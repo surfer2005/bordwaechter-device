@@ -69,11 +69,15 @@ HACS-Integration nutzt dasselbe Passwort.
 
 ## Komplett-Image (flashen → fertig)
 
-Der Workflow `.github/workflows/image.yml` baut per CI ein **vorkonfiguriertes Raspberry-Pi-Image**
-(Desktop-Basis → **SSH + VNC** an, Zeitzone Europe/Berlin, Bordwächter-Dienst installiert & aktiv).
+Der Workflow `.github/workflows/image.yml` erzeugt ein **vorkonfiguriertes Raspberry-Pi-Image**, ohne
+selbst ein OS zu bauen: Er lädt das **offizielle Raspberry-Pi-OS-Desktop-Image** (SSH + VNC bereits
+vorhanden) und legt per Loop-Mount nur noch den Bordwächter-Dienst + ein Erst-Start-Skript hinein
+(SSH + VNC an, Hostname `bordwaechter`, Zeitzone Europe/Berlin, Dienst aktiviert). Kein apt/chroot im
+Build → keine Debian-Keyring-/Paket-Probleme, baut in wenigen Minuten.
 
-- Bauen: **Actions → image → Run** (oder Tag `img-*` → Release mit `.img.xz`).
-- Flashen (Raspberry Pi Imager/Etcher), Pi starten — läuft.
+- Bauen: **Actions → image → Run** (Artefakt) oder Tag `img-*` → **Release mit `.img.xz`**.
+- Flashen (Raspberry Pi Imager/Etcher), Pi starten — beim ersten Boot richtet sich alles selbst ein
+  (SSH, VNC, Hostname, Zeitzone) und startet neu; danach läuft der Dienst.
 - **Pro Schiff** nur eine Datei **`bordwaechter.json`** auf die **Boot-Partition** legen (Token/Schiff);
-  der First-Boot übernimmt sie als `/etc/bordwaechter/config.json`. Alternativ einmal im Web-UI eintragen.
+  der Dienst übernimmt sie als `/etc/bordwaechter/config.json`. Alternativ einmal im Web-UI eintragen.
 - Standard-Login `pi` / `bordwaechter` (nach dem ersten Start ändern).

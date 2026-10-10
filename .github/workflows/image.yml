@@ -79,6 +79,10 @@ jobs:
           echo "Europe/Berlin" >/etc/timezone
           systemctl enable ssh
           raspi-config nonint do_vnc 0 || true
+          # Pro Schiff vorab abgelegte Konfiguration übernehmen (Token/Schiff), falls vorhanden.
+          if [ -f /boot/firmware/bordwaechter.json ]; then
+            install -Dm600 /boot/firmware/bordwaechter.json /etc/bordwaechter/config.json
+          fi
           systemctl enable bordwaechter.service
           # firstrun aus der Kernel-Kommandozeile entfernen (läuft nur einmal)
           sed -i 's| systemd.run=[^ ]*||g; s| systemd.run_success_action=[^ ]*||g; s| systemd.unit=[^ ]*||g' /boot/firmware/cmdline.txt
