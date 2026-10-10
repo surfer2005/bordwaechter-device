@@ -32,6 +32,16 @@ jobs:
           cp systemd/bordwaechter.service pi-gen/stageBW/00-install/files/bordwaechter.service
           cp config.example.json pi-gen/stageBW/00-install/files/config.json
 
+      # Platz schaffen: der volle Desktop-Build (stage0–4) braucht viele GB temporär.
+      # Bewusst manuell statt `increase-runner-disk-size` der Action — deren apt-purge
+      # bricht an einem auf dem Runner fehlenden Paket mit exit 100 ab.
+      - name: Platz auf dem Runner schaffen
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL \
+            /usr/local/lib/android /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+          sudo docker image prune --all --force || true
+          df -h /
+
       - name: Image bauen (pi-gen)
         id: build
         uses: usimd/pi-gen-action@v1
@@ -48,7 +58,6 @@ jobs:
           timezone: Europe/Berlin
           compression: xz
           export-last-stage-only: true
-          increase-runner-disk-size: true
           extra-host-dependencies: debian-archive-keyring
           verbose-output: true
 
