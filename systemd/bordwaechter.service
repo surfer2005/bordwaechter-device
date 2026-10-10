@@ -1,0 +1,17 @@
+[Unit]
+Description=Bordwächter (KAI Edge) — On-Board-Sicherheitsdienst
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/bordwaechter
+Environment=BORDWAECHTER_CONFIG=/etc/bordwaechter/config.json
+Restart=always
+RestartSec=3
+# Für sysfs-GPIO genügt root; alternativ den Dienst in die gpio-Gruppe nehmen.
+User=root
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

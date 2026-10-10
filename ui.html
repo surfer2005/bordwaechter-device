@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bordwächter</title>
+<style>
+  :root{--bg:#F3F1EA;--panel:#fff;--line:#E2DDD0;--ink:#121A17;--muted:#5C6B64;--teal:#1F6E5C;--amber:#B16A12;--red:#C4442E;--radius:10px}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:system-ui,sans-serif;line-height:1.5;padding:16px;max-width:900px;margin:0 auto}
+  h1{font-size:1.3rem;display:flex;align-items:center;gap:8px}h1 .d{width:26px;height:26px;border-radius:7px;background:var(--teal);color:#fff;display:grid;place-items:center}
+  h2{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:18px 0 8px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px}
+  .banner{padding:10px 14px;border-radius:var(--radius);font-weight:700;margin-bottom:12px;display:none}
+  .b-warn{display:block;background:#f6e6c8;color:var(--amber)} .b-alarm{display:block;background:#f3d4ce;color:var(--red)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .kv{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .kv .k{font-size:.64rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+  .kv .v{font-weight:700;font-size:1.1rem;font-family:ui-monospace,monospace}
+  label{display:block;font-size:.8rem;color:var(--muted);margin:6px 0 2px}
+  input,select{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff;color:var(--ink)}
+  .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+  button{background:var(--teal);color:#fff;border:0;border-radius:8px;padding:9px 14px;font:inherit;font-weight:700;cursor:pointer}
+  button.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .dot{display:inline-block;width:11px;height:11px;border-radius:50%;background:#ccc;margin-right:5px}
+  .on{background:var(--red)}
+  .muted{color:var(--muted);font-size:.85rem}
+  fieldset{border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:10px}
+  legend{font-size:.75rem;color:var(--muted);padding:0 6px}
+</style>
+</head>
+<body>
+  <h1><span class="d">⚓</span> Bordwächter <span class="muted" id="ver" style="font-weight:400;font-size:.8rem"></span></h1>
+
+  <div id="banner" class="banner"></div>
+
+  <div class="card">
+    <h2>Status</h2>
+    <div class="grid">
+      <div class="kv"><div class="k">Schiff</div><div class="v" id="s_ship">—</div></div>
+      <div class="kv"><div class="k">Phase</div><div class="v" id="s_phase">—</div></div>
+      <div class="kv"><div class="k">Nächster Halt</div><div class="v" id="s_leg" style="font-size:.95rem">—</div></div>
+      <div class="kv"><div class="k">Soll-Ankunft</div><div class="v" id="s_soll">—</div></div>
+      <div class="kv"><div class="k">Reststrecke</div><div class="v" id="s_remain">—</div></div>
+      <div class="kv"><div class="k">Ist / Soll km/h</div><div class="v" id="s_speed">—</div></div>
+      <div class="kv"><div class="k">Empfehlung</div><div class="v" id="s_verdict">—</div></div>
+      <div class="kv"><div class="k">Kursabweichung</div><div class="v" id="s_off">—</div></div>
+      <div class="kv"><div class="k">Position (Alter)</div><div class="v" id="s_pos">—</div></div>
+      <div class="kv"><div class="k">Ausgänge</div><div class="v" id="s_out" style="font-size:.95rem">—</div></div>
+    </div>
+    <div class="btns">
+      <button onclick="post('/api/ack')">Quittieren</button>
+      <button class="ghost" onclick="post('/api/test?out=horn')">Hupe testen</button>
+      <button class="ghost" onclick="post('/api/test?out=lamp')">Lampe testen</button>
+    </div>
+  </div>
+
+  <div class="card" id="manualCard" style="display:none">
+    <h2>Manuelle Position (Test)</h2>
+    <div class="row">
+      <div><label>Breite (lat)</label><input id="m_lat" value="47.655"></div>
+      <div><label>Länge (lng)</label><input id="m_lng" value="9.3"></div>
+      <div><label>Tempo km/h</label><input id="m_sp" value="20"></div>
+    </div>
+    <div class="btns"><button onclick="setPos()">Position setzen</button></div>
+  </div>
+
+  <div class="card">
+    <h2>Einstellungen</h2>
+    <div class="row">
+      <div><label>KAI-Adresse</label><input id="c_base"></div>
+      <div><label>Edge-Token</label><input id="c_token"></div>
+      <div><label>Schiff-ID (0 = aus Bundle)</label><input id="c_ship" type="number"></div>
+      <div><label>GPS an KAI melden</label><select id="c_sendpos"><option value="true">ja</option><option value="false">nein</option></select></div>
+      <div><label>UI-Passwort</label><input id="c_uipw"></div>
+    </div>
+    <fieldset><legend>GPS-Quelle</legend>
+      <div class="row">
+        <div><label>Quelle</label><select id="g_src"><option value="manual">manual (Test)</option><option value="teltonika">Teltonika (Modbus)</option></select></div>
+        <div><label>Host</label><input id="g_host"></div>
+        <div><label>Port</label><input id="g_port" type="number"></div>
+        <div><label>Unit</label><input id="g_unit" type="number"></div>
+        <div><label>Lat-Register</label><input id="g_lat" type="number"></div>
+        <div><label>Lng-Register</label><input id="g_lng" type="number"></div>
+        <div><label>Format</label><select id="g_fmt"><option>float32</option><option>int32_1e7</option><option>int32_1e6</option></select></div>
+        <div><label>Poll (s)</label><input id="g_poll" type="number"></div>
+      </div>
+    </fieldset>
+    <fieldset><legend>SIFA / Alarm</legend>
+      <div class="row">
+        <div><label>Auslöser</label><select id="sf_combo"><option value="either">GPS oder Kamera</option><option value="gps">nur GPS</option><option value="camera">nur Kamera</option><option value="both">GPS und Kamera</option></select></div>
+        <div><label>Wiederhol-Alarm (s)</label><input id="sf_re" type="number"></div>
+        <div><label>Totmann-SIFA</label><select id="sf_dm"><option value="false">aus</option><option value="true">an</option></select></div>
+        <div><label>Totmann-Intervall (s)</label><input id="sf_dms" type="number"></div>
+        <div><label>Vorwarnung (s)</label><input id="sf_pre" type="number"></div>
+      </div>
+    </fieldset>
+    <fieldset><legend>GPIO / Relais</legend>
+      <div class="row">
+        <div><label>Backend</label><select id="io_be"><option value="none">none (ohne Hardware)</option><option value="sysfs">sysfs (Raspberry)</option></select></div>
+        <div><label>Hupe-Pin</label><input id="io_horn" type="number"></div>
+        <div><label>Lampe-Pin</label><input id="io_lamp" type="number"></div>
+        <div><label>Quittier-Pin (-1=keiner)</label><input id="io_ack" type="number"></div>
+        <div><label>SIFA-Schlüssel-Pin (-1=keiner)</label><input id="io_key" type="number"></div>
+        <div><label>Aktiv-Low</label><select id="io_al"><option value="false">nein</option><option value="true">ja</option></select></div>
+      </div>
+    </fieldset>
+    <fieldset><legend>Kamera (Mobotix, optional)</legend>
+      <div class="row">
+        <div><label>Kamera aktiv</label><select id="cam_en"><option value="false">nein</option><option value="true">ja</option></select></div>
+        <div><label>Webhook-Secret</label><input id="cam_sec"></div>
+        <div><label>Snapshot-URL</label><input id="cam_url"></div>
+        <div><label>Hinweis-Dauer (s)</label><input id="cam_hold" type="number"></div>
+      </div>
+      <p class="muted" id="cam_hint" style="margin-top:6px"></p>
+    </fieldset>
+    <div class="btns"><button onclick="saveCfg()">Speichern</button><span id="saveMsg" class="muted"></span></div>
+    <p class="muted" style="margin-top:6px">Hinweis: Änderung von GPS-Quelle oder GPIO-Backend wird nach einem Neustart des Dienstes wirksam.</p>
+  </div>
+
+<script>
+function g(id){return document.getElementById(id)}
+async function post(u){ try{ await fetch(u,{method:'POST'}) }catch(e){} }
+async function setPos(){ await post('/api/position?lat='+g('m_lat').value+'&lng='+g('m_lng').value+'&speed_kmh='+g('m_sp').value) }
+function fmt(n,u){ return (n==null||n===0&&u==='km'?'—':n)+(u?(' '+u):'') }
+
+async function refresh(){
+  try{
+    const r=await fetch('/api/status'); const s=await r.json()
+    g('s_ship').textContent=(s.ship||'—')+(s.registration_number?(' · '+s.registration_number):'')
+    g('s_phase').textContent=s.phase||'—'
+    g('s_leg').textContent=(s.from&&s.to)?(s.from+' → '+s.to):'—'
+    g('s_soll').textContent=s.soll||'—'
+    g('s_remain').textContent=(s.remain_km>0?s.remain_km+' km':'—')
+    g('s_speed').textContent=(s.ist_kmh||0)+' / '+(s.soll_kmh||0)
+    g('s_verdict').textContent={ok:'Passt',faster:'Schneller',slower:'Langsamer',none:'—'}[s.verdict]||'—'
+    g('s_off').textContent=(s.off_state&&s.off_state!=='unknown')?(s.off_course_m+' m ('+s.off_state+')'):'—'
+    g('s_pos').textContent=s.pos_valid?(s.pos_age_sec+' s'):'keine'
+    g('s_out').innerHTML='<span class="dot '+(s.horn?'on':'')+'"></span>Hupe <span class="dot '+(s.lamp?'on':'')+'"></span>Lampe'
+    const b=g('banner'); b.className='banner'
+    if(s.phase==='vor_abfahrt'){ b.className='banner b-warn'; b.textContent='Abfahrt '+(s.abfahrt||'')+(s.warten_min>=0?(' · in '+s.warten_min+' min'):'') }
+    else if(s.off_state==='alarm'){ b.className='banner b-alarm'; b.textContent='KURS VERLASSEN! '+s.off_course_m+' m neben der Fahrrinne' }
+    else if(s.off_state==='warn'){ b.className='banner b-warn'; b.textContent='Kurs prüfen · '+s.off_course_m+' m neben der Fahrrinne' }
+  }catch(e){}
+}
+async function loadCfg(){
+  const c=await (await fetch('/api/config')).json()
+  g('ver').textContent='Schiff-ID '+(c.ship_id||0)
+  g('c_base').value=c.kai_base_url||''; g('c_token').value=c.edge_token||''; g('c_ship').value=c.ship_id||0
+  g('c_sendpos').value=String(!!c.send_position); g('c_uipw').value=c.ui_password||''
+  g('g_src').value=c.gps.source; g('g_host').value=c.gps.host||''; g('g_port').value=c.gps.port; g('g_unit').value=c.gps.unit
+  g('g_lat').value=c.gps.lat_reg; g('g_lng').value=c.gps.lng_reg; g('g_fmt').value=c.gps.format; g('g_poll').value=c.gps.poll_sec
+  g('sf_combo').value=c.sifa.trigger_combo; g('sf_re').value=c.sifa.realarm_sec; g('sf_dm').value=String(!!c.sifa.deadman_on)
+  g('sf_dms').value=c.sifa.deadman_sec; g('sf_pre').value=c.sifa.deadman_prewarn_sec
+  g('io_be').value=c.gpio.backend; g('io_horn').value=c.gpio.horn_pin; g('io_lamp').value=c.gpio.lamp_pin
+  g('io_ack').value=c.gpio.ack_pin; g('io_key').value=c.gpio.sifa_key_pin; g('io_al').value=String(!!c.gpio.active_low)
+  g('cam_en').value=String(!!c.camera.enabled); g('cam_sec').value=c.camera.webhook_secret||''; g('cam_url').value=c.camera.snapshot_url||''; g('cam_hold').value=c.camera.hold_sec
+  g('manualCard').style.display = c.gps.source==='manual' ? 'block':'none'
+  g('cam_hint').textContent='MxMessage-Webhook (in die Kamera eintragen): '+location.origin+'/api/camera/event?secret='+(c.camera.webhook_secret||'<secret>')
+}
+async function saveCfg(){
+  const num=(id)=>parseInt(g(id).value||'0',10)
+  const c={ kai_base_url:g('c_base').value, edge_token:g('c_token').value, ship_id:num('c_ship'),
+    send_position:g('c_sendpos').value==='true', listen:':8090', ui_password:g('c_uipw').value, bundle_refresh_sec:300,
+    gps:{source:g('g_src').value,host:g('g_host').value,port:num('g_port'),unit:num('g_unit'),lat_reg:num('g_lat'),lng_reg:num('g_lng'),speed_reg:-1,heading_reg:-1,format:g('g_fmt').value,poll_sec:num('g_poll')},
+    sifa:{trigger_combo:g('sf_combo').value,realarm_sec:num('sf_re'),deadman_on:g('sf_dm').value==='true',deadman_sec:num('sf_dms'),deadman_prewarn_sec:num('sf_pre')},
+    gpio:{backend:g('io_be').value,horn_pin:num('io_horn'),lamp_pin:num('io_lamp'),ack_pin:num('io_ack'),sifa_key_pin:num('io_key'),active_low:g('io_al').value==='true'},
+    camera:{enabled:g('cam_en').value==='true',webhook_secret:g('cam_sec').value,snapshot_url:g('cam_url').value,hold_sec:num('cam_hold')} }
+  const r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)})
+  g('saveMsg').textContent = r.ok ? 'Gespeichert.' : 'Fehler.'
+  setTimeout(()=>g('saveMsg').textContent='',2500); loadCfg()
+}
+loadCfg(); refresh(); setInterval(refresh,2000)
+</script>
+</body>
+</html>

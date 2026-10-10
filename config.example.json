@@ -1,0 +1,42 @@
+{
+  "kai_base_url": "https://kai-bsb.de",
+  "edge_token": "",
+  "ship_id": 0,
+  "send_position": true,
+  "listen": ":8090",
+  "ui_password": "",
+  "gps": {
+    "source": "manual",
+    "host": "192.168.1.1",
+    "port": 502,
+    "unit": 1,
+    "lat_reg": 0,
+    "lng_reg": 2,
+    "speed_reg": -1,
+    "heading_reg": -1,
+    "format": "float32",
+    "poll_sec": 5
+  },
+  "sifa": {
+    "trigger_combo": "either",
+    "realarm_sec": 15,
+    "deadman_on": false,
+    "deadman_sec": 30,
+    "deadman_prewarn_sec": 5
+  },
+  "gpio": {
+    "backend": "none",
+    "horn_pin": 17,
+    "lamp_pin": 27,
+    "ack_pin": 22,
+    "sifa_key_pin": -1,
+    "active_low": false
+  },
+  "camera": {
+    "enabled": false,
+    "webhook_secret": "",
+    "snapshot_url": "",
+    "hold_sec": 20
+  },
+  "bundle_refresh_sec": 300
+}
