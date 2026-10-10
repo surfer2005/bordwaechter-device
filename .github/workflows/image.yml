@@ -50,7 +50,10 @@ jobs:
           # Desktop-Basis (stage0–4), damit VNC funktioniert, danach unsere Stage.
           stage-list: stage0 stage1 stage2 stage3 stage4 ./pi-gen/stageBW
           release: bookworm
-          pi-gen-version: master
+          # pi-gen-version weglassen → Action-Default "arm64" (bookworm/64-bit, passt zum arm64-Binary).
+          # NICHT "master": dessen Stage-Listen ziehen trixie-Pakete (rpi-swap/-loop-utils/-usb-gadget),
+          # die es in den bookworm-Repos nicht gibt ("Unable to locate package"). Keyring-Fix steckt in
+          # extra-host-dependencies (debian-archive-keyring), nicht in der pi-gen-Version.
           enable-ssh: 1
           username: pi
           password: bordwaechter
