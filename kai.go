@@ -30,9 +30,11 @@ type Bundle struct {
 	} `json:"ship"`
 	Date       string `json:"date"`
 	Thresholds struct {
-		OffCourseM   float64 `json:"offCourseM"`
-		ToleranceKmh float64 `json:"toleranceKmh"`
-		Unit         string  `json:"unit"`
+		OffCourseM     float64 `json:"offCourseM"`
+		ToleranceKmh   float64 `json:"toleranceKmh"`
+		MaxKmh         float64 `json:"maxKmh"`
+		ArrivalRadiusM float64 `json:"arrivalRadiusM"`
+		Unit           string  `json:"unit"`
 	} `json:"thresholds"`
 	HatBordbuch bool   `json:"hatBordbuch"`
 	Legs        []Leg  `json:"legs"`

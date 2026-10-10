@@ -40,10 +40,16 @@ jobs:
           # Desktop-Basis (stage0–4), damit VNC funktioniert, danach unsere Stage.
           stage-list: stage0 stage1 stage2 stage3 stage4 ./pi-gen/stageBW
           release: bookworm
+          pi-gen-version: master
           enable-ssh: 1
           username: pi
           password: bordwaechter
+          hostname: bordwaechter
+          timezone: Europe/Berlin
           compression: xz
+          export-last-stage-only: true
+          increase-runner-disk-size: true
+          extra-host-dependencies: debian-archive-keyring
           verbose-output: true
 
       - name: Image als Artefakt

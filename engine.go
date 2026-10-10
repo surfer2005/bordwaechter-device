@@ -24,8 +24,9 @@ type Status struct {
 	RemainKm     float64 `json:"remain_km"`
 	IstKmh       float64 `json:"ist_kmh"`
 	SollKmh      float64 `json:"soll_kmh"`
-	Verdict      string  `json:"verdict"` // ok | faster | slower | none
+	Verdict      string  `json:"verdict"` // ok | faster | slower | ankunft | late | none
 	DiffKmh      float64 `json:"diff_kmh"`
+	DelayMin     int     `json:"delay_min"`
 	OffCourseM   float64 `json:"off_course_m"`
 	OffState     string  `json:"off_state"` // ok | warn | alarm | unknown
 	Alarm        bool    `json:"alarm"`
@@ -268,13 +269,38 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	if pos.Valid {
 		st.IstKmh = round1(pos.SpeedKmh)
 	}
-	if st.RemainKm > 0 && st.RestMin > 0 {
+	maxKmh := b.Thresholds.MaxKmh
+	if maxKmh <= 0 {
+		maxKmh = 40
+	}
+	arrivalRadiusKm := b.Thresholds.ArrivalRadiusM / 1000
+	if arrivalRadiusKm <= 0 {
+		arrivalRadiusKm = 0.15
+	}
+	// Zwei Sicherungen gegen unsinnige Tempo-Werte am Rand (siehe Server kiosk-gps.js):
+	//  - praktisch am Ziel → "ankunft", keine Empfehlung
+	//  - auch bei Vollgas nicht pünktlich → "late" + Verspätung statt absurder km/h
+	if st.RemainKm > 0 && st.RemainKm <= arrivalRadiusKm {
+		st.Verdict = "ankunft"
+		st.SollKmh = 0
+	} else if st.RemainKm > 0 && st.RestMin > 0 {
 		soll := requiredSpeedKmh(st.RemainKm, float64(st.RestMin))
-		st.SollKmh = round1(soll)
-		if pos.Valid {
-			v, diff := speedVerdict(pos.SpeedKmh, soll, tol)
-			st.Verdict = v
-			st.DiffKmh = round1(diff)
+		if soll > maxKmh {
+			st.Verdict = "late"
+			st.SollKmh = 0
+			tFull := (st.RemainKm / maxKmh) * 60
+			dm := int(tFull - float64(st.RestMin) + 0.5)
+			if dm < 0 {
+				dm = 0
+			}
+			st.DelayMin = dm
+		} else {
+			st.SollKmh = round1(soll)
+			if pos.Valid {
+				v, diff := speedVerdict(pos.SpeedKmh, soll, tol)
+				st.Verdict = v
+				st.DiffKmh = round1(diff)
+			}
 		}
 	}
 	return st
