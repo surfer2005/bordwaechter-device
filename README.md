@@ -66,3 +66,14 @@ HACS-Integration nutzt dasselbe Passwort.
 - **SSH + VNC** am Image aktivieren (Fernwartung), Overlay-/Read-only-FS + OS-`unattended-upgrades`
   für wartungsarmen Dauerbetrieb.
 - Nicht in dieser Umgebung kompiliert (keine Go-Toolchain vorhanden) — Build per CI/auf dem Pi.
+
+## Komplett-Image (flashen → fertig)
+
+Der Workflow `.github/workflows/image.yml` baut per CI ein **vorkonfiguriertes Raspberry-Pi-Image**
+(Desktop-Basis → **SSH + VNC** an, Zeitzone Europe/Berlin, Bordwächter-Dienst installiert & aktiv).
+
+- Bauen: **Actions → image → Run** (oder Tag `img-*` → Release mit `.img.xz`).
+- Flashen (Raspberry Pi Imager/Etcher), Pi starten — läuft.
+- **Pro Schiff** nur eine Datei **`bordwaechter.json`** auf die **Boot-Partition** legen (Token/Schiff);
+  der First-Boot übernimmt sie als `/etc/bordwaechter/config.json`. Alternativ einmal im Web-UI eintragen.
+- Standard-Login `pi` / `bordwaechter` (nach dem ersten Start ändern).

@@ -1,0 +1,60 @@
+name: image
+
+# Baut ein komplett vorkonfiguriertes Raspberry-Pi-Image (Desktop-Basis → SSH + VNC + Bordwächter
+# vorinstalliert, Zeitzone Europe/Berlin). Pro Schiff nur noch eine Datei `bordwaechter.json` auf die
+# Boot-Partition legen (Token/Schiff) — oder einmal im Web-UI eintragen. Dann: Image drauf, fertig.
+#
+# Auslösen: manuell (Actions → image → Run) oder per Tag `img-*`. Ergebnis: Artefakt + (bei Tag) Release.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["img-*"]
+
+permissions:
+  contents: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Bordwächter-Binary (arm64) bauen
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o pi-gen/stageBW/00-install/files/bordwaechter .
+
+      - name: Unit + Config in die Stage kopieren
+        run: |
+          cp systemd/bordwaechter.service pi-gen/stageBW/00-install/files/bordwaechter.service
+          cp config.example.json pi-gen/stageBW/00-install/files/config.json
+
+      - name: Image bauen (pi-gen)
+        id: build
+        uses: usimd/pi-gen-action@v1
+        with:
+          image-name: bordwaechter
+          # Desktop-Basis (stage0–4), damit VNC funktioniert, danach unsere Stage.
+          stage-list: stage0 stage1 stage2 stage3 stage4 ./pi-gen/stageBW
+          release: bookworm
+          enable-ssh: 1
+          username: pi
+          password: bordwaechter
+          compression: xz
+          verbose-output: true
+
+      - name: Image als Artefakt
+        uses: actions/upload-artifact@v4
+        with:
+          name: bordwaechter-image
+          path: ${{ steps.build.outputs.image-path }}
+          if-no-files-found: error
+
+      - name: Release (bei Tag img-*)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.build.outputs.image-path }}
