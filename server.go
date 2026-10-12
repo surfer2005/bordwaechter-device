@@ -99,6 +99,23 @@ func (a *App) guard(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// guardUI schützt Admin-Aktionen (Netzwerk, Geräte-Neustart) mit dem UI-Passwort — NICHT mit dem
+// HA-Passwort (das ist nur fürs Mitlesen gedacht). Leeres UI-Passwort = offen im Bordnetz.
+func (a *App) guardUI(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		pw := a.getCfg().UIPassword
+		if pw != "" {
+			_, pass, ok := r.BasicAuth()
+			if !ok || pass != pw {
+				w.Header().Set("WWW-Authenticate", `Basic realm="Bordwächter"`)
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+		h(w, r)
+	}
+}
+
 func (a *App) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 
@@ -160,6 +177,52 @@ func (a *App) routes() *http.ServeMux {
 			f.Flush()
 		}
 		reexecSoon()
+	}))
+
+	// Feste IP / DHCP umstellen (schreibt ein NetworkManager-Keyfile, kein Shell). Wirkt nach
+	// einem Geräte-Neustart. Nur mit UI-Passwort.
+	mux.HandleFunc("/api/network", a.guardUI(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "POST", http.StatusMethodNotAllowed)
+			return
+		}
+		var in struct {
+			Mode, Interface, Address, Gateway, DNS string
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		a.mu.Lock()
+		a.cfg.Network.Mode = in.Mode
+		a.cfg.Network.Interface = in.Interface
+		a.cfg.Network.Address = in.Address
+		a.cfg.Network.Gateway = in.Gateway
+		a.cfg.Network.DNS = in.DNS
+		cfg := a.cfg
+		a.mu.Unlock()
+		if err := applyNetwork(cfg); err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		if err := saveConfig(cfg); err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	}))
+
+	// Gerät (Raspberry) komplett neu starten — nötig, damit eine geänderte feste IP greift.
+	mux.HandleFunc("/api/reboot", a.guardUI(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"ok": true})
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			syscall.Sync()
+			_ = syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART)
+		}()
 	}))
 
 	mux.HandleFunc("/api/ack", a.guard(func(w http.ResponseWriter, r *http.Request) {

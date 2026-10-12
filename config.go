@@ -55,6 +55,16 @@ type Config struct {
 		HoldSec       int    `json:"hold_sec"`       // wie lange ein Kamera-Hinweis als aktiv gilt
 	} `json:"camera"`
 
+	// Netzwerk: DHCP (Vorgabe) oder feste IP. Wird als NetworkManager-Keyfile geschrieben und
+	// wirkt nach einem Neustart des Geräts — ohne Shell/nmcli (reines Datei-Schreiben).
+	Network struct {
+		Mode      string `json:"mode"`      // "dhcp" | "static"
+		Interface string `json:"interface"` // z. B. "eth0"
+		Address   string `json:"address"`   // CIDR, z. B. "192.168.1.50/24"
+		Gateway   string `json:"gateway"`   // z. B. "192.168.1.1"
+		DNS       string `json:"dns"`       // Komma-getrennt, z. B. "192.168.1.1,1.1.1.1"
+	} `json:"network"`
+
 	BundleRefreshSec int `json:"bundle_refresh_sec"`
 }
 
@@ -80,6 +90,8 @@ func defaultConfig() *Config {
 	c.GPIO.HornPin, c.GPIO.LampPin = 17, 27
 	c.GPIO.AckPin, c.GPIO.SifaKeyPin = 22, -1
 	c.Camera.HoldSec = 20
+	c.Network.Mode = "dhcp"
+	c.Network.Interface = "eth0"
 	return c
 }
 

@@ -39,5 +39,12 @@
     "snapshot_url": "",
     "hold_sec": 20
   },
+  "network": {
+    "mode": "dhcp",
+    "interface": "eth0",
+    "address": "",
+    "gateway": "",
+    "dns": ""
+  },
   "bundle_refresh_sec": 300
 }

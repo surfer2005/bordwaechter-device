@@ -119,6 +119,17 @@
       </div>
       <p class="muted" id="cam_hint" style="margin-top:6px"></p>
     </fieldset>
+    <fieldset><legend>Netzwerk (IP-Adresse)</legend>
+      <div class="row">
+        <div><label>Modus</label><select id="n_mode"><option value="dhcp">DHCP (automatisch)</option><option value="static">Feste IP</option></select></div>
+        <div><label>Schnittstelle</label><input id="n_if" placeholder="eth0"></div>
+        <div><label>IP-Adresse (CIDR)</label><input id="n_addr" placeholder="192.168.1.50/24"></div>
+        <div><label>Gateway</label><input id="n_gw" placeholder="192.168.1.1"></div>
+        <div><label>DNS (Komma)</label><input id="n_dns" placeholder="192.168.1.1,1.1.1.1"></div>
+      </div>
+      <div class="btns" style="margin-top:8px"><button onclick="applyNet()">IP übernehmen</button><button class="ghost" onclick="rebootPi()">Gerät neu starten (Pi)</button><span id="netMsg" class="muted"></span></div>
+      <p class="muted" style="margin-top:6px">Feste IP/DHCP wird erst nach einem <b>Neustart des Geräts</b> wirksam. Vorsicht: eine falsche IP/Gateway kann das Gerät im Netz unerreichbar machen — dann hilft nur Bildschirm+Tastatur am Raspberry.</p>
+    </fieldset>
     <div class="btns"><button onclick="saveCfg()">Speichern</button><button class="ghost" onclick="updateDev()">Aktualisieren</button><button class="ghost" onclick="restartDev()">Neustart</button><span id="saveMsg" class="muted"></span></div>
     <p class="muted" style="margin-top:6px">Hinweis: Änderung von GPS-Quelle oder GPIO-Backend wird nach einem Neustart des Dienstes wirksam.</p>
   </div>
@@ -128,6 +139,15 @@ function g(id){return document.getElementById(id)}
 async function post(u){ try{ await fetch(u,{method:'POST'}) }catch(e){} }
 async function setPos(){ await post('/api/position?lat='+g('m_lat').value+'&lng='+g('m_lng').value+'&speed_kmh='+g('m_sp').value) }
 async function restartDev(){ if(!confirm('Bordwächter-Dienst neu starten?'))return; g('saveMsg').textContent='Neustart läuft …'; await post('/api/restart'); setTimeout(()=>{g('saveMsg').textContent='';location.reload()},4000) }
+async function applyNet(){
+  const body={mode:g('n_mode').value,interface:g('n_if').value,address:g('n_addr').value,gateway:g('n_gw').value,dns:g('n_dns').value}
+  g('netMsg').textContent='Übernehme …'
+  try{ const r=await fetch('/api/network',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const j=await r.json()
+    if(!j.ok){ g('netMsg').textContent='Fehler: '+(j.error||'Netzwerk'); return }
+    g('netMsg').textContent='Gespeichert. Wirkt nach Geräte-Neustart.' }
+  catch(e){ g('netMsg').textContent='Fehler: '+e }
+}
+async function rebootPi(){ if(!confirm('Das GERÄT (Raspberry) jetzt komplett neu starten?'))return; g('netMsg').textContent='Gerät startet neu …'; await post('/api/reboot') }
 async function updateDev(){ if(!confirm('Neueste Version aus dem Internet laden und installieren?'))return; g('saveMsg').textContent='Lade neue Version …'; try{ const r=await fetch('/api/update',{method:'POST'}); const j=await r.json(); if(!j.ok){ g('saveMsg').textContent='Fehler: '+(j.error||'Update'); return } g('saveMsg').textContent='Aktualisiert, Neustart läuft …'; setTimeout(()=>{g('saveMsg').textContent='';location.reload()},6000) }catch(e){ g('saveMsg').textContent='Aktualisiert, Neustart läuft …'; setTimeout(()=>location.reload(),6000) } }
 function fmt(n,u){ return (n==null||n===0&&u==='km'?'—':n)+(u?(' '+u):'') }
 
@@ -162,6 +182,7 @@ async function loadCfg(){
   g('io_be').value=c.gpio.backend; g('io_horn').value=c.gpio.horn_pin; g('io_lamp').value=c.gpio.lamp_pin
   g('io_ack').value=c.gpio.ack_pin; g('io_key').value=c.gpio.sifa_key_pin; g('io_al').value=String(!!c.gpio.active_low)
   g('cam_en').value=String(!!c.camera.enabled); g('cam_sec').value=c.camera.webhook_secret||''; g('cam_url').value=c.camera.snapshot_url||''; g('cam_hold').value=c.camera.hold_sec
+  const n=c.network||{}; g('n_mode').value=n.mode||'dhcp'; g('n_if').value=n.interface||'eth0'; g('n_addr').value=n.address||''; g('n_gw').value=n.gateway||''; g('n_dns').value=n.dns||''
   g('manualCard').style.display = c.gps.source==='manual' ? 'block':'none'
   g('cam_hint').textContent='MxMessage-Webhook (in die Kamera eintragen): '+location.origin+'/api/camera/event?secret='+(c.camera.webhook_secret||'<secret>')
 }
@@ -172,7 +193,8 @@ async function saveCfg(){
     gps:{source:g('g_src').value,host:g('g_host').value,port:num('g_port'),unit:num('g_unit'),lat_reg:num('g_lat'),lng_reg:num('g_lng'),speed_reg:num('g_speed'),heading_reg:num('g_head'),format:g('g_fmt').value,poll_sec:num('g_poll')},
     sifa:{trigger_combo:g('sf_combo').value,realarm_sec:num('sf_re'),deadman_on:g('sf_dm').value==='true',deadman_sec:num('sf_dms'),deadman_prewarn_sec:num('sf_pre')},
     gpio:{backend:g('io_be').value,horn_pin:num('io_horn'),lamp_pin:num('io_lamp'),ack_pin:num('io_ack'),sifa_key_pin:num('io_key'),active_low:g('io_al').value==='true'},
-    camera:{enabled:g('cam_en').value==='true',webhook_secret:g('cam_sec').value,snapshot_url:g('cam_url').value,hold_sec:num('cam_hold')} }
+    camera:{enabled:g('cam_en').value==='true',webhook_secret:g('cam_sec').value,snapshot_url:g('cam_url').value,hold_sec:num('cam_hold')},
+    network:{mode:g('n_mode').value,interface:g('n_if').value,address:g('n_addr').value,gateway:g('n_gw').value,dns:g('n_dns').value} }
   const r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)})
   g('saveMsg').textContent = r.ok ? 'Gespeichert.' : 'Fehler.'
   setTimeout(()=>g('saveMsg').textContent='',2500); loadCfg()
