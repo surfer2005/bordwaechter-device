@@ -69,7 +69,9 @@ func (a *App) gpsLoop() {
 				a.eng.SetPosition(p)
 				if cfg.SendPosition {
 					if k := a.getKai(); k != nil && cfg.EdgeToken != "" {
-						go func(pp Position) { _ = k.PostPosition(pp) }(p)
+						// die ANGEREICHERTE Position posten (mit aus der Bewegung abgeleitetem Tempo),
+						// nicht die rohe p (die trägt bei Teltonika ohne Speed-Register 0).
+						go func(pp Position) { _ = k.PostPosition(pp) }(a.eng.CurrentPos())
 					}
 				}
 			}

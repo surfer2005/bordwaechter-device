@@ -120,6 +120,14 @@ func (e *Engine) SetPosition(p Position) {
 	e.pos = p
 }
 
+// CurrentPos: die zuletzt gesetzte, mit abgeleiteter Geschwindigkeit ANGEREICHERTE Position.
+// Wichtig fürs Posten an KAI — die rohe Position aus der Quelle trägt oft Speed 0.
+func (e *Engine) CurrentPos() Position {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.pos
+}
+
 func (e *Engine) CameraHazard() {
 	e.mu.Lock()
 	hold := e.cfg.Camera.HoldSec
