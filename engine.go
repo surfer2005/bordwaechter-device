@@ -28,7 +28,9 @@ type Status struct {
 	DiffKmh      float64 `json:"diff_kmh"`
 	DelayMin     int     `json:"delay_min"`
 	OffCourseM   float64 `json:"off_course_m"`
-	OffState     string  `json:"off_state"` // ok | warn | alarm | unknown
+	OffLimitM    float64 `json:"off_course_limit_m"` // „Grenze" (streckenadaptiv) für die Anzeige
+	OffState     string  `json:"off_state"`          // ok | warn | alarm | unknown
+	MaxKmh       float64 `json:"max_kmh"`
 	Alarm        bool    `json:"alarm"`
 	AlarmState   string  `json:"alarm_state"` // normal | alarm | acked
 	SifaDeadman  bool    `json:"sifa_deadman_active"`
@@ -42,6 +44,7 @@ type Status struct {
 	Hint         string  `json:"hint"`
 	Horn         bool    `json:"horn"`
 	Lamp         bool    `json:"lamp"`
+	Version      string  `json:"version"`
 	UpdatedAt    string  `json:"updated_at"`
 }
 
@@ -287,6 +290,7 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 			effLimit = cand
 		}
 	}
+	st.OffLimitM = float64(int(effLimit + 0.5))
 	// Position-Veraltung: ein altes Signal (Ausfall) erzeugt KEINE Live-Bewertung mehr —
 	// sonst 0,0 km/h + „Schneller" aus altem Stillstand. Nur eine frische Position gilt als live.
 	posStaleS := b.Thresholds.PosStaleS
@@ -336,6 +340,7 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	if maxKmh <= 0 {
 		maxKmh = 40
 	}
+	st.MaxKmh = maxKmh
 	arrivalRadiusKm := b.Thresholds.ArrivalRadiusM / 1000
 	if arrivalRadiusKm <= 0 {
 		arrivalRadiusKm = 0.15
@@ -449,6 +454,7 @@ func (e *Engine) Tick(now time.Time) {
 	st.Alarm = eventHorn
 	st.AlarmState = e.alarmState
 	st.Horn, st.Lamp = horn, lamp
+	st.Version = version
 	st.UpdatedAt = now.Format(time.RFC3339)
 	e.status = st
 	gpio := e.gpio
