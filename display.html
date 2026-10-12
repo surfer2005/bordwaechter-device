@@ -66,6 +66,10 @@
  .cfg:hover{color:var(--ink);border-color:var(--teal)}
  .msg{flex:1;display:grid;place-items:center;text-align:center;color:var(--muted);font-size:1.3rem;font-weight:600;padding:40px}
  .hintbox{padding:34px 20px;text-align:center;color:var(--muted);font-size:1.25rem;font-weight:600}
+ .camwrap{width:100%;max-width:560px;position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:16/9;display:grid;place-items:center;border:1px solid var(--line)}
+ .camwrap.alarm{border:3px solid var(--red);box-shadow:0 0 0 3px rgba(232,97,78,.25)}
+ .camwrap img{width:100%;height:100%;object-fit:contain}
+ .camrec{position:absolute;top:10px;left:12px;font-family:var(--mono);font-weight:700;font-size:.85rem;color:var(--red);background:rgba(0,0,0,.45);padding:3px 9px;border-radius:6px}
 </style>
 </head>
 <body>
@@ -73,6 +77,7 @@
   <header>
     <div class="brand"><span class="d"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18c2 1.4 4 1.4 6 0s4-1.4 6 0 4 1.4 6 0M5 18l1.2-8.4a1 1 0 0 1 1-.86H12V4l6 4-6 3.2"/></svg></span></div>
     <div><div class="shipname" id="shipname">—</div><div class="reg" id="reg"></div></div>
+    <button class="themebtn" id="livebtn" title="Live-Bild" style="display:none">Live-Bild</button>
     <button class="themebtn" id="themebtn" title="Hell/Dunkel umschalten">☾</button>
     <span class="clock" id="clock">—:—</span>
   </header>
@@ -100,6 +105,7 @@
         <div class="abziel" id="abfziel"></div>
       </div>
       <div class="hintbox" id="hint" style="display:none"></div>
+      <div class="camwrap" id="camwrap" style="display:none"><div class="camrec" id="camrec">● LIVE</div><img id="camimg" alt="Kamerabild"></div>
     </section>
     <div class="side">
       <section class="card facts">
@@ -124,7 +130,8 @@
 <script>
 function $(id){return document.getElementById(id)}
 var token=new URLSearchParams(location.search).get('token')||''
-var CX=110,CY=120,R=86,A0=150,A1=390,VMAX=40,fails=0;
+var CX=110,CY=120,R=86,A0=150,A1=390,VMAX=40,fails=0,liveManual=false,camShown=false;
+function snapUrl(){ return '/api/snapshot?token='+encodeURIComponent(token)+'&_='+Date.now() }
 
 // Theme (hell/dunkel) wie im Kiosk
 (function(){var KEY='bw_display_theme'
@@ -218,6 +225,19 @@ function render(s){
     gauge.style.display='none';vd.style.display='none';tl.style.display='none';ab.style.display='none';hint.style.display='block'
     hint.textContent=s.hint||'Keine Fahrplandaten für die Empfehlung.'
   }
+
+  // Kamerabild überlagert den Tacho: automatisch bei einem Ereignis, oder per „Live-Bild"-Knopf.
+  $('livebtn').style.display = s.cam_configured ? '' : 'none'
+  var cam=$('camwrap')
+  if(s.cam_configured && (liveManual || s.camera_hazard)){
+    gauge.style.display='none';vd.style.display='none';tl.style.display='none';ab.style.display='none';hint.style.display='none'
+    cam.style.display='grid'
+    cam.className='camwrap'+(s.camera_hazard?' alarm':'')
+    $('camrec').textContent=s.camera_hazard?'● REC · Hinweis':'● LIVE'
+    $('camrec').style.color=s.camera_hazard?'var(--red)':'var(--teal)'
+    if(!camShown){ $('camimg').src=snapUrl(); camShown=true }
+  } else { cam.style.display='none'; camShown=false }
+
   drawMap(s)
 }
 
@@ -259,6 +279,8 @@ async function load(){
     var s=await r.json(); fails=0; render(s)
   }catch(e){ if(++fails>=3) showMsg('Keine Verbindung zum Bordwächter …') }
 }
+$('livebtn').onclick=function(){ liveManual=!liveManual; load() }
+setInterval(function(){ if($('camwrap').style.display!=='none'){ $('camimg').src=snapUrl() } },1000)
 load(); setInterval(load,2000)
 </script>
 </body>

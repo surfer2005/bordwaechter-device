@@ -195,6 +195,39 @@ func (a *App) routes() *http.ServeMux {
 		writeJSON(w, a.eng.Status())
 	})
 
+	// Kamera-Snapshot für die Anzeige: holt das Bild vom konfigurierten Mobotix-Snapshot-URL und
+	// reicht es weiter — so bleibt die Kamera-Adresse/der Zugang auf dem Gerät, nicht im Monitor-Browser.
+	// Token wie bei /api/display (die Anzeige ist ohne Login, aber mit Token in der Adresse).
+	mux.HandleFunc("/api/snapshot", func(w http.ResponseWriter, r *http.Request) {
+		cfg := a.getCfg()
+		if cfg.DisplayToken == "" || r.URL.Query().Get("token") != cfg.DisplayToken {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if cfg.Camera.SnapshotURL == "" {
+			http.Error(w, "keine Kamera konfiguriert", http.StatusNotFound)
+			return
+		}
+		cl := &http.Client{Timeout: 8 * time.Second}
+		resp, err := cl.Get(cfg.Camera.SnapshotURL)
+		if err != nil {
+			http.Error(w, "Kamera nicht erreichbar", http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			http.Error(w, "Kamera-Fehler", http.StatusBadGateway)
+			return
+		}
+		ct := resp.Header.Get("Content-Type")
+		if ct == "" {
+			ct = "image/jpeg"
+		}
+		w.Header().Set("Content-Type", ct)
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = io.Copy(w, io.LimitReader(resp.Body, 10*1024*1024))
+	})
+
 	mux.HandleFunc("/api/config", a.guard(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
 			var c Config
