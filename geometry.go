@@ -14,6 +14,16 @@ func haversineKm(aLat, aLng, bLat, bLng float64) float64 {
 	return 2 * R * math.Asin(math.Min(1, math.Sqrt(h)))
 }
 
+// bearingDeg: Peilung (Kurs über Grund) von Punkt A nach B in Grad (0 = Nord, im Uhrzeigersinn).
+func bearingDeg(aLat, aLng, bLat, bLng float64) float64 {
+	p1 := aLat * math.Pi / 180
+	p2 := bLat * math.Pi / 180
+	dl := (bLng - aLng) * math.Pi / 180
+	y := math.Sin(dl) * math.Cos(p2)
+	x := math.Cos(p1)*math.Sin(p2) - math.Sin(p1)*math.Cos(p2)*math.Cos(dl)
+	return math.Mod(math.Atan2(y, x)*180/math.Pi+360, 360)
+}
+
 type projResult struct {
 	RemainKm     float64
 	DistToLineKm float64

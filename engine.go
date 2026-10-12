@@ -36,6 +36,7 @@ type Status struct {
 	SifaDeadman  bool    `json:"sifa_deadman_active"`
 	Lat          float64 `json:"lat"`
 	Lng          float64 `json:"lng"`
+	Heading      float64 `json:"heading"` // Kurs über Grund (°), aus der Bewegung abgeleitet
 	FromLat      float64      `json:"from_lat"`
 	FromLng      float64      `json:"from_lng"`
 	ToLat        float64      `json:"to_lat"`
@@ -62,8 +63,9 @@ type Engine struct {
 
 	bundle   *Bundle
 	bundleAt time.Time
-	pos      Position
-	lastPos  Position
+	pos         Position
+	lastPos     Position
+	lastHeading float64 // zuletzt abgeleiteter Kurs (wird bei Stillstand gehalten)
 
 	// Ereignis-SIFA
 	alarmState string // normal | alarm | acked
@@ -121,6 +123,16 @@ func (e *Engine) SetPosition(p Position) {
 		if dt > 0 && dt < 0.2 { // nur plausible kurze Abstände
 			d := haversineKm(e.lastPos.Lat, e.lastPos.Lng, p.Lat, p.Lng)
 			p.SpeedKmh = d / dt
+		}
+	}
+	// Kurs: Teltonika hat KEIN Heading-Register → aus der Bewegung ableiten (Peilung). Bei zu wenig
+	// Bewegung (GPS-Zittern im Stand) den zuletzt bekannten Kurs halten statt wild zu springen.
+	if e.cfg != nil && e.cfg.GPS.HeadingReg < 0 && e.lastPos.Valid && p.Valid {
+		if haversineKm(e.lastPos.Lat, e.lastPos.Lng, p.Lat, p.Lng) > 0.004 { // > ~4 m
+			p.Heading = bearingDeg(e.lastPos.Lat, e.lastPos.Lng, p.Lat, p.Lng)
+			e.lastHeading = p.Heading
+		} else {
+			p.Heading = e.lastHeading
 		}
 	}
 	if p.Valid {
@@ -412,6 +424,7 @@ func (e *Engine) Tick(now time.Time) {
 	if pos.Valid {
 		st.PosValid = true
 		st.Lat, st.Lng = pos.Lat, pos.Lng
+		st.Heading = pos.Heading
 		st.PosAgeSec = int(now.Sub(pos.TS).Seconds())
 	}
 	if !e.bundleAt.IsZero() {

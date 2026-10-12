@@ -20,7 +20,9 @@
  .brand .d{width:30px;height:30px;border-radius:8px;background:var(--teal);display:grid;place-items:center}
  .brand .d svg{width:20px;height:20px;display:block}
  .shipname{font-weight:800;font-size:1.1rem;line-height:1}.reg{color:var(--muted);font-family:var(--mono);font-size:.85rem}
- .clock{margin-left:auto;font-family:var(--mono);font-weight:700;font-size:1.4rem}
+ .clock{font-family:var(--mono);font-weight:700;font-size:1.4rem}
+ .kurs{margin-left:auto;font-family:var(--mono);font-weight:700;font-size:1rem;color:var(--muted);white-space:nowrap}
+ .shipdir svg{display:block;filter:drop-shadow(0 0 1px rgba(0,0,0,.4))}
  .themebtn{background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:7px 12px;font:inherit;font-size:1.15rem;line-height:1;cursor:pointer}
  .ampel{display:flex;align-items:center;gap:11px;padding:12px 16px;border-radius:12px;border:1px solid var(--line);font-weight:800;font-size:1.1rem}
  .ampel .lamp{width:18px;height:18px;border-radius:50%;flex:none}
@@ -77,6 +79,7 @@
   <header>
     <div class="brand"><span class="d"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18c2 1.4 4 1.4 6 0s4-1.4 6 0 4 1.4 6 0M5 18l1.2-8.4a1 1 0 0 1 1-.86H12V4l6 4-6 3.2"/></svg></span></div>
     <div><div class="shipname" id="shipname">—</div><div class="reg" id="reg"></div></div>
+    <span class="kurs" id="kurs"></span>
     <button class="themebtn" id="livebtn" title="Live-Bild" style="display:none">Live-Bild</button>
     <button class="themebtn" id="themebtn" title="Hell/Dunkel umschalten">☾</button>
     <span class="clock" id="clock">—:—</span>
@@ -164,6 +167,7 @@ function render(s){
   $('shipname').textContent=s.ship||'—'
   $('reg').textContent=s.registration_number||''
   $('verfoot').textContent=s.version?('v'+s.version):''
+  $('kurs').textContent=s.pos_valid?('Kurs '+Math.round(s.heading||0)+'° · '+cardinal(s.heading||0)):''
 
   // Fußzeile: Live · Quelle + Position
   if(s.pos_valid){$('src').textContent='Live · bordwaechter';$('agetxt').textContent='letzte Position vor '+s.pos_age_sec+' s';$('blip').style.background=(s.pos_age_sec>120?'var(--amber)':'var(--teal)')}
@@ -243,17 +247,18 @@ function render(s){
 
 // Karte wie im Kiosk (Route + Start/Ziel + Position). Lädt Leaflet/OSM vom Netz; ohne Verbindung
 // (reiner Offline-Bordmonitor) wird die Karten-Kachel ausgeblendet statt grau zu bleiben.
-var kmap=null,klayer=null,mapFitted=false,mapPts=[],lastInteract=0,userMoved=false
+var kmap=null,klayer=null,mapFitted=false,mapPts=[],lastInteract=0,userMoved=false,recentering=false
 var IDLE_MS=30000 // nach 30 s ohne Nutzer-Aktion automatisch wieder einpassen
-function recenterMap(){ if(kmap&&mapPts.length){ kmap.fitBounds(L.latLngBounds(mapPts).pad(0.25)); userMoved=false } }
+function cardinal(d){ return ['N','NO','O','SO','S','SW','W','NW'][Math.round(((d%360)/45))%8] }
+function recenterMap(){ if(kmap&&mapPts.length){ recentering=true; kmap.fitBounds(L.latLngBounds(mapPts).pad(0.25),{animate:false}); userMoved=false; setTimeout(function(){recentering=false},60) } }
 function drawMap(s){
   if(typeof L==='undefined'){ $('mapcard').style.display='none'; return }
   if(!kmap){
     kmap=L.map('map',{zoomControl:true,preferCanvas:true}).setView([47.62,9.30],11)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(kmap)
     klayer=L.layerGroup().addTo(kmap)
-    // Nutzer-Interaktion merken (verschieben/zoomen) → 30-s-Timer bis zum Auto-Zentrieren
-    L.DomEvent.on(kmap.getContainer(),'mousedown wheel touchstart',function(){lastInteract=Date.now();userMoved=true})
+    // Nutzer-Interaktion über Leaflet-Events (fängt AUCH die +/- Zoom-Knöpfe, anders als reine DOM-Events)
+    kmap.on('zoomstart movestart',function(){ if(!recentering){ lastInteract=Date.now(); userMoved=true } })
     // Zentrieren-Knopf (passt sofort wieder auf Route+Position ein)
     var Z=L.Control.extend({options:{position:'topleft'},onAdd:function(){var d=L.DomUtil.create('div','leaflet-bar leaflet-control');var a=L.DomUtil.create('a','',d);a.href='#';a.title='Zentrieren';a.innerHTML='&#9678;';a.style.fontSize='18px';a.style.lineHeight='26px';a.style.textAlign='center';L.DomEvent.on(a,'click',function(e){L.DomEvent.stop(e);recenterMap();});return d;}})
     kmap.addControl(new Z())
@@ -264,7 +269,14 @@ function drawMap(s){
   if(s.route_geom&&s.route_geom.length){var ll=s.route_geom.map(function(p){return [p[1],p[0]]});L.polyline(ll,{color:'#1F6E5C',weight:4,opacity:.85}).addTo(klayer);for(var i=0;i<ll.length;i++)pts.push(ll[i])}
   function dot(la,ln,color){if((la||ln)){L.circleMarker([la,ln],{radius:5,color:color,fillColor:color,fillOpacity:1,weight:1}).addTo(klayer);pts.push([la,ln])}}
   dot(s.from_lat,s.from_lng,'#8a8a8a');dot(s.to_lat,s.to_lng,'#E8614E')
-  if(s.pos_valid){L.circleMarker([s.lat,s.lng],{radius:7,color:'#fff',weight:2,fillColor:'#1F6E5C',fillOpacity:1}).addTo(klayer);pts.push([s.lat,s.lng])}
+  if(s.pos_valid){
+    if(s.heading!=null && (s.ist_kmh==null || s.ist_kmh>1)){ // fährt → Pfeil in Fahrtrichtung
+      L.marker([s.lat,s.lng],{icon:L.divIcon({className:'shipdir',iconSize:[28,28],iconAnchor:[14,14],html:'<svg width="28" height="28" viewBox="0 0 28 28" style="transform:rotate('+s.heading+'deg)"><path d="M14 3 L20 23 L14 18 L8 23 Z" fill="#1F6E5C" stroke="#fff" stroke-width="1.4"/></svg>'})}).addTo(klayer)
+    } else {
+      L.circleMarker([s.lat,s.lng],{radius:7,color:'#fff',weight:2,fillColor:'#1F6E5C',fillOpacity:1}).addTo(klayer)
+    }
+    pts.push([s.lat,s.lng])
+  }
   mapPts=pts
   if(!mapFitted&&pts.length){ recenterMap(); mapFitted=true }          // erstes Einpassen
   else if(userMoved && pts.length && (Date.now()-lastInteract)>=IDLE_MS){ recenterMap() } // nach 30 s Ruhe zurück
