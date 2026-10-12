@@ -28,10 +28,26 @@
   .muted{color:var(--muted);font-size:.85rem}
   fieldset{border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:10px}
   legend{font-size:.75rem;color:var(--muted);padding:0 6px}
+  #login{position:fixed;inset:0;background:var(--bg);display:none;place-items:center;z-index:100;padding:16px}
+  #login .box{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px;width:100%;max-width:340px}
+  #login h1{justify-content:center;margin-bottom:14px}
+  #login .err{color:var(--red);font-size:.85rem;min-height:1.2em;margin-top:6px}
+  #login button{width:100%;margin-top:12px}
 </style>
 </head>
 <body>
-  <h1><span class="d">⚓</span> Bordwächter <span class="muted" id="ver" style="font-weight:400;font-size:.8rem"></span></h1>
+  <div id="login">
+    <div class="box">
+      <h1><span class="d">⚓</span> Bordwächter</h1>
+      <label>Benutzer</label><input id="l_user" value="admin" autocomplete="username">
+      <label>Passwort</label><input id="l_pw" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+      <div class="err" id="l_err"></div>
+      <button onclick="doLogin()">Anmelden</button>
+    </div>
+  </div>
+
+  <h1><span class="d">⚓</span> Bordwächter <span class="muted" id="ver" style="font-weight:400;font-size:.8rem"></span>
+    <button class="ghost" style="margin-left:auto;font-size:.8rem;padding:5px 10px" onclick="doLogout()">Abmelden</button></h1>
 
   <div id="banner" class="banner"></div>
 
@@ -150,10 +166,25 @@ async function applyNet(){
 async function rebootPi(){ if(!confirm('Das GERÄT (Raspberry) jetzt komplett neu starten?'))return; g('netMsg').textContent='Gerät startet neu …'; await post('/api/reboot') }
 async function updateDev(){ if(!confirm('Neueste Version aus dem Internet laden und installieren?'))return; g('saveMsg').textContent='Lade neue Version …'; try{ const r=await fetch('/api/update',{method:'POST'}); const j=await r.json(); if(!j.ok){ g('saveMsg').textContent='Fehler: '+(j.error||'Update'); return } g('saveMsg').textContent='Aktualisiert, Neustart läuft …'; setTimeout(()=>{g('saveMsg').textContent='';location.reload()},6000) }catch(e){ g('saveMsg').textContent='Aktualisiert, Neustart läuft …'; setTimeout(()=>location.reload(),6000) } }
 function fmt(n,u){ return (n==null||n===0&&u==='km'?'—':n)+(u?(' '+u):'') }
+function showLogin(){ g('login').style.display='grid' }
+function hideLogin(){ g('login').style.display='none' }
+async function doLogin(){
+  g('l_err').textContent=''
+  try{
+    const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:g('l_user').value,password:g('l_pw').value})})
+    const j=await r.json()
+    if(j.ok){ g('l_pw').value=''; hideLogin(); loadCfg(); refresh() }
+    else g('l_err').textContent=j.error||'Anmeldung fehlgeschlagen'
+  }catch(e){ g('l_err').textContent='Fehler: '+e }
+}
+async function doLogout(){ try{ await post('/api/logout') }catch(e){}; showLogin() }
 
 async function refresh(){
   try{
-    const r=await fetch('/api/status'); const s=await r.json()
+    const r=await fetch('/api/status')
+    if(r.status===401){ showLogin(); return }
+    hideLogin()
+    const s=await r.json()
     g('s_ship').textContent=(s.ship||'—')+(s.registration_number?(' · '+s.registration_number):'')
     g('s_phase').textContent=s.phase||'—'
     g('s_leg').textContent=(s.from&&s.to)?(s.from+' → '+s.to):'—'
@@ -171,7 +202,9 @@ async function refresh(){
   }catch(e){}
 }
 async function loadCfg(){
-  const c=await (await fetch('/api/config')).json()
+  const rc=await fetch('/api/config')
+  if(rc.status===401){ showLogin(); return }
+  const c=await rc.json()
   g('ver').textContent='Schiff-ID '+(c.ship_id||0)
   g('c_base').value=c.kai_base_url||''; g('c_token').value=c.edge_token||''; g('c_ship').value=c.ship_id||0
   g('c_sendpos').value=String(!!c.send_position); g('c_uipw').value=c.ui_password||''; g('c_hapw').value=c.ha_password||''

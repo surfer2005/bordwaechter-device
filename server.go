@@ -80,20 +80,36 @@ func writeJSON(w http.ResponseWriter, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// basicAuth: schützt die lokale Oberfläche/API. Akzeptiert das UI-Passwort ODER — falls gesetzt —
-// das eigene HA-Passwort (Benutzername egal). So kann Home Assistant mit einem eigenen Passwort lesen,
-// ohne dass das UI-Passwort im HA hinterlegt werden muss. Sind beide leer, ist die API im Bordnetz offen.
+// authOK prüft die Berechtigung: Cookie-Sitzung (aus der Anmeldemaske) ODER Basic-Auth. Bewusst
+// KEIN WWW-Authenticate mehr — so erscheint kein Browser-Popup; die Oberfläche zeigt stattdessen eine
+// eigene Anmeldemaske. Basic-Auth bleibt für Home Assistant (eigenes HA-Passwort) erhalten.
+// uiOnly=true: nur das UI-Passwort zählt (Admin-Aktionen wie Netzwerk/Neustart); sonst auch HA-Passwort.
+func (a *App) authOK(r *http.Request, uiOnly bool) bool {
+	cfg := a.getCfg()
+	ui, ha := cfg.UIPassword, cfg.HAPassword
+	if ui == "" && (uiOnly || ha == "") {
+		return true // kein relevantes Passwort gesetzt → offen im Bordnetz
+	}
+	if c, err := r.Cookie("bw_session"); err == nil && validSession(c.Value) {
+		return true
+	}
+	if _, pass, ok := r.BasicAuth(); ok {
+		if ui != "" && pass == ui {
+			return true
+		}
+		if !uiOnly && ha != "" && pass == ha {
+			return true
+		}
+	}
+	return false
+}
+
+// guard: schützt API/Aktionen; akzeptiert UI- ODER HA-Passwort (bzw. gültige Sitzung).
 func (a *App) guard(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		cfg := a.getCfg()
-		ui, ha := cfg.UIPassword, cfg.HAPassword
-		if ui != "" || ha != "" {
-			_, pass, ok := r.BasicAuth()
-			if !ok || (pass != ui && pass != ha) {
-				w.Header().Set("WWW-Authenticate", `Basic realm="Bordwächter"`)
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
+		if !a.authOK(r, false) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
 		}
 		h(w, r)
 	}
@@ -103,14 +119,9 @@ func (a *App) guard(h http.HandlerFunc) http.HandlerFunc {
 // HA-Passwort (das ist nur fürs Mitlesen gedacht). Leeres UI-Passwort = offen im Bordnetz.
 func (a *App) guardUI(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		pw := a.getCfg().UIPassword
-		if pw != "" {
-			_, pass, ok := r.BasicAuth()
-			if !ok || pass != pw {
-				w.Header().Set("WWW-Authenticate", `Basic realm="Bordwächter"`)
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
+		if !a.authOK(r, true) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
 		}
 		h(w, r)
 	}
@@ -119,7 +130,9 @@ func (a *App) guardUI(h http.HandlerFunc) http.HandlerFunc {
 func (a *App) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/", a.guard(func(w http.ResponseWriter, r *http.Request) {
+	// Die Seite selbst ist nicht geschützt (sie enthält nur HTML/JS). Alle Daten/Aktionen dahinter
+	// sind weiterhin geschützt; ist man nicht angemeldet, zeigt die Seite ihre eigene Anmeldemaske.
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
@@ -127,7 +140,36 @@ func (a *App) routes() *http.ServeMux {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
 		_, _ = w.Write(uiHTML)
-	}))
+	})
+
+	// Anmelden: Benutzername (z. B. "admin") egal, Passwort muss dem UI-Passwort entsprechen.
+	// Erfolg → Sitzungs-Cookie. Kein UI-Passwort gesetzt → immer erfolgreich (offen im Bordnetz).
+	mux.HandleFunc("/api/login", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "POST", http.StatusMethodNotAllowed)
+			return
+		}
+		var in struct{ Username, Password string }
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		ui := a.getCfg().UIPassword
+		if ui == "" || in.Password == ui {
+			http.SetCookie(w, &http.Cookie{
+				Name: "bw_session", Value: newSession(), Path: "/",
+				HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: int(sessionTTL / time.Second),
+			})
+			writeJSON(w, map[string]any{"ok": true})
+			return
+		}
+		writeJSON(w, map[string]any{"ok": false, "error": "Benutzername oder Passwort falsch"})
+	})
+
+	mux.HandleFunc("/api/logout", func(w http.ResponseWriter, r *http.Request) {
+		if c, err := r.Cookie("bw_session"); err == nil {
+			dropSession(c.Value)
+		}
+		http.SetCookie(w, &http.Cookie{Name: "bw_session", Value: "", Path: "/", HttpOnly: true, MaxAge: -1})
+		writeJSON(w, map[string]any{"ok": true})
+	})
 
 	// Status — auch für die HACS-Integration (Basic-Auth mit UI-Passwort).
 	mux.HandleFunc("/api/status", a.guard(func(w http.ResponseWriter, r *http.Request) {
