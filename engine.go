@@ -36,6 +36,11 @@ type Status struct {
 	SifaDeadman  bool    `json:"sifa_deadman_active"`
 	Lat          float64 `json:"lat"`
 	Lng          float64 `json:"lng"`
+	FromLat      float64      `json:"from_lat"`
+	FromLng      float64      `json:"from_lng"`
+	ToLat        float64      `json:"to_lat"`
+	ToLng        float64      `json:"to_lng"`
+	RouteGeom    [][2]float64 `json:"route_geom"` // [lon,lat] des aktuellen Legs (für die Karte)
 	PosAgeSec    int     `json:"pos_age_sec"`
 	PosValid     bool    `json:"pos_valid"`
 	CameraHazard bool    `json:"camera_hazard"`
@@ -242,6 +247,14 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	st.From, st.To = leg.From, leg.To
 	st.Soll = leg.Arr
 	st.Abfahrt = leg.Dep
+	// Route + Start/Ziel für die Karte (gilt auch „vor Abfahrt").
+	if len(leg.Geometry) >= 2 {
+		st.RouteGeom = leg.Geometry
+		a := leg.Geometry[0]
+		z := leg.Geometry[len(leg.Geometry)-1]
+		st.FromLng, st.FromLat = a[0], a[1]
+		st.ToLng, st.ToLat = z[0], z[1]
+	}
 
 	phase := "unterwegs"
 	if best.dep >= 0 && float64(best.dep) > nowMin {
