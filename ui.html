@@ -146,6 +146,13 @@
       <div class="btns" style="margin-top:8px"><button onclick="applyNet()">IP übernehmen</button><button class="ghost" onclick="rebootPi()">Gerät neu starten (Pi)</button><span id="netMsg" class="muted"></span></div>
       <p class="muted" style="margin-top:6px">Feste IP/DHCP wird erst nach einem <b>Neustart des Geräts</b> wirksam. Vorsicht: eine falsche IP/Gateway kann das Gerät im Netz unerreichbar machen — dann hilft nur Bildschirm+Tastatur am Raspberry.</p>
     </fieldset>
+    <fieldset><legend>Anzeige (Kiosk-Seite)</legend>
+      <div class="row">
+        <div><label>Display-Token (leer = Anzeige aus)</label><input id="c_disptok"></div>
+      </div>
+      <div class="btns" style="margin-top:8px"><button class="ghost" onclick="genDispTok()">Neu erzeugen</button><a id="dispOpen" class="ghost" style="display:inline-block;text-decoration:none" href="#" target="_blank" rel="noopener">Anzeige öffnen</a></div>
+      <p class="muted" style="margin-top:6px">Vollbild-Anzeige für einen Monitor an Bord — ohne Login, der Token steckt in der Adresse. Diese Adresse am Monitor hinterlegen:<br><code id="dispUrl" style="word-break:break-all"></code></p>
+    </fieldset>
     <div class="btns"><button onclick="saveCfg()">Speichern</button><button class="ghost" onclick="updateDev()">Aktualisieren</button><button class="ghost" onclick="restartDev()">Neustart</button><span id="saveMsg" class="muted"></span></div>
     <p class="muted" style="margin-top:6px">Hinweis: Änderung von GPS-Quelle oder GPIO-Backend wird nach einem Neustart des Dienstes wirksam.</p>
   </div>
@@ -164,6 +171,13 @@ async function applyNet(){
   catch(e){ g('netMsg').textContent='Fehler: '+e }
 }
 async function rebootPi(){ if(!confirm('Das GERÄT (Raspberry) jetzt komplett neu starten?'))return; g('netMsg').textContent='Gerät startet neu …'; await post('/api/reboot') }
+function updateDispUrl(){
+  const t=g('c_disptok').value.trim()
+  const u=t? (location.origin+'/anzeige?token='+encodeURIComponent(t)) : ''
+  g('dispUrl').textContent = u || '— (kein Token gesetzt, Anzeige ist aus)'
+  const a=g('dispOpen'); if(u){ a.href=u; a.style.pointerEvents=''; a.style.opacity='' } else { a.href='#'; a.style.pointerEvents='none'; a.style.opacity='.5' }
+}
+function genDispTok(){ const b=new Uint8Array(16); crypto.getRandomValues(b); g('c_disptok').value=Array.from(b,x=>x.toString(16).padStart(2,'0')).join(''); updateDispUrl() }
 async function updateDev(){ if(!confirm('Neueste Version aus dem Internet laden und installieren?'))return; g('saveMsg').textContent='Lade neue Version …'; try{ const r=await fetch('/api/update',{method:'POST'}); const j=await r.json(); if(!j.ok){ g('saveMsg').textContent='Fehler: '+(j.error||'Update'); return } g('saveMsg').textContent='Aktualisiert, Neustart läuft …'; setTimeout(()=>{g('saveMsg').textContent='';location.reload()},6000) }catch(e){ g('saveMsg').textContent='Aktualisiert, Neustart läuft …'; setTimeout(()=>location.reload(),6000) } }
 function fmt(n,u){ return (n==null||n===0&&u==='km'?'—':n)+(u?(' '+u):'') }
 function showLogin(){ g('login').style.display='grid' }
@@ -208,6 +222,7 @@ async function loadCfg(){
   g('ver').textContent='Schiff-ID '+(c.ship_id||0)
   g('c_base').value=c.kai_base_url||''; g('c_token').value=c.edge_token||''; g('c_ship').value=c.ship_id||0
   g('c_sendpos').value=String(!!c.send_position); g('c_uipw').value=c.ui_password||''; g('c_hapw').value=c.ha_password||''
+  g('c_disptok').value=c.display_token||''; updateDispUrl()
   g('g_src').value=c.gps.source; g('g_host').value=c.gps.host||''; g('g_port').value=c.gps.port; g('g_unit').value=c.gps.unit
   g('g_lat').value=c.gps.lat_reg; g('g_lng').value=c.gps.lng_reg; g('g_speed').value=c.gps.speed_reg; g('g_head').value=c.gps.heading_reg; g('g_fmt').value=c.gps.format; g('g_poll').value=c.gps.poll_sec
   g('sf_combo').value=c.sifa.trigger_combo; g('sf_re').value=c.sifa.realarm_sec; g('sf_dm').value=String(!!c.sifa.deadman_on)
@@ -222,7 +237,7 @@ async function loadCfg(){
 async function saveCfg(){
   const num=(id)=>parseInt(g(id).value||'0',10)
   const c={ kai_base_url:g('c_base').value, edge_token:g('c_token').value, ship_id:num('c_ship'),
-    send_position:g('c_sendpos').value==='true', listen:':8090', ui_password:g('c_uipw').value, ha_password:g('c_hapw').value, bundle_refresh_sec:300,
+    send_position:g('c_sendpos').value==='true', listen:':8090', ui_password:g('c_uipw').value, ha_password:g('c_hapw').value, display_token:g('c_disptok').value, bundle_refresh_sec:300,
     gps:{source:g('g_src').value,host:g('g_host').value,port:num('g_port'),unit:num('g_unit'),lat_reg:num('g_lat'),lng_reg:num('g_lng'),speed_reg:num('g_speed'),heading_reg:num('g_head'),format:g('g_fmt').value,poll_sec:num('g_poll')},
     sifa:{trigger_combo:g('sf_combo').value,realarm_sec:num('sf_re'),deadman_on:g('sf_dm').value==='true',deadman_sec:num('sf_dms'),deadman_prewarn_sec:num('sf_pre')},
     gpio:{backend:g('io_be').value,horn_pin:num('io_horn'),lamp_pin:num('io_lamp'),ack_pin:num('io_ack'),sifa_key_pin:num('io_key'),active_low:g('io_al').value==='true'},

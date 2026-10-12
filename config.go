@@ -17,6 +17,7 @@ type Config struct {
 	Listen       string `json:"listen"`        // lokale UI/API, z. B. ":8090"
 	UIPassword   string `json:"ui_password"`   // Schutz der lokalen Oberfläche (leer = offen im Bordnetz)
 	HAPassword   string `json:"ha_password"`   // eigenes Passwort für Home Assistant (leer = HA nutzt UIPassword)
+	DisplayToken string `json:"display_token"` // Token für die Kiosk-Anzeige (/anzeige?token=…), leer = Anzeige aus
 
 	GPS struct {
 		Source     string `json:"source"` // "teltonika" | "manual"

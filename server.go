@@ -18,6 +18,9 @@ import (
 //go:embed ui.html
 var uiHTML []byte
 
+//go:embed display.html
+var displayHTML []byte
+
 // Quelle für den Self-Update ("Aktualisieren"-Knopf): die neueste Release-Binärdatei des Geräte-Repos.
 const updateBase = "https://github.com/surfer2005/bordwaechter-device/releases/latest/download"
 
@@ -175,6 +178,22 @@ func (a *App) routes() *http.ServeMux {
 	mux.HandleFunc("/api/status", a.guard(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, a.eng.Status())
 	}))
+
+	// Kiosk-Anzeige (schöne Vollbild-Seite für einen Monitor an Bord): ohne Login, dafür Token in der
+	// Adresse. Die Seite selbst ist harmlos; die Daten dahinter (/api/display) prüfen den Token.
+	mux.HandleFunc("/anzeige", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write(displayHTML)
+	})
+	mux.HandleFunc("/api/display", func(w http.ResponseWriter, r *http.Request) {
+		tok := a.getCfg().DisplayToken
+		if tok == "" || r.URL.Query().Get("token") != tok {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		writeJSON(w, a.eng.Status())
+	})
 
 	mux.HandleFunc("/api/config", a.guard(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {

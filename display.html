@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bordwächter — Anzeige</title>
+<style>
+  :root{--bg:#0B100E;--panel:#121A17;--line:#243029;--ink:#EAF2EE;--muted:#8CA399;
+        --teal:#54BC9F;--amber:#E0A23B;--red:#E7604A;--radius:14px}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:system-ui,sans-serif;
+       display:flex;flex-direction:column;min-height:100%;padding:3vmin;gap:2.4vmin}
+  .top{display:flex;align-items:baseline;gap:1.2rem;flex-wrap:wrap}
+  .ship{font-size:min(7vw,4rem);font-weight:800;letter-spacing:.01em;line-height:1}
+  .reg{font-size:min(3.4vw,1.4rem);color:var(--muted);font-family:ui-monospace,monospace}
+  .banner{display:none;border-radius:var(--radius);padding:1.4vmin 2.4vmin;font-weight:800;
+          font-size:min(4.4vw,1.8rem)}
+  .b-alarm{display:block;background:#3a1712;color:var(--red);border:2px solid var(--red)}
+  .b-warn{display:block;background:#332611;color:var(--amber);border:1px solid var(--amber)}
+  .verdict{flex:1;display:grid;place-items:center;border-radius:var(--radius);
+           background:var(--panel);border:1px solid var(--line);padding:3vmin;text-align:center}
+  .v-word{font-size:min(16vw,10rem);font-weight:900;line-height:.95;letter-spacing:-.01em}
+  .v-delta{font-size:min(7vw,3.2rem);font-weight:800;margin-top:1vmin}
+  .v-sub{font-size:min(4vw,1.6rem);color:var(--muted);margin-top:1.6vmin}
+  .ok{color:var(--teal)} .up{color:var(--amber)} .down{color:var(--teal)} .bad{color:var(--red)} .dim{color:var(--muted)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1.6vmin}
+  .kv{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:1.8vmin 2.2vmin}
+  .k{font-size:min(3vw,1rem);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
+  .val{font-size:min(6vw,2.4rem);font-weight:800;font-family:ui-monospace,monospace;margin-top:.4vmin}
+  .msg{flex:1;display:grid;place-items:center;text-align:center;color:var(--muted);font-size:min(5vw,2rem);padding:3vmin}
+  .foot{color:var(--muted);font-size:min(3vw,.95rem);display:flex;justify-content:space-between;align-items:center;gap:1rem}
+  .cfg{color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:8px;
+       padding:.8vmin 1.6vmin;font-weight:700;white-space:nowrap}
+  .cfg:hover{color:var(--ink);border-color:var(--teal)}
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="ship" id="ship">—</div>
+    <div class="reg" id="reg"></div>
+  </div>
+  <div class="banner" id="banner"></div>
+
+  <div class="verdict" id="vcard">
+    <div>
+      <div class="v-word dim" id="v_word">—</div>
+      <div class="v-delta" id="v_delta"></div>
+      <div class="v-sub" id="v_sub"></div>
+    </div>
+  </div>
+
+  <div class="grid" id="grid">
+    <div class="kv"><div class="k">Nächster Halt</div><div class="val" id="leg" style="font-size:min(4.4vw,1.7rem)">—</div></div>
+    <div class="kv"><div class="k">Soll-Ankunft</div><div class="val" id="soll">—</div></div>
+    <div class="kv"><div class="k">Ist / Soll km/h</div><div class="val" id="speed">—</div></div>
+    <div class="kv"><div class="k">Reststrecke</div><div class="val" id="remain">—</div></div>
+    <div class="kv"><div class="k">Kursabweichung</div><div class="val" id="off">—</div></div>
+    <div class="kv"><div class="k">Position</div><div class="val" id="pos">—</div></div>
+  </div>
+
+  <div class="msg" id="msg" style="display:none"></div>
+  <div class="foot">
+    <span id="foot"></span>
+    <a class="cfg" href="/">⚙ Einstellungen</a>
+  </div>
+
+<script>
+function g(id){return document.getElementById(id)}
+const token=new URLSearchParams(location.search).get('token')||''
+let fails=0
+
+function showMsg(t){ g('msg').style.display='grid'; g('msg').textContent=t
+  g('grid').style.display='none'; g('vcard').style.display='none'; g('banner').style.display='none' }
+function showData(){ g('msg').style.display='none'; g('grid').style.display='grid'; g('vcard').style.display='grid' }
+
+async function tick(){
+  if(!token){ showMsg('Kein Token in der Adresse. In den Einstellungen des Bordwächters ein Display-Token setzen und die vollständige Adresse verwenden.'); return }
+  try{
+    const r=await fetch('/api/display?token='+encodeURIComponent(token),{cache:'no-store'})
+    if(r.status===401||r.status===403){ showMsg('Token ungültig. Bitte die Adresse aus den Einstellungen erneut übernehmen.'); return }
+    if(!r.ok) throw new Error('http '+r.status)
+    const s=await r.json(); fails=0; render(s)
+  }catch(e){ if(++fails>=3) showMsg('Keine Verbindung zum Bordwächter …') }
+}
+
+function render(s){
+  showData()
+  g('ship').textContent=s.ship||'—'
+  g('reg').textContent=s.registration_number||''
+  g('leg').textContent=(s.from&&s.to)?(s.from+' → '+s.to):'—'
+  g('soll').textContent=s.soll||'—'
+  g('speed').textContent=(s.ist_kmh||0)+' / '+(s.soll_kmh||0)
+  g('remain').textContent=(s.remain_km>0?s.remain_km+' km':'—')
+
+  // Kursabweichung
+  const offEl=g('off')
+  if(s.off_state && s.off_state!=='unknown'){ offEl.textContent=s.off_course_m+' m'
+    offEl.className='val '+(s.off_state==='alarm'?'bad':s.off_state==='warn'?'up':'ok') }
+  else { offEl.textContent='—'; offEl.className='val dim' }
+
+  // Position (Alter)
+  const posEl=g('pos')
+  if(s.pos_valid){ posEl.textContent=s.pos_age_sec+' s'; posEl.className='val '+((s.pos_age_sec||0)>300?'up':'dim') }
+  else { posEl.textContent='keine'; posEl.className='val bad' }
+
+  // Empfehlung (groß)
+  const word=g('v_word'), delta=g('v_delta'), sub=g('v_sub')
+  const d=(s.ist_kmh||0)-(s.soll_kmh||0)
+  const map={ok:['PASST','ok'],faster:['SCHNELLER','up'],slower:['LANGSAMER','down'],none:['—','dim']}
+  const m=map[s.verdict]||map.none
+  word.textContent=m[0]; word.className='v-word '+m[1]
+  if(s.verdict==='faster'){ delta.textContent='Gas raus · '+Math.abs(d)+' km/h zu schnell'; delta.className='v-delta up' }
+  else if(s.verdict==='slower'){ delta.textContent='Schneller · '+Math.abs(d)+' km/h fehlen'; delta.className='v-delta down' }
+  else if(s.verdict==='ok'){ delta.textContent='Tempo passt'; delta.className='v-delta ok' }
+  else { delta.textContent=''; }
+  sub.textContent=s.phase?('Phase: '+s.phase):''
+
+  // Banner
+  const b=g('banner'); b.className='banner'
+  if(s.off_state==='alarm'){ b.className='banner b-alarm'; b.textContent='⚠ KURS VERLASSEN — '+s.off_course_m+' m neben der Fahrrinne' }
+  else if(s.phase==='vor_abfahrt'){ b.className='banner b-warn'; b.textContent='Abfahrt '+(s.abfahrt||'')+(s.warten_min>=0?(' · in '+s.warten_min+' min'):'') }
+  else if(s.off_state==='warn'){ b.className='banner b-warn'; b.textContent='Kurs prüfen · '+s.off_course_m+' m neben der Fahrrinne' }
+  else if(s.horn||s.lamp){ b.className='banner b-alarm'; b.textContent='SIFA-Alarm aktiv' }
+
+  const now=new Date(); g('foot').textContent='Stand '+now.toLocaleTimeString('de-DE')
+}
+tick(); setInterval(tick,2000)
+</script>
+</body>
+</html>
