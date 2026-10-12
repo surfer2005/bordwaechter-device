@@ -337,10 +337,12 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	if pos.Valid && !posLive {
 		st.Hint = "Position veraltet — keine aktuelle Geschwindigkeit"
 	}
+	remainKnown := false
 	if posLive && len(leg.Geometry) >= 2 {
 		pr := projectOntoPolyline(leg.Geometry, pos.Lat, pos.Lng)
 		if pr.OK {
 			st.RemainKm = round2(pr.RemainKm)
+			remainKnown = true
 			st.OffCourseM = float64(int(pr.DistToLineKm*1000 + 0.5))
 			// Hafen-/Manöverbereich: nahe Start/Ziel UND im Manövertempo (langsam) → Kurs-Ampel aus
 			// (dort fächert das Schiff beim An-/Ablegen von der Linie auf → Fehlalarme).
@@ -386,10 +388,16 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	//  - auch bei Vollgas nicht pünktlich → "late" + Verspätung statt absurder km/h
 	if wartetAbfahrt {
 		// keine Tempo-Empfehlung, solange überfällig am Steg
-	} else if st.RemainKm > 0 && st.RemainKm <= arrivalRadiusKm {
-		st.Verdict = "ankunft"
+	} else if remainKnown && st.RemainKm <= arrivalRadiusKm {
+		// „Am Ziel" (steht am Steg) vs. „Gleich am Ziel" (fährt noch an) — wie der Server
+		// über das Tempo, nicht über den Restweg (die Linie endet nicht zwingend am Anleger).
+		if posLive && pos.SpeedKmh <= 2 {
+			st.Verdict = "angekommen"
+		} else {
+			st.Verdict = "ankunft"
+		}
 		st.SollKmh = 0
-	} else if st.RemainKm > 0 && st.RestMin > 0 {
+	} else if remainKnown && st.RemainKm > 0 && st.RestMin > 0 {
 		soll := requiredSpeedKmh(st.RemainKm, float64(st.RestMin))
 		if soll > maxKmh {
 			st.Verdict = "late"
