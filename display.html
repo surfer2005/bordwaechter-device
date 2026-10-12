@@ -115,7 +115,7 @@
 <script>
 function $(id){return document.getElementById(id)}
 var token=new URLSearchParams(location.search).get('token')||''
-var CX=110,CY=120,R=86,A0=150,A1=390,VMAX=40,fails=0
+var CX=110,CY=120,R=86,A0=150,A1=390,VMAX=40,fails=0;
 
 // Theme (hell/dunkel) wie im Kiosk
 (function(){var KEY='bw_display_theme'
@@ -166,11 +166,16 @@ function render(s){
   $('soll').textContent=s.soll||'—:—'
   $('restKm').innerHTML=(s.remain_km>0?fmt1(s.remain_km):'—')+' <small>km</small>'
   $('restMin').innerHTML=(s.rest_min>=0?s.rest_min:'—')+' <small>min</small>'
+  // Prognose wie im Kiosk: Hochrechnung der Ankunft beim AKTUELLEN Tempo (nicht beim Soll-Tempo).
   var bf=$('buffer');bf.className='v'
-  if(s.verdict==='late'){bf.classList.add('up');bf.textContent=(s.delay_min||0)+' min zu spät'}
-  else if(s.verdict==='ankunft'){bf.classList.add('ok');bf.textContent='gleich am Ziel'}
-  else if(s.phase==='unterwegs'&&s.soll_kmh>0){bf.classList.add('ok');bf.textContent='pünktlich'}
-  else{bf.classList.add('dim');bf.textContent='—'}
+  var buf=null
+  if(s.verdict==='late'){buf=-(s.delay_min||0)}
+  else if(s.ist_kmh>0&&s.remain_km>0&&s.rest_min>=0){buf=Math.round(s.rest_min-(s.remain_km/s.ist_kmh*60))}
+  if(s.verdict==='ankunft'){bf.classList.add('ok');bf.textContent='gleich am Ziel'}
+  else if(buf==null){bf.classList.add('dim');bf.textContent='—'}
+  else if(Math.abs(buf)<1){bf.classList.add('ok');bf.textContent='pünktlich'}
+  else if(buf>0){bf.classList.add('down');bf.textContent=buf+' min zu früh'}
+  else{bf.classList.add('up');bf.textContent=(-buf)+' min zu spät'}
 
   var adv=$('advice');adv.className='card advice'
   var gauge=$('gaugebox'),vd=$('verdict'),tl=$('tl'),ab=$('abfahrtblock'),hint=$('hint')
