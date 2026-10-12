@@ -200,7 +200,7 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	}
 	offLimit := b.Thresholds.OffCourseM
 	if offLimit <= 0 {
-		offLimit = 100
+		offLimit = 50
 	}
 	if !b.HatBordbuch || len(b.Legs) == 0 {
 		st.Hint = "kein Bordbuch für heute"
@@ -316,8 +316,18 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	if maneuverKmh <= 0 {
 		maneuverKmh = 8
 	}
-	// FESTER Kurs-Abstand (Nutzerentscheidung): kein ×1,3/spread_m mehr — die feine Linie je Rinne trägt.
+	// Grenze streckenadaptiv: gelernte Korridorbreite × Faktor, mindestens die globale Untergrenze.
+	// (Fester Wert an echten Daten geprüft und verworfen — Streuung je Rinne zu verschieden, s. Server.)
+	offFactor := b.Thresholds.OffCourseFactor
+	if offFactor <= 0 {
+		offFactor = 1.3
+	}
 	effLimit := offLimit
+	if leg.SpreadM != nil && *leg.SpreadM > 0 {
+		if cand := *leg.SpreadM * offFactor; cand > effLimit {
+			effLimit = cand
+		}
+	}
 	st.OffLimitM = float64(int(effLimit + 0.5))
 	// Position-Veraltung: ein altes Signal (Ausfall) erzeugt KEINE Live-Bewertung mehr —
 	// sonst 0,0 km/h + „Schneller" aus altem Stillstand. Nur eine frische Position gilt als live.
