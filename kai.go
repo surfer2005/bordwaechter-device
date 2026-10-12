@@ -40,6 +40,7 @@ type Bundle struct {
 		ToleranceKmh    float64 `json:"toleranceKmh"`
 		MaxKmh          float64 `json:"maxKmh"`
 		ArrivalRadiusM  float64 `json:"arrivalRadiusM"`
+		NextLogbookHintMin float64 `json:"nextLogbookHintMin"`
 		Unit            string  `json:"unit"`
 	} `json:"thresholds"`
 	HatBordbuch bool   `json:"hatBordbuch"`

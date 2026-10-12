@@ -49,6 +49,7 @@ type Status struct {
 	HatBordbuch  bool    `json:"hat_bordbuch"`
 	BundleAgeSec int     `json:"bundle_age_sec"`
 	Hint         string  `json:"hint"`
+	NextLogbookHint bool `json:"next_logbook_hint"` // am Ziel + kein weiteres Leg → Bordbuch für nächste Fahrt
 	Horn         bool    `json:"horn"`
 	Lamp         bool    `json:"lamp"`
 	Version      string  `json:"version"`
@@ -199,7 +200,7 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	}
 	offLimit := b.Thresholds.OffCourseM
 	if offLimit <= 0 {
-		offLimit = 50
+		offLimit = 100
 	}
 	if !b.HatBordbuch || len(b.Legs) == 0 {
 		st.Hint = "kein Bordbuch für heute"
@@ -315,17 +316,8 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	if maneuverKmh <= 0 {
 		maneuverKmh = 8
 	}
-	offFactor := b.Thresholds.OffCourseFactor
-	if offFactor <= 0 {
-		offFactor = 1.3
-	}
-	// Grenze streckenadaptiv: gelernte Korridor-Breite × Faktor, mindestens die globale Untergrenze.
+	// FESTER Kurs-Abstand (Nutzerentscheidung): kein ×1,3/spread_m mehr — die feine Linie je Rinne trägt.
 	effLimit := offLimit
-	if leg.SpreadM != nil && *leg.SpreadM > 0 {
-		if cand := *leg.SpreadM * offFactor; cand > effLimit {
-			effLimit = cand
-		}
-	}
 	st.OffLimitM = float64(int(effLimit + 0.5))
 	// Position-Veraltung: ein altes Signal (Ausfall) erzeugt KEINE Live-Bewertung mehr —
 	// sonst 0,0 km/h + „Schneller" aus altem Stillstand. Nur eine frische Position gilt als live.
@@ -416,6 +408,14 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 				st.DiffKmh = round1(diff)
 			}
 		}
+	}
+	// Nach Ankunft am LETZTEN Halt (kein weiteres Leg) nach hintMin Minuten: Bordbuch für nächste Fahrt.
+	hintMin := b.Thresholds.NextLogbookHintMin
+	if hintMin <= 0 {
+		hintMin = 5
+	}
+	if st.Verdict == "angekommen" && len(upcoming) == 0 && best.arr >= 0 && nowMin >= float64(best.arr)+hintMin {
+		st.NextLogbookHint = true
 	}
 	return st
 }

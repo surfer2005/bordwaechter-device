@@ -219,7 +219,7 @@ function render(s){
     if(s.verdict==='late'){$('delta').style.display='';$('delta').textContent='+'+(s.delay_min||0)+' min'}
     else if(s.verdict==='ankunft'||s.verdict==='angekommen'){$('delta').style.display='none'}
     else{$('delta').style.display='';$('delta').textContent=(diff==null?'':((diff>0?'+':'')+fmt1(diff)+' km/h'))}
-    if(s.verdict==='ankunft'||s.verdict==='angekommen'){tl.innerHTML='Reststrecke <b>'+(s.remain_km!=null?Math.round(s.remain_km*1000)+' m':'—')+'</b> – '+(s.verdict==='angekommen'?'am Ziel':'gleich am Ziel')}
+    if(s.verdict==='ankunft'||s.verdict==='angekommen'){tl.innerHTML='Reststrecke <b>'+(s.remain_km!=null?Math.round(s.remain_km*1000)+' m':'—')+'</b> – '+(s.verdict==='angekommen'?'am Ziel':'gleich am Ziel')+(s.next_logbook_hint?' · für die nächste Fahrt <b>Bordbuch anlegen</b>':'')}
     else if(s.verdict==='late'){tl.innerHTML='Auch bei Vollgas (<b>'+fmt1(s.max_kmh||40)+' km/h</b>) rund <b>'+(s.delay_min||0)+' min</b> zu spät'}
     else{tl.innerHTML='Sollgeschwindigkeit <b>'+(tgt>0?fmt1(tgt)+' km/h':'—')+'</b>, um <b>'+(s.soll||'—')+'</b> am Ziel zu sein'}
   } else if(s.phase==='vor_abfahrt'){
