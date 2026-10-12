@@ -266,6 +266,16 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 		if best.dep >= 0 {
 			st.WartenMin = int(float64(best.dep) - nowMin + 0.5)
 		}
+		// Reststrecke auch VOR der Abfahrt zeigen (wie der KAI-Kiosk) — Projektion der Position auf die Route.
+		posStaleS := b.Thresholds.PosStaleS
+		if posStaleS <= 0 {
+			posStaleS = 300
+		}
+		if pos.Valid && now.Sub(pos.TS).Seconds() <= posStaleS && len(leg.Geometry) >= 2 {
+			if pr := projectOntoPolyline(leg.Geometry, pos.Lat, pos.Lng); pr.OK {
+				st.RemainKm = round2(pr.RemainKm)
+			}
+		}
 		st.Hint = "Abfahrt " + leg.Dep
 		return st
 	}

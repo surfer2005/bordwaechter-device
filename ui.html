@@ -43,6 +43,10 @@
   .bsub{font-size:.72rem;font-weight:600;color:var(--muted);letter-spacing:.02em}
   .logout{margin-left:auto;font-size:.8rem;padding:6px 12px}
   input[readonly]{background:var(--bg);color:var(--muted);cursor:default}
+  #ask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;place-items:center;z-index:120;padding:16px}
+  #ask .box{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px;width:100%;max-width:420px;box-shadow:0 16px 44px rgba(0,0,0,.35)}
+  #ask .msg{font-size:1rem;margin-bottom:16px;line-height:1.4}
+  #ask .btns{display:flex;gap:10px;justify-content:flex-end}
 </style>
 </head>
 <body>
@@ -55,6 +59,8 @@
       <button onclick="doLogin()">Anmelden</button>
     </div>
   </div>
+
+  <div id="ask"><div class="box"><div class="msg" id="askmsg"></div><div class="btns"><button class="ghost" id="askno">Abbrechen</button><button id="askyes">OK</button></div></div></div>
 
   <h1 class="topbar">
     <span class="d"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18c2 1.4 4 1.4 6 0s4-1.4 6 0 4 1.4 6 0M5 18l1.2-8.4a1 1 0 0 1 1-.86H12V4l6 4-6 3.2"/></svg></span>
@@ -176,7 +182,13 @@
 function g(id){return document.getElementById(id)}
 async function post(u){ try{ await fetch(u,{method:'POST'}) }catch(e){} }
 async function setPos(){ await post('/api/position?lat='+g('m_lat').value+'&lng='+g('m_lng').value+'&speed_kmh='+g('m_sp').value) }
-async function restartDev(){ if(!confirm('Bordwächter-Dienst neu starten?'))return; g('saveMsg').textContent='Neustart läuft …'; await post('/api/restart'); setTimeout(()=>{g('saveMsg').textContent='';location.reload()},4000) }
+function ask(msg){ return new Promise(function(res){
+  g('askmsg').textContent=msg; g('ask').style.display='grid'
+  function done(v){ g('ask').style.display='none'; g('askyes').onclick=null; g('askno').onclick=null; document.onkeydown=null; res(v) }
+  g('askyes').onclick=function(){done(true)}; g('askno').onclick=function(){done(false)}
+  document.onkeydown=function(e){ if(e.key==='Enter')done(true); if(e.key==='Escape')done(false) }
+}) }
+async function restartDev(){ if(!(await ask('Bordwächter-Dienst neu starten?')))return; g('saveMsg').textContent='Neustart läuft …'; await post('/api/restart'); setTimeout(()=>{g('saveMsg').textContent='';location.reload()},4000) }
 async function applyNet(){
   const body={mode:g('n_mode').value,interface:g('n_if').value,address:g('n_addr').value,gateway:g('n_gw').value,dns:g('n_dns').value}
   g('netMsg').textContent='Übernehme …'
@@ -185,7 +197,7 @@ async function applyNet(){
     g('netMsg').textContent='Gespeichert. Wirkt nach Geräte-Neustart.' }
   catch(e){ g('netMsg').textContent='Fehler: '+e }
 }
-async function rebootPi(){ if(!confirm('Das GERÄT (Raspberry) jetzt komplett neu starten?'))return; g('netMsg').textContent='Gerät startet neu …'; await post('/api/reboot') }
+async function rebootPi(){ if(!(await ask('Das GERÄT (Raspberry) jetzt komplett neu starten?')))return; g('netMsg').textContent='Gerät startet neu …'; await post('/api/reboot') }
 function updateDispUrl(){
   const t=g('c_disptok').value.trim()
   const u=t? (location.origin+'/anzeige?token='+encodeURIComponent(t)) : ''
@@ -193,7 +205,7 @@ function updateDispUrl(){
   const a=g('dispOpen'); if(u){ a.href=u; a.style.pointerEvents=''; a.style.opacity='' } else { a.href='#'; a.style.pointerEvents='none'; a.style.opacity='.5' }
 }
 function genDispTok(){ const b=new Uint8Array(16); crypto.getRandomValues(b); g('c_disptok').value=Array.from(b,x=>x.toString(16).padStart(2,'0')).join(''); updateDispUrl() }
-async function updateDev(){ if(!confirm('Neueste Version aus dem Internet laden und installieren?'))return; g('saveMsg').textContent='Lade neue Version …'; try{ const r=await fetch('/api/update',{method:'POST'}); const j=await r.json(); if(!j.ok){ g('saveMsg').textContent='Fehler: '+(j.error||'Update'); return } g('saveMsg').textContent='Aktualisiert, Neustart läuft …'; setTimeout(()=>{g('saveMsg').textContent='';location.reload()},6000) }catch(e){ g('saveMsg').textContent='Aktualisiert, Neustart läuft …'; setTimeout(()=>location.reload(),6000) } }
+async function updateDev(){ if(!(await ask('Neueste Version aus dem Internet laden und installieren?')))return; g('saveMsg').textContent='Lade neue Version …'; try{ const r=await fetch('/api/update',{method:'POST'}); const j=await r.json(); if(!j.ok){ g('saveMsg').textContent='Fehler: '+(j.error||'Update'); return } g('saveMsg').textContent='Aktualisiert, Neustart läuft …'; setTimeout(()=>{g('saveMsg').textContent='';location.reload()},6000) }catch(e){ g('saveMsg').textContent='Aktualisiert, Neustart läuft …'; setTimeout(()=>location.reload(),6000) } }
 function fmt(n,u){ return (n==null||n===0&&u==='km'?'—':n)+(u?(' '+u):'') }
 function showLogin(){ g('login').style.display='grid' }
 function hideLogin(){ g('login').style.display='none' }
