@@ -16,6 +16,7 @@ type Config struct {
 	SendPosition bool   `json:"send_position"` // GPS direkt an KAI melden (aus, falls HA das liefert)
 	Listen       string `json:"listen"`        // lokale UI/API, z. B. ":8090"
 	UIPassword   string `json:"ui_password"`   // Schutz der lokalen Oberfläche (leer = offen im Bordnetz)
+	HAPassword   string `json:"ha_password"`   // eigenes Passwort für Home Assistant (leer = HA nutzt UIPassword)
 
 	GPS struct {
 		Source     string `json:"source"` // "teltonika" | "manual"

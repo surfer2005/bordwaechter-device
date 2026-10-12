@@ -73,14 +73,17 @@ func (t *TeltonikaGPS) Read() (Position, error) {
 		return Position{}, err
 	}
 	p := Position{Lat: regsToFloat(latR, g.Format), Lng: regsToFloat(lngR, g.Format), Valid: true, TS: time.Now()}
+	// Heading/Speed wie Lat/Lng als float32 (2 Register) im selben Format lesen, wenn ein Register
+	// gesetzt ist. ⚠️ Einheit/Skalierung an der echten Teltonika prüfen (Speed km/h vs. Knoten).
+	// Ist kein Speed-Register gesetzt (-1), bleibt Speed 0 und wird im Engine aus der Bewegung abgeleitet.
 	if g.HeadingReg >= 0 {
-		if hr, err := modbusReadHolding(g.Host, g.Port, g.Unit, g.HeadingReg, 1, to); err == nil && len(hr) > 0 {
-			p.Heading = float64(hr[0])
+		if hr, err := modbusReadHolding(g.Host, g.Port, g.Unit, g.HeadingReg, 2, to); err == nil && len(hr) >= 2 {
+			p.Heading = regsToFloat(hr, g.Format)
 		}
 	}
 	if g.SpeedReg >= 0 {
-		if sr, err := modbusReadHolding(g.Host, g.Port, g.Unit, g.SpeedReg, 1, to); err == nil && len(sr) > 0 {
-			p.SpeedKmh = float64(sr[0]) // ggf. skalieren — an echter Teltonika verifizieren
+		if sr, err := modbusReadHolding(g.Host, g.Port, g.Unit, g.SpeedReg, 2, to); err == nil && len(sr) >= 2 {
+			p.SpeedKmh = regsToFloat(sr, g.Format)
 		}
 	}
 	return p, nil
