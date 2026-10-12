@@ -185,12 +185,18 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 		arr  int
 		rang float64
 	}
+	// "Offen" ZEITbasiert, nicht über l.Done: RMS-Bordbücher haben die Ist-Ankunft je Leg vorbefüllt
+	// (= Soll), sonst gälten alle Legs sofort als erreicht → den ganzen Tag "Dienst beendet".
+	lateGrace := b.Thresholds.LateGraceMin
+	if lateGrace <= 0 {
+		lateGrace = 120
+	}
 	var offen, running, upcoming []cand
 	for _, l := range b.Legs {
-		if l.Done {
-			continue
-		}
 		dep, arr := hhmmToMin(l.Dep), hhmmToMin(l.Arr)
+		if arr >= 0 && float64(arr) < nowMin-lateGrace {
+			continue // Soll-Ankunft liegt deutlich zurück → erledigt
+		}
 		c := cand{leg: l, dep: dep, arr: arr}
 		if dep >= 0 {
 			c.rang = absf(float64(dep) - nowMin)
@@ -241,8 +247,10 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	}
 
 	// unterwegs
+	// Mitternachts-Leg nur, wenn die Ankunft vor der Abfahrt DESSELBEN Legs liegt (nicht bloß, weil
+	// die Soll-Zeit schon vorbei ist) — sonst würde eine vergangene Ankunft um 24 h nach vorn gerechnet.
 	arr := best.arr
-	if arr >= 0 && float64(arr) < nowMin {
+	if arr >= 0 && best.dep >= 0 && arr < best.dep {
 		arr += 1440
 	}
 	if arr >= 0 {
@@ -252,22 +260,69 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 		}
 		st.RestMin = int(rm + 0.5)
 	}
-	if pos.Valid && len(leg.Geometry) >= 2 {
+	portZoneKm := b.Thresholds.OffCoursePortM / 1000
+	if portZoneKm <= 0 {
+		portZoneKm = 0.5
+	}
+	maneuverKmh := b.Thresholds.ManeuverKmh
+	if maneuverKmh <= 0 {
+		maneuverKmh = 8
+	}
+	offFactor := b.Thresholds.OffCourseFactor
+	if offFactor <= 0 {
+		offFactor = 1.3
+	}
+	// Grenze streckenadaptiv: gelernte Korridor-Breite × Faktor, mindestens die globale Untergrenze.
+	effLimit := offLimit
+	if leg.SpreadM != nil && *leg.SpreadM > 0 {
+		if cand := *leg.SpreadM * offFactor; cand > effLimit {
+			effLimit = cand
+		}
+	}
+	// Position-Veraltung: ein altes Signal (Ausfall) erzeugt KEINE Live-Bewertung mehr —
+	// sonst 0,0 km/h + „Schneller" aus altem Stillstand. Nur eine frische Position gilt als live.
+	posStaleS := b.Thresholds.PosStaleS
+	if posStaleS <= 0 {
+		posStaleS = 300
+	}
+	posLive := pos.Valid && now.Sub(pos.TS).Seconds() <= posStaleS
+	if pos.Valid && !posLive {
+		st.Hint = "Position veraltet — keine aktuelle Geschwindigkeit"
+	}
+	if posLive && len(leg.Geometry) >= 2 {
 		pr := projectOntoPolyline(leg.Geometry, pos.Lat, pos.Lng)
 		if pr.OK {
 			st.RemainKm = round2(pr.RemainKm)
 			st.OffCourseM = float64(int(pr.DistToLineKm*1000 + 0.5))
-			if st.OffCourseM <= offLimit {
+			// Hafen-/Manöverbereich: nahe Start/Ziel UND im Manövertempo (langsam) → Kurs-Ampel aus
+			// (dort fächert das Schiff beim An-/Ablegen von der Linie auf → Fehlalarme).
+			a := leg.Geometry[0]
+			z := leg.Geometry[len(leg.Geometry)-1]
+			nahHalt := haversineKm(pos.Lat, pos.Lng, a[1], a[0]) <= portZoneKm || haversineKm(pos.Lat, pos.Lng, z[1], z[0]) <= portZoneKm
+			langsam := !posLive || pos.SpeedKmh < maneuverKmh
+			if nahHalt && langsam {
+				st.OffState = "unknown"
+			} else if st.OffCourseM <= effLimit {
 				st.OffState = "ok"
-			} else if st.OffCourseM <= offLimit*2 {
+			} else if st.OffCourseM <= effLimit*1.5 {
 				st.OffState = "warn"
 			} else {
 				st.OffState = "alarm"
 			}
 		}
 	}
-	if pos.Valid {
+	if posLive {
 		st.IstKmh = round1(pos.SpeedKmh)
+	}
+	// Überfällige Abfahrt: steht das Schiff noch am Abfahrtssteg (Ist ~0, nah an leg.from) und die
+	// Soll-Abfahrt ist vorbei → keine Aufhol-Geschwindigkeit, sondern "wartet am Steg".
+	wartetAbfahrt := false
+	if posLive && len(leg.Geometry) >= 2 && best.dep >= 0 && float64(best.dep) <= nowMin && pos.SpeedKmh < maneuverKmh {
+		a := leg.Geometry[0]
+		if haversineKm(pos.Lat, pos.Lng, a[1], a[0]) <= portZoneKm {
+			wartetAbfahrt = true
+			st.Hint = "Abfahrt überfällig — Schiff wartet am Steg"
+		}
 	}
 	maxKmh := b.Thresholds.MaxKmh
 	if maxKmh <= 0 {
@@ -280,7 +335,9 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	// Zwei Sicherungen gegen unsinnige Tempo-Werte am Rand (siehe Server kiosk-gps.js):
 	//  - praktisch am Ziel → "ankunft", keine Empfehlung
 	//  - auch bei Vollgas nicht pünktlich → "late" + Verspätung statt absurder km/h
-	if st.RemainKm > 0 && st.RemainKm <= arrivalRadiusKm {
+	if wartetAbfahrt {
+		// keine Tempo-Empfehlung, solange überfällig am Steg
+	} else if st.RemainKm > 0 && st.RemainKm <= arrivalRadiusKm {
 		st.Verdict = "ankunft"
 		st.SollKmh = 0
 	} else if st.RemainKm > 0 && st.RestMin > 0 {
@@ -296,7 +353,7 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 			st.DelayMin = dm
 		} else {
 			st.SollKmh = round1(soll)
-			if pos.Valid {
+			if posLive {
 				v, diff := speedVerdict(pos.SpeedKmh, soll, tol)
 				st.Verdict = v
 				st.DiffKmh = round1(diff)

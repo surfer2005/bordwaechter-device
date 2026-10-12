@@ -20,6 +20,7 @@ type Leg struct {
 	Done     bool        `json:"done"`
 	Geometry [][2]float64 `json:"geometry"` // [lon,lat]
 	LengthKm *float64    `json:"length_km"`
+	SpreadM  *float64    `json:"spread_m"` // gelernte Korridor-Breite (für adaptive Kurs-Grenze)
 }
 
 type Bundle struct {
@@ -30,11 +31,16 @@ type Bundle struct {
 	} `json:"ship"`
 	Date       string `json:"date"`
 	Thresholds struct {
-		OffCourseM     float64 `json:"offCourseM"`
-		ToleranceKmh   float64 `json:"toleranceKmh"`
-		MaxKmh         float64 `json:"maxKmh"`
-		ArrivalRadiusM float64 `json:"arrivalRadiusM"`
-		Unit           string  `json:"unit"`
+		OffCourseM      float64 `json:"offCourseM"`
+		OffCourseFactor float64 `json:"offCourseFactor"`
+		OffCoursePortM  float64 `json:"offCoursePortM"`
+		ManeuverKmh     float64 `json:"maneuverKmh"`
+		PosStaleS       float64 `json:"posStaleS"`
+		LateGraceMin    float64 `json:"lateGraceMin"`
+		ToleranceKmh    float64 `json:"toleranceKmh"`
+		MaxKmh          float64 `json:"maxKmh"`
+		ArrivalRadiusM  float64 `json:"arrivalRadiusM"`
+		Unit            string  `json:"unit"`
 	} `json:"thresholds"`
 	HatBordbuch bool   `json:"hatBordbuch"`
 	Legs        []Leg  `json:"legs"`
@@ -49,8 +55,17 @@ type KaiClient struct {
 }
 
 func newKaiClient(base, token string) *KaiClient {
+	// Tolerant gegen die häufige Fehleingabe: der Nutzer kopiert die in KAI angezeigte „Gerät-Adresse"
+	// (…/api/edge) ins Adressfeld, obwohl das Gerät /api/edge SELBST anhängt. Doppeltes Suffix abschneiden.
+	b := strings.TrimRight(base, "/")
+	for _, suf := range []string{"/api/edge", "/api"} {
+		if strings.HasSuffix(b, suf) {
+			b = strings.TrimRight(strings.TrimSuffix(b, suf), "/")
+			break
+		}
+	}
 	return &KaiClient{
-		base:  strings.TrimRight(base, "/"),
+		base:  b,
 		token: token,
 		hc:    &http.Client{Timeout: 20 * time.Second},
 	}

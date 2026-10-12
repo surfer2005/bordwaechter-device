@@ -4,7 +4,10 @@ import (
 	_ "embed"
 	"encoding/json"
 	"net/http"
+	"os"
 	"strconv"
+	"syscall"
+	"time"
 )
 
 //go:embed ui.html
@@ -65,6 +68,24 @@ func (a *App) routes() *http.ServeMux {
 			return
 		}
 		writeJSON(w, a.getCfg())
+	}))
+
+	// Neustart aus der Oberfläche: Prozess per Re-Exec frisch starten (liest die Config neu ein,
+	// setzt GPIO-Backend/alle Loops neu auf). systemd-unabhängig — ersetzt das laufende Programm.
+	mux.HandleFunc("/api/restart", a.guard(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"ok": true})
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		go func() {
+			time.Sleep(400 * time.Millisecond)
+			exe, err := os.Executable()
+			if err != nil {
+				exe = os.Args[0]
+			}
+			_ = syscall.Exec(exe, os.Args, os.Environ())
+			os.Exit(0) // nur erreichbar, wenn Exec fehlschlägt → systemd startet neu
+		}()
 	}))
 
 	mux.HandleFunc("/api/ack", a.guard(func(w http.ResponseWriter, r *http.Request) {
