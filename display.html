@@ -223,13 +223,17 @@ function render(s){
 
 // Karte wie im Kiosk (Route + Start/Ziel + Position). Lädt Leaflet/OSM vom Netz; ohne Verbindung
 // (reiner Offline-Bordmonitor) wird die Karten-Kachel ausgeblendet statt grau zu bleiben.
-var kmap=null,klayer=null
+var kmap=null,klayer=null,mapFitted=false,mapPts=[]
+function recenterMap(){ if(kmap&&mapPts.length) kmap.fitBounds(L.latLngBounds(mapPts).pad(0.25)) }
 function drawMap(s){
   if(typeof L==='undefined'){ $('mapcard').style.display='none'; return }
   if(!kmap){
     kmap=L.map('map',{zoomControl:true,preferCanvas:true}).setView([47.62,9.30],11)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(kmap)
     klayer=L.layerGroup().addTo(kmap)
+    // Zentrieren-Knopf (passt wieder auf Route+Position ein; danach wieder frei verschiebbar)
+    var Z=L.Control.extend({options:{position:'topleft'},onAdd:function(){var d=L.DomUtil.create('div','leaflet-bar leaflet-control');var a=L.DomUtil.create('a','',d);a.href='#';a.title='Zentrieren';a.innerHTML='&#9678;';a.style.fontSize='18px';a.style.lineHeight='26px';a.style.textAlign='center';L.DomEvent.on(a,'click',function(e){L.DomEvent.stop(e);recenterMap();});return d;}})
+    kmap.addControl(new Z())
     setTimeout(function(){if(kmap)kmap.invalidateSize()},150)
   }
   klayer.clearLayers()
@@ -238,7 +242,9 @@ function drawMap(s){
   function dot(la,ln,color){if((la||ln)){L.circleMarker([la,ln],{radius:5,color:color,fillColor:color,fillOpacity:1,weight:1}).addTo(klayer);pts.push([la,ln])}}
   dot(s.from_lat,s.from_lng,'#8a8a8a');dot(s.to_lat,s.to_lng,'#E8614E')
   if(s.pos_valid){L.circleMarker([s.lat,s.lng],{radius:7,color:'#fff',weight:2,fillColor:'#1F6E5C',fillOpacity:1}).addTo(klayer);pts.push([s.lat,s.lng])}
-  if(pts.length)kmap.fitBounds(L.latLngBounds(pts).pad(0.25))
+  mapPts=pts
+  // nur beim ERSTEN Mal automatisch einpassen; danach bleibt die Nutzer-Ansicht erhalten (→ Zentrieren-Knopf)
+  if(!mapFitted&&pts.length){ recenterMap(); mapFitted=true }
 }
 
 async function load(){

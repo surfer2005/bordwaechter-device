@@ -123,12 +123,13 @@
     </fieldset>
     <fieldset><legend>SIFA / Alarm</legend>
       <div class="row">
-        <div><label>Auslöser</label><select id="sf_combo"><option value="either">GPS oder Kamera</option><option value="gps">nur GPS</option><option value="camera">nur Kamera</option><option value="both">GPS und Kamera</option></select></div>
+        <div><label>Auslöser</label><select id="sf_combo"><option value="either">GPS oder Kamera</option><option value="gps">nur GPS</option><option value="camera">nur Kamera</option><option value="both">GPS und Kamera</option><option value="manuell">manuell (nur Totmann/Zeit)</option></select></div>
         <div><label>Wiederhol-Alarm (s)</label><input id="sf_re" type="number"></div>
         <div><label>Totmann-SIFA</label><select id="sf_dm"><option value="false">aus</option><option value="true">an</option></select></div>
         <div><label>Totmann-Intervall (s)</label><input id="sf_dms" type="number"></div>
         <div><label>Vorwarnung (s)</label><input id="sf_pre" type="number"></div>
       </div>
+      <p class="muted" style="margin-top:6px">Auslöser „manuell": keine Kamera-/Kursprüfung — fordert alle <b>Totmann-Intervall</b> Sekunden zum Quittieren auf (für Schiffe ohne Kamera/Kursdaten). Der Totmann läuft dann automatisch, auch wenn „Totmann-SIFA" auf „aus" steht.</p>
     </fieldset>
     <fieldset><legend>GPIO / Relais</legend>
       <div class="row">
