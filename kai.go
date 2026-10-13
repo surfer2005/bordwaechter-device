@@ -18,8 +18,9 @@ type Leg struct {
 	Arr      string      `json:"arr"`
 	Dist     *float64    `json:"dist"`
 	Done     bool        `json:"done"`
-	Geometry [][2]float64 `json:"geometry"` // [lon,lat]
-	LengthKm *float64    `json:"length_km"`
+	Geometry        [][2]float64 `json:"geometry"`         // [lon,lat]
+	GeometryReverse [][2]float64 `json:"geometry_reverse"` // Gegenrichtung (blasse Linie)
+	LengthKm        *float64     `json:"length_km"`
 	SpreadM  *float64    `json:"spread_m"` // gelernte Korridor-Breite (für adaptive Kurs-Grenze)
 }
 

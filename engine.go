@@ -41,7 +41,8 @@ type Status struct {
 	FromLng      float64      `json:"from_lng"`
 	ToLat        float64      `json:"to_lat"`
 	ToLng        float64      `json:"to_lng"`
-	RouteGeom    [][2]float64 `json:"route_geom"` // [lon,lat] des aktuellen Legs (für die Karte)
+	RouteGeom        [][2]float64 `json:"route_geom"`         // [lon,lat] des aktuellen Legs (für die Karte)
+	RouteGeomReverse [][2]float64 `json:"route_geom_reverse"` // Gegenrichtung (blasse Linie)
 	PosAgeSec    int     `json:"pos_age_sec"`
 	PosValid     bool    `json:"pos_valid"`
 	CameraHazard bool    `json:"camera_hazard"`
@@ -260,6 +261,7 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	// Route + Start/Ziel für die Karte (gilt auch „vor Abfahrt").
 	if len(leg.Geometry) >= 2 {
 		st.RouteGeom = leg.Geometry
+		st.RouteGeomReverse = leg.GeometryReverse
 		a := leg.Geometry[0]
 		z := leg.Geometry[len(leg.Geometry)-1]
 		st.FromLng, st.FromLat = a[0], a[1]

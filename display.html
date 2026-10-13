@@ -268,6 +268,7 @@ function drawMap(s){
   }
   klayer.clearLayers()
   var pts=[]
+  if(s.route_geom_reverse&&s.route_geom_reverse.length){var llr=s.route_geom_reverse.map(function(p){return [p[1],p[0]]});L.polyline(llr,{color:'#1F6E5C',weight:3,opacity:.45,dashArray:'6 6'}).addTo(klayer)}
   if(s.route_geom&&s.route_geom.length){var ll=s.route_geom.map(function(p){return [p[1],p[0]]});L.polyline(ll,{color:'#1F6E5C',weight:4,opacity:.85}).addTo(klayer);for(var i=0;i<ll.length;i++)pts.push(ll[i])}
   function dot(la,ln,color){if((la||ln)){L.circleMarker([la,ln],{radius:5,color:color,fillColor:color,fillOpacity:1,weight:1}).addTo(klayer);pts.push([la,ln])}}
   dot(s.from_lat,s.from_lng,'#8a8a8a');dot(s.to_lat,s.to_lng,'#E8614E')
