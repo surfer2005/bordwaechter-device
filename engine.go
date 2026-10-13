@@ -348,6 +348,10 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	if pos.Valid && !posLive {
 		st.Hint = "Position veraltet — keine aktuelle Geschwindigkeit"
 	}
+	arrivalRadiusKm := b.Thresholds.ArrivalRadiusM / 1000
+	if arrivalRadiusKm <= 0 {
+		arrivalRadiusKm = 0.15
+	}
 	remainKnown := false
 	if posLive && len(leg.Geometry) >= 2 {
 		pr := projectOntoPolyline(leg.Geometry, pos.Lat, pos.Lng)
@@ -368,7 +372,14 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 				orange, rot = hafenOrange, hafenRot
 			}
 			st.OffLimitM = float64(int(orange + 0.5))
-			if st.OffCourseM < orange {
+			// Beim An-/Ablegen fächert das Schiff neben die Fahrrinne (manövriert am Steg, die gelernte
+			// Linie endet nicht am Anleger) — dort KEIN Kurs-Alarm, sonst Dauer-Fehlalarm bei JEDER
+			// Ankunft, der die Crew gegen den echten Alarm abstumpft. Wie der Server (kiosk-gps.js).
+			beimAnlegen := st.RemainKm <= arrivalRadiusKm ||
+				(pos.SpeedKmh < maneuverKmh && haversineKm(pos.Lat, pos.Lng, a[1], a[0]) <= portZoneKm)
+			if beimAnlegen {
+				st.OffState = "unknown"
+			} else if st.OffCourseM < orange {
 				st.OffState = "ok"
 			} else if st.OffCourseM < rot {
 				st.OffState = "warn"
@@ -395,10 +406,6 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 		maxKmh = 40
 	}
 	st.MaxKmh = maxKmh
-	arrivalRadiusKm := b.Thresholds.ArrivalRadiusM / 1000
-	if arrivalRadiusKm <= 0 {
-		arrivalRadiusKm = 0.15
-	}
 	// Zwei Sicherungen gegen unsinnige Tempo-Werte am Rand (siehe Server kiosk-gps.js):
 	//  - praktisch am Ziel → "ankunft", keine Empfehlung
 	//  - auch bei Vollgas nicht pünktlich → "late" + Verspätung statt absurder km/h
