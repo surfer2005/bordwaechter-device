@@ -255,7 +255,8 @@ function render(s){
 var kmap=null,klayer=null,mapFitted=false,mapPts=[],lastInteract=0,userMoved=false,recentering=false
 var IDLE_MS=30000 // nach 30 s ohne Nutzer-Aktion automatisch wieder einpassen
 function cardinal(d){ return ['N','NO','O','SO','S','SW','W','NW'][Math.round(((d%360)/45))%8] }
-function recenterMap(){ if(kmap&&mapPts.length){ recentering=true; kmap.fitBounds(L.latLngBounds(mapPts).pad(0.25),{animate:false}); userMoved=false; setTimeout(function(){recentering=false},60) } }
+var LAKE=[[47.50,9.00],[47.80,9.82]] // ganzer Bodensee — feste Übersicht (wie KAI/Kiosk, Nutzerwunsch „wie früher")
+function recenterMap(){ if(kmap){ recentering=true; kmap.fitBounds(LAKE,{animate:false,padding:[4,4]}); userMoved=false; setTimeout(function(){recentering=false},60) } }
 function drawMap(s){
   if(typeof L==='undefined'){ $('mapcard').style.display='none'; return }
   if(!kmap){
@@ -268,7 +269,7 @@ function drawMap(s){
     // Zentrieren-Knopf (passt sofort wieder auf Route+Position ein)
     var Z=L.Control.extend({options:{position:'topleft'},onAdd:function(){var d=L.DomUtil.create('div','leaflet-bar leaflet-control');var a=L.DomUtil.create('a','',d);a.href='#';a.title='Zentrieren';a.innerHTML='&#9678;';a.style.fontSize='18px';a.style.lineHeight='26px';a.style.textAlign='center';L.DomEvent.on(a,'click',function(e){L.DomEvent.stop(e);recenterMap();});return d;}})
     kmap.addControl(new Z())
-    setTimeout(function(){if(kmap)kmap.invalidateSize()},150)
+    setTimeout(function(){if(kmap){kmap.invalidateSize();recenterMap()}},180)
   }
   klayer.clearLayers()
   var pts=[]
@@ -285,8 +286,8 @@ function drawMap(s){
     pts.push([s.lat,s.lng])
   }
   mapPts=pts
-  if(!mapFitted&&pts.length){ recenterMap(); mapFitted=true }          // erstes Einpassen
-  else if(userMoved && pts.length && (Date.now()-lastInteract)>=IDLE_MS){ recenterMap() } // nach 30 s Ruhe zurück
+  // Feste See-Übersicht (wie KAI/Kiosk) — nicht aufs Schiff zoomen. Nach 30 s Ruhe zurück zur Übersicht.
+  if(userMoved && (Date.now()-lastInteract)>=IDLE_MS){ recenterMap() }
 }
 
 async function load(){
