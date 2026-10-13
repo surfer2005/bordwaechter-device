@@ -23,6 +23,9 @@ var uiHTML []byte
 //go:embed display.html
 var displayHTML []byte
 
+//go:embed seekarte.html
+var seekarteHTML []byte
+
 // Quelle für den Self-Update ("Aktualisieren"-Knopf): die neueste Release-Binärdatei des Geräte-Repos.
 const updateBase = "https://github.com/surfer2005/bordwaechter-device/releases/latest/download"
 
@@ -264,6 +267,12 @@ func (a *App) routes() *http.ServeMux {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
 		_, _ = w.Write(displayHTML)
+	})
+	// Seekarten-Ansicht (Hochkant: Pilot-Infos oben, große Karte unten) — gleiche Daten/Token wie /anzeige.
+	mux.HandleFunc("/seekarte", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write(seekarteHTML)
 	})
 	mux.HandleFunc("/api/display", func(w http.ResponseWriter, r *http.Request) {
 		tok := a.getCfg().DisplayToken
