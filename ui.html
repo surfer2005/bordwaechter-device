@@ -174,7 +174,7 @@
       <div class="btns" style="margin-top:8px"><button class="ghost" onclick="genDispTok()">Neu erzeugen</button><a id="dispOpen" class="ghost" style="display:inline-block;text-decoration:none" href="#" target="_blank" rel="noopener">Anzeige öffnen</a></div>
       <p class="muted" style="margin-top:6px">Vollbild-Anzeige für einen Monitor an Bord — ohne Login, der Token steckt in der Adresse. Diese Adresse am Monitor hinterlegen:<br><code id="dispUrl" style="word-break:break-all"></code></p>
     </fieldset>
-    <div class="btns"><button onclick="saveCfg()">Speichern</button><button class="ghost" onclick="updateDev()">Aktualisieren</button><button class="ghost" onclick="restartDev()">Neustart</button><span id="saveMsg" class="muted"></span></div>
+    <div class="btns"><button onclick="saveCfg()">Speichern</button><button class="ghost" onclick="updateDev()">Aktualisieren</button><span id="updBadge" style="display:none;align-self:center;padding:2px 8px;border-radius:10px;background:#f3e2c0;color:#8a5a00;font-weight:600;font-size:13px"></span><button class="ghost" onclick="restartDev()">Neustart</button><span id="saveMsg" class="muted"></span></div>
     <p class="muted" style="margin-top:6px">Hinweis: Änderung von GPS-Quelle oder GPIO-Backend wird nach einem Neustart des Dienstes wirksam.</p>
   </div>
 
@@ -206,6 +206,16 @@ function updateDispUrl(){
 }
 function genDispTok(){ const b=new Uint8Array(16); crypto.getRandomValues(b); g('c_disptok').value=Array.from(b,x=>x.toString(16).padStart(2,'0')).join(''); updateDispUrl() }
 async function updateDev(){ if(!(await ask('Neueste Version aus dem Internet laden und installieren?')))return; g('saveMsg').textContent='Lade neue Version …'; try{ const r=await fetch('/api/update',{method:'POST'}); const j=await r.json(); if(!j.ok){ g('saveMsg').textContent='Fehler: '+(j.error||'Update'); return } g('saveMsg').textContent='Aktualisiert, Neustart läuft …'; setTimeout(()=>{g('saveMsg').textContent='';location.reload()},6000) }catch(e){ g('saveMsg').textContent='Aktualisiert, Neustart läuft …'; setTimeout(()=>location.reload(),6000) } }
+let updChecked=false
+async function checkUpdate(){
+  if(updChecked)return; updChecked=true
+  try{
+    const r=await fetch('/api/update-check'); if(!r.ok)return
+    const j=await r.json(); const b=g('updBadge')
+    if(j.updateAvailable){ b.textContent='● Neue Version '+j.latest+' verfügbar'; b.style.display='inline-block'; b.title='Jetzt „Aktualisieren" drücken' }
+    else b.style.display='none'
+  }catch(e){ updChecked=false }
+}
 function fmt(n,u){ return (n==null||n===0&&u==='km'?'—':n)+(u?(' '+u):'') }
 function showLogin(){ g('login').style.display='grid' }
 function hideLogin(){ g('login').style.display='none' }
@@ -225,6 +235,7 @@ async function refresh(){
     const r=await fetch('/api/status')
     if(r.status===401){ showLogin(); return }
     hideLogin()
+    checkUpdate()
     const s=await r.json()
     g('ver').textContent='Konfiguration · Schiff-ID '+(s.ship_id||0)+(s.version?(' · v'+s.version):'')
     g('s_ship').textContent=(s.ship||'—')+(s.registration_number?(' · '+s.registration_number):'')

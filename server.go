@@ -9,6 +9,8 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -75,6 +77,83 @@ func selfUpdate() error {
 		return err
 	}
 	return nil
+}
+
+// Versionsprüfung: liegt in GitHub eine neuere Version als die laufende vor? Dieselbe Quelle wie der
+// „Aktualisieren"-Knopf (releases/latest). Zwischengespeichert (1 h); bei Offline/Fehler bleibt der
+// letzte bekannte Stand. So sieht der Kollege beim Öffnen der Konfigseite, dass eine neue Version
+// bereitsteht, statt extra informiert werden zu müssen.
+const ghLatestAPI = "https://api.github.com/repos/surfer2005/bordwaechter-device/releases/latest"
+
+var (
+	relMu  sync.Mutex
+	relTag string
+	relAt  time.Time
+)
+
+func latestReleaseTag() string {
+	relMu.Lock()
+	if relTag != "" && time.Since(relAt) < time.Hour {
+		t := relTag
+		relMu.Unlock()
+		return t
+	}
+	relMu.Unlock()
+	cl := &http.Client{Timeout: 8 * time.Second}
+	req, _ := http.NewRequest("GET", ghLatestAPI, nil)
+	req.Header.Set("User-Agent", "bordwaechter")
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := cl.Do(req)
+	if err != nil {
+		relMu.Lock()
+		t := relTag
+		relMu.Unlock()
+		return t
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 200 {
+		var j struct {
+			TagName string `json:"tag_name"`
+		}
+		if json.NewDecoder(resp.Body).Decode(&j) == nil && j.TagName != "" {
+			relMu.Lock()
+			relTag = j.TagName
+			relAt = time.Now()
+			relMu.Unlock()
+			return j.TagName
+		}
+	}
+	relMu.Lock()
+	t := relTag
+	relMu.Unlock()
+	return t
+}
+
+// verNewer: ist latest (z. B. "v0.1.22") höher als current ("0.1.21")? Nur Zahlenteile, führendes v egal.
+func verNewer(latest, current string) bool {
+	norm := func(s string) []int {
+		s = strings.TrimPrefix(strings.TrimSpace(s), "v")
+		parts := strings.Split(s, ".")
+		out := make([]int, len(parts))
+		for i, p := range parts {
+			out[i], _ = strconv.Atoi(p)
+		}
+		return out
+	}
+	a, b := norm(latest), norm(current)
+	for i := 0; i < len(a) || i < len(b); i++ {
+		var x, y int
+		if i < len(a) {
+			x = a[i]
+		}
+		if i < len(b) {
+			y = b[i]
+		}
+		if x != y {
+			return x > y
+		}
+	}
+	return false
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
@@ -271,6 +350,16 @@ func (a *App) routes() *http.ServeMux {
 			f.Flush()
 		}
 		reexecSoon()
+	}))
+
+	// Versionsprüfung: meldet die laufende und die neueste verfügbare Version (GitHub releases/latest).
+	mux.HandleFunc("/api/update-check", a.guard(func(w http.ResponseWriter, r *http.Request) {
+		latest := latestReleaseTag()
+		writeJSON(w, map[string]any{
+			"current":         version,
+			"latest":          latest,
+			"updateAvailable": latest != "" && verNewer(latest, version),
+		})
 	}))
 
 	// Feste IP / DHCP umstellen (schreibt ein NetworkManager-Keyfile, kein Shell). Wirkt nach
