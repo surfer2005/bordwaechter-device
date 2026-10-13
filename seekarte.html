@@ -16,7 +16,7 @@
    --teal:#54BC9F;--amber:#F0A93C;--blue:#4FA7D6;--green:#3FC28C;--red:#E8614E;--arc:#163338;--tick:#2A4F54}
  *{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}
  body{background:var(--bg);color:var(--ink);font-family:system-ui,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
- .wrap{height:100%;display:flex;flex-direction:column;padding:16px;gap:14px;max-width:1280px;margin:0 auto;overflow:hidden}
+ .wrap{height:100%;display:flex;flex-direction:column;padding:8px;gap:10px;overflow:hidden}
  header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
  .brand .d{width:30px;height:30px;border-radius:8px;background:var(--teal);display:grid;place-items:center}
  .brand .d svg{width:20px;height:20px;display:block}
@@ -37,8 +37,9 @@
  .side{display:contents}
  .advice{grid-area:advice}.facts{grid-area:facts}.map{grid-area:map;min-height:0}
  @media(max-width:620px){main{grid-template-columns:1fr;grid-template-areas:'advice' 'facts' 'map'}}
- /* Querformat: Pilot-Kopf extra kompakt, damit die Karte die Höhe füllt (kein Streifen). */
+ /* Querformat: Infos LINKS (kompakt), Karte RECHTS über die volle Höhe (breit, kein Streifen). */
  @media(orientation:landscape){
+   main{grid-template-columns:minmax(300px,.8fr) 2fr;grid-template-rows:auto 1fr;grid-template-areas:'advice map' 'facts map'}
    .advice{padding:6px 10px;gap:3px}.gauge{width:176px}.gauge .big .val{font-size:1.9rem}
    .verdict{margin-top:2px}.verdict .ar{font-size:1.5rem}.verdict .w{font-size:1.15rem}
    .facts{padding:7px;gap:6px}.fact{padding:6px 9px}
