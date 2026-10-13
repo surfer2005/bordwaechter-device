@@ -7,6 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%231F6E5C'/%3E%3Cg transform='translate(112,112) scale(12)' fill='none' stroke='%23fff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 18c2 1.4 4 1.4 6 0s4-1.4 6 0 4 1.4 6 0M5 18l1.2-8.4a1 1 0 0 1 1-.86H12V4l6 4-6 3.2'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script>
 <style>
  :root{--bg:#F3F1EA;--panel:#FBFAF5;--panel2:#F1EDE3;--line:#E2DDD0;--ink:#121A17;--muted:#5C6B64;--faint:#8A978F;
    --teal:#1F6E5C;--amber:#B16A12;--blue:#2E7CB8;--green:#2E8B57;--red:#C4442E;--arc:#E4DFD2;--tick:#C8C2B4;
@@ -270,17 +271,19 @@ function render(s){
 // (reiner Offline-Bordmonitor) wird die Karten-Kachel ausgeblendet statt grau zu bleiben.
 var kmap=null,klayer=null,seamark=null,mapFitted=false,mapPts=[],shipLL=null,lastInteract=0,userMoved=false,recentering=false
 var INITZOOM=13
+var curBearing=0
 var IDLE_MS=30000 // nach 30 s ohne Nutzer-Aktion automatisch wieder einpassen
 function cardinal(d){ return ['N','NO','O','SO','S','SW','W','NW'][Math.round(((d%360)/45))%8] }
 // Schiff mittig halten (unter dem Fadenkreuz). Ohne Position Rückfall auf Route-Einpassen.
 function recenterMap(initZoom){ if(!kmap)return; recentering=true
+  if(kmap.setBearing)kmap.setBearing(-curBearing) // course-up: Kurs nach oben
   if(shipLL){ kmap.setView(shipLL, initZoom?INITZOOM:kmap.getZoom(), {animate:false}) }
   else if(mapPts.length){ kmap.fitBounds(L.latLngBounds(mapPts).pad(0.25),{animate:false}) }
   recentering=false; userMoved=false } // synchron geklammert — kein setTimeout (sonst userMoved-Hänger)
 function drawMap(s){
   if(typeof L==='undefined'){ $('mapcard').style.display='none'; return }
   if(!kmap){
-    kmap=L.map('map',{zoomControl:true,preferCanvas:true}).setView([47.62,9.30],11)
+    kmap=L.map('map',{zoomControl:true,rotate:true,rotateControl:false}).setView([47.62,9.30],11)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(kmap)
     // Seezeichen-Overlay (transparent, darüber). Offline: lädt einfach nicht, kein Crash.
     seamark=L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',{maxZoom:18,opacity:.95,attribution:'© OpenSeaMap'}).addTo(kmap)
@@ -305,17 +308,15 @@ function drawMap(s){
   }
   if(s.pos_valid){
     shipLL=[s.lat,s.lng]
-    if(s.heading!=null && (s.ist_kmh==null || s.ist_kmh>1)){ // fährt → Pfeil in Fahrtrichtung
-      L.marker([s.lat,s.lng],{icon:L.divIcon({className:'shipdir',iconSize:[28,28],iconAnchor:[14,14],html:'<svg width="28" height="28" viewBox="0 0 28 28" style="transform:rotate('+s.heading+'deg)"><path d="M14 3 L20 23 L14 18 L8 23 Z" fill="#1F6E5C" stroke="#fff" stroke-width="1.4"/></svg>'})}).addTo(klayer)
-    } else {
-      L.circleMarker([s.lat,s.lng],{radius:7,color:'#fff',weight:2,fillColor:'#1F6E5C',fillOpacity:1}).addTo(klayer)
-    }
+    if(s.heading!=null)curBearing=s.heading // Kurs halten (course-up)
+    // course-up: die Karte ist gedreht → das Schiff zeigt IMMER nach oben
+    L.marker([s.lat,s.lng],{icon:L.divIcon({className:'shipdir',iconSize:[30,30],iconAnchor:[15,15],html:'<svg width="30" height="30" viewBox="0 0 30 30"><path d="M15 3 L22 25 L15 19 L8 25 Z" fill="#1F6E5C" stroke="#fff" stroke-width="1.6"/></svg>'})}).addTo(klayer)
     pts.push([s.lat,s.lng])
   } else { shipLL=null }
   mapPts=pts
-  if(!mapFitted&&(shipLL||pts.length)){ recenterMap(true); mapFitted=true }              // erstes Einpassen (Schiff mittig)
-  else if(!userMoved && shipLL){ recenterMap(false) }                                    // dem Schiff folgen
-  else if(userMoved && (shipLL||pts.length) && (Date.now()-lastInteract)>=IDLE_MS){ recenterMap(false) } // nach 30 s Ruhe zurück
+  // Große Seekarte: IMMER folgen (zentriert, course-up), Nutzer-Zoom behalten; kein 30-s-Reset, nur ◎ = INITZOOM.
+  if(!mapFitted&&(shipLL||pts.length)){ recenterMap(true); mapFitted=true }
+  else if(shipLL||pts.length){ recenterMap(false) }
 }
 
 async function load(){
