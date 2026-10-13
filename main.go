@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const version = "0.1.18"
+const version = "0.1.19"
 
 type App struct {
 	mu     sync.Mutex
@@ -44,6 +44,12 @@ func sleepSec(v, def int) {
 }
 
 func (a *App) bundleLoop() {
+	// Beim Start das zuletzt gespeicherte Bundle von der Platte laden → nach Offline-Neustart gelten
+	// sofort wieder die KAI-Werte (statt der Code-Defaults), auch bevor KAI erreichbar ist.
+	if b := loadBundle(); b != nil {
+		a.eng.SetBundle(b)
+		log.Printf("bundle: aus Platten-Cache geladen (%s)", b.Date)
+	}
 	if k := a.getKai(); k != nil && a.getCfg().EdgeToken != "" {
 		_ = k.Hello(version)
 	}
@@ -52,6 +58,7 @@ func (a *App) bundleLoop() {
 		if k := a.getKai(); k != nil && cfg.EdgeToken != "" {
 			if b, err := k.GetBundle(cfg.ShipID); err == nil {
 				a.eng.SetBundle(b)
+				saveBundle(b) // für Offline-Neustart auf die Platte sichern
 			} else {
 				log.Printf("bundle: %v", err)
 			}

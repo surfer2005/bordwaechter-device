@@ -31,10 +31,15 @@ type Bundle struct {
 	} `json:"ship"`
 	Date       string `json:"date"`
 	Thresholds struct {
-		OffCourseM      float64 `json:"offCourseM"`
-		OffCourseFactor float64 `json:"offCourseFactor"`
+		OffCourseM      float64 `json:"offCourseM"`      // abwärtskompatibel (alt), ab v0.1.19 ungenutzt
+		OffCourseFactor float64 `json:"offCourseFactor"` // abwärtskompatibel (alt), ab v0.1.19 ungenutzt
 		OffCoursePortM  float64 `json:"offCoursePortM"`
 		ManeuverKmh     float64 `json:"maneuverKmh"`
+		HafenRadiusM    float64 `json:"hafenRadiusM"`    // Zonen-Ampel: Radius Hafen-Zone
+		HafenOrangeM    float64 `json:"hafenOrangeM"`    // Hafen: orange ab
+		HafenRotM       float64 `json:"hafenRotM"`       // Hafen: rot ab
+		SeeOrangeM      float64 `json:"seeOrangeM"`      // offene See: orange ab
+		SeeRotM         float64 `json:"seeRotM"`         // offene See: rot ab
 		PosStaleS       float64 `json:"posStaleS"`
 		LateGraceMin    float64 `json:"lateGraceMin"`
 		ToleranceKmh    float64 `json:"toleranceKmh"`

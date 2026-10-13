@@ -54,6 +54,83 @@ HACS-Integration nutzt dasselbe Passwort.
 - **Totmann-SIFA (optional):** Anwesenheit muss alle _N_ s bestätigt werden (Vorwarnung → Hupe).
 - Ausgänge aus dem Pi (potenzialfreie Relais empfohlen): Hupe, Lampe. Eingang: Quittier-Taster.
 
+## Verdrahtung / galvanische Trennung (Schiff)
+
+Grundsatz: **alles galvanisch trennen, was den Pi verlässt** — Bordnetz (12/24 V), lange
+Leitungen, EMV und Spannungsspitzen sind an Bord die Regel. Pins per Config:
+`horn_pin` (Vorgabe 17), `lamp_pin` (27), `ack_pin` (22), `sifa_key_pin`, `active_low`.
+
+- **Ausgänge (Hupe, Lampe):** Das Relais trennt bereits die **Last** (potenzialfrei). Zusätzlich
+  die Seite **GPIO → Relaisspule** trennen: **opto-isolierte Relaismodule** (Eingang mit PC817)
+  verwenden, die **JD-VCC-Brücke entfernen** und die Spulen aus einer **eigenen, isolierten 5 V**
+  speisen — erst dann ist der Pi beidseitig getrennt. Ein zusätzlicher diskreter Optokoppler davor
+  ist dann überflüssig. `active_low` passend zur Modul-Logik setzen; Freilaufdiode/TVS an der Last.
+- **Eingänge (Quittier-Taster, SIFA-Taste): optokoppeln.** Taster schaltet die LED-Seite, der
+  Fototransistor zieht den GPIO. Teile: **PC817** (einzeln) bzw. **TLP281** (4-fach SMD); für
+  genormte 24-V-Pegel **ISO1212** (isolierter Digitaleingang, IEC 61131). Dazu Entprellung (Software
+  + optional RC) und **TVS** gegen Bordnetz-Surges.
+- **Empfohlen — Industrie-Pi mit Klemmen-I/O statt Eigenbau-Optokoppler:** fertige Hutschienen-
+  Einheiten mit **isolierten Digitaleingängen UND Relais/isolierten Ausgängen auf Schraubklemmen**,
+  Weitbereichseingang 9–36 V (Bordnetz direkt), verpolsicher, Watchdog/RTC: **Sfera Labs Iono Pi
+  (Max)** (fast maßgeschneidert: Relais + opto-isolierte DI), **Kunbus RevPi Core/Connect + RevPi
+  DIO**, alternativ UniPi / Techbase ModBerry / Strato Pi. Die Trennung ist dort ab Werk geprüft;
+  bei Iono/RevPi deren Pin-/Treiber-Nummern nutzen (ggf. GPIO-Backend anpassen). Modelle/Preise vor
+  Beschaffung am aktuellen Datenblatt prüfen.
+
+## Einstellungen (alle Optionen)
+
+Gerät-seitig editierbar in der **lokalen Oberfläche** (`http://<pi>:8090`, Zahnrad) bzw. direkt in
+`config.json`; die schiffs-/schwellenwertbezogenen Werte kommen aus dem **KAI-Bundle**
+(*KAI → Einstellungen → Schnittstellen → Bordwächter-Geräte*). Defaults in Klammern.
+
+**Allgemein / KAI-Anbindung**
+- `kai_base_url` — KAI-Adresse (z. B. `https://kai-bsb.de`); das Gerät ruft `<base>/api/edge/…`.
+- `edge_token` — je Gerät, aus der KAI-Geräteverwaltung.
+- `ship_id` (0 = aus dem Bundle übernehmen).
+- `send_position` — GPS direkt an KAI melden (aus lassen, wenn Home Assistant die Position liefert).
+- `listen` (`:8090`) — lokale UI/API.
+- `ui_password` — Schutz der lokalen Oberfläche (leer = im Bordnetz offen).
+- `ha_password` — eigenes Passwort für Home Assistant (leer = nutzt `ui_password`).
+- `display_token` — Token der Kiosk-Anzeige (`/anzeige?token=…`); leer = Anzeige aus.
+- `bundle_refresh_sec` — wie oft das Bundle (Schiff, Soll-Zeiten, Kurs-Grenzen) von KAI geholt wird.
+
+**GPS** (`gps`)
+- `source` — `teltonika` (Modbus) oder `manual` (`manual`).
+- `host` / `port` (`502`) / `unit` (`1`) — Modbus-Verbindung.
+- `lat_reg` (`0`) / `lng_reg` (`2`) / `speed_reg` (`-1` = keins) / `heading_reg` (`-1` = keins) —
+  Holding-Register; **an der echten Teltonika verifizieren** (Defaults sind Platzhalter).
+- `format` — `float32` (Vorgabe) / `int32_1e7` / `int32_1e6`.
+- `poll_sec` (`5`) — Abfrageintervall. Ohne Speed-Register wird die Geschwindigkeit aus der Bewegung abgeleitet.
+
+**SIFA / Alarm** (`sifa`)
+- `trigger_combo` — Auslöser: `gps` | `camera` | `both` | `either` (`either`).
+- `realarm_sec` (`15`) — Ereignis-SIFA: erneuter Alarm nach Quittieren, solange die Ursache besteht.
+- `deadman_on` — Totmann-SIFA aktiv.
+- `deadman_sec` (`30`) — Intervall, in dem Anwesenheit bestätigt werden muss.
+- `deadman_prewarn_sec` (`5`) — Vorwarnzeit vor dem Totmann-Alarm.
+
+**GPIO** (`gpio`, s. Abschnitt „Verdrahtung")
+- `backend` — `sysfs` oder `none` (`none`).
+- `horn_pin` (`17`) / `lamp_pin` (`27`) — Ausgänge (Relais).
+- `ack_pin` (`22`, `-1` = keiner) — Quittier-Taster (Eingang).
+- `sifa_key_pin` (`-1`) — Schlüsselschalter „SIFA an" (Eingang).
+- `active_low` — Relais/Ausgang schaltet bei LOW.
+
+**Kamera** (`camera`)
+- `enabled` — Kamera-Auswertung aktiv.
+- `webhook_secret` — MxMessage ruft `/api/camera/event?secret=…`.
+- `snapshot_url` — HTTP-Snapshot, bei Alarm geholt und an KAI gehängt.
+- `hold_sec` (`20`) — wie lange ein Kamera-Hinweis als aktiv gilt.
+
+**Netzwerk** (`network`)
+- `mode` — `dhcp` (Vorgabe) oder `static`.
+- `interface` (`eth0`) / `address` (CIDR) / `gateway` / `dns` (komma-getrennt).
+
+**Serverseitig (KAI-Bundle, wirkt aufs Gerät)**
+- Kurs-Grenze je Abschnitt und Basiswert, Hafen-Zone — aus den GPS-Kiosk-Einstellungen.
+- „Für die nächste Fahrt Bordbuch anlegen"-Hinweis nach Ankunft (Minuten) — Bundle.
+- Schiff, Soll-Zeiten/Reststrecke, Fahrrinnen-Geometrie — Bundle.
+
 ## Hinweise / noch zu verifizieren
 
 - **Teltonika-Modbus-Register** (lat/lng + Format) sind **konfigurierbar** und müssen an der

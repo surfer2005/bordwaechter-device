@@ -135,3 +135,40 @@ func saveConfig(c *Config) error {
 	}
 	return os.Rename(tmp, p)
 }
+
+// Bundle-Persistenz: das zuletzt von KAI geholte Bundle auf die Platte schreiben und beim Start laden.
+// So gelten nach einem Offline-Neustart weiter die KAI-Werte (statt der Code-Defaults). Siehe main.go.
+func bundlePath() string {
+	if p := os.Getenv("BORDWAECHTER_BUNDLE"); p != "" {
+		return p
+	}
+	if _, err := os.Stat("/etc/bordwaechter"); err == nil {
+		return "/etc/bordwaechter/bundle.json"
+	}
+	return "bundle.json"
+}
+
+func saveBundle(b *Bundle) {
+	data, err := json.Marshal(b)
+	if err != nil {
+		return
+	}
+	p := bundlePath()
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	tmp := p + ".tmp"
+	if os.WriteFile(tmp, data, 0o600) == nil {
+		_ = os.Rename(tmp, p)
+	}
+}
+
+func loadBundle() *Bundle {
+	data, err := os.ReadFile(bundlePath())
+	if err != nil {
+		return nil
+	}
+	var b Bundle
+	if json.Unmarshal(data, &b) != nil {
+		return nil
+	}
+	return &b
+}

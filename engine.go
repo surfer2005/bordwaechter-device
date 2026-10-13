@@ -198,10 +198,6 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	if tol <= 0 {
 		tol = tolDefault
 	}
-	offLimit := b.Thresholds.OffCourseM
-	if offLimit <= 0 {
-		offLimit = 50
-	}
 	if !b.HatBordbuch || len(b.Legs) == 0 {
 		st.Hint = "kein Bordbuch für heute"
 		return st
@@ -316,19 +312,30 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	if maneuverKmh <= 0 {
 		maneuverKmh = 8
 	}
-	// Grenze streckenadaptiv: gelernte Korridorbreite × Faktor, mindestens die globale Untergrenze.
-	// (Fester Wert an echten Daten geprüft und verworfen — Streuung je Rinne zu verschieden, s. Server.)
-	offFactor := b.Thresholds.OffCourseFactor
-	if offFactor <= 0 {
-		offFactor = 1.3
+	// Kurs-Ampel ZONENBASIERT (wie Server, mit dem Nutzer festgelegt): in Hafennähe eng, auf offener
+	// See weit. Werte aus dem Bundle (KAI-Einstellungen), Code-Defaults nur als Notnagel (fabrikneues,
+	// nie-online-Gerät). Löst das frühere spread×Faktor ab.
+	hafenRadiusM := b.Thresholds.HafenRadiusM
+	if hafenRadiusM <= 0 {
+		hafenRadiusM = 300
 	}
-	effLimit := offLimit
-	if leg.SpreadM != nil && *leg.SpreadM > 0 {
-		if cand := *leg.SpreadM * offFactor; cand > effLimit {
-			effLimit = cand
-		}
+	hafenOrange := b.Thresholds.HafenOrangeM
+	if hafenOrange <= 0 {
+		hafenOrange = 30
 	}
-	st.OffLimitM = float64(int(effLimit + 0.5))
+	hafenRot := b.Thresholds.HafenRotM
+	if hafenRot <= 0 {
+		hafenRot = 50
+	}
+	seeOrange := b.Thresholds.SeeOrangeM
+	if seeOrange <= 0 {
+		seeOrange = 700
+	}
+	seeRot := b.Thresholds.SeeRotM
+	if seeRot <= 0 {
+		seeRot = 1050
+	}
+	st.OffLimitM = float64(int(seeOrange + 0.5)) // Vorbelegung; in der Hafen-Zone unten überschrieben
 	// Position-Veraltung: ein altes Signal (Ausfall) erzeugt KEINE Live-Bewertung mehr —
 	// sonst 0,0 km/h + „Schneller" aus altem Stillstand. Nur eine frische Position gilt als live.
 	posStaleS := b.Thresholds.PosStaleS
@@ -346,17 +353,22 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 			st.RemainKm = round2(pr.RemainKm)
 			remainKnown = true
 			st.OffCourseM = float64(int(pr.DistToLineKm*1000 + 0.5))
-			// Hafen-/Manöverbereich: nahe Start/Ziel UND im Manövertempo (langsam) → Kurs-Ampel aus
-			// (dort fächert das Schiff beim An-/Ablegen von der Linie auf → Fehlalarme).
+			// Zone nach Abstand zum nächsten Hafen (Anfang/Ende der Linie = Anlegestellen):
+			// in der Zone eng (hafenOrange/Rot), draußen weit (seeOrange/Rot). Grenze = Beginn Orange.
 			a := leg.Geometry[0]
 			z := leg.Geometry[len(leg.Geometry)-1]
-			nahHalt := haversineKm(pos.Lat, pos.Lng, a[1], a[0]) <= portZoneKm || haversineKm(pos.Lat, pos.Lng, z[1], z[0]) <= portZoneKm
-			langsam := !posLive || pos.SpeedKmh < maneuverKmh
-			if nahHalt && langsam {
-				st.OffState = "unknown"
-			} else if st.OffCourseM <= effLimit {
+			distHarborM := haversineKm(pos.Lat, pos.Lng, a[1], a[0]) * 1000
+			if d2 := haversineKm(pos.Lat, pos.Lng, z[1], z[0]) * 1000; d2 < distHarborM {
+				distHarborM = d2
+			}
+			orange, rot := seeOrange, seeRot
+			if distHarborM <= hafenRadiusM {
+				orange, rot = hafenOrange, hafenRot
+			}
+			st.OffLimitM = float64(int(orange + 0.5))
+			if st.OffCourseM < orange {
 				st.OffState = "ok"
-			} else if st.OffCourseM <= effLimit*1.5 {
+			} else if st.OffCourseM < rot {
 				st.OffState = "warn"
 			} else {
 				st.OffState = "alarm"
