@@ -335,9 +335,10 @@ function drawMap(s){
   }
   if(s.pos_valid){
     shipLL=[s.lat,s.lng]
-    if(s.heading!=null)curBearing=s.heading // Kurs halten (course-up)
-    // course-up: die Karte ist gedreht → das Schiff zeigt IMMER nach oben
-    L.marker([s.lat,s.lng],{icon:L.divIcon({className:'shipdir',iconSize:[30,30],iconAnchor:[15,15],html:'<svg width="30" height="30" viewBox="0 0 30 30"><path d="M15 3 L22 25 L15 19 L8 25 Z" fill="#1F6E5C" stroke="#fff" stroke-width="1.6"/></svg>'})}).addTo(klayer)
+    // Norden oben (wie die Pilot-Karte): Karte NICHT drehen → Beschriftung bleibt lesbar.
+    // Das Schiff ist ein Pfeil, der in die Fahrtrichtung (Kurs) zeigt.
+    var hd=(s.heading!=null?s.heading:0)
+    L.marker([s.lat,s.lng],{icon:L.divIcon({className:'shipdir',iconSize:[30,30],iconAnchor:[15,15],html:'<svg width="30" height="30" viewBox="0 0 30 30" style="transform:rotate('+hd+'deg)"><path d="M15 3 L22 25 L15 19 L8 25 Z" fill="#1F6E5C" stroke="#fff" stroke-width="1.6"/></svg>'})}).addTo(klayer)
     pts.push([s.lat,s.lng])
   } else { shipLL=null }
   mapPts=pts
