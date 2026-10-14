@@ -91,8 +91,12 @@
  .hintbox{padding:34px 20px;text-align:center;color:var(--muted);font-size:1.25rem;font-weight:600}
  .camwrap{width:100%;max-width:560px;position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:16/9;display:grid;place-items:center;border:1px solid var(--line)}
  .camwrap.alarm{border:3px solid var(--red);box-shadow:0 0 0 3px rgba(232,97,78,.25)}
- .camwrap img{width:100%;height:100%;object-fit:contain}
+ .camwrap img{width:100%;height:100%;object-fit:contain;cursor:zoom-in}
+ .camwrap.big{position:fixed;inset:0;max-width:none;width:100vw;height:100vh;aspect-ratio:auto;z-index:300;border-radius:0;border:none}
+ .camwrap.big img{cursor:zoom-out}
+ .cambig{position:absolute;top:10px;right:12px;z-index:5;background:rgba(0,0,0,.5);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:8px;font-size:1.15rem;line-height:1;padding:5px 10px;cursor:pointer}
  .camrec{position:absolute;top:10px;left:12px;font-family:var(--mono);font-weight:700;font-size:.85rem;color:var(--red);background:rgba(0,0,0,.45);padding:3px 9px;border-radius:6px}
+ .camerr{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:14px;color:#E8614E;font-family:var(--mono);font-size:.82rem;line-height:1.4;background:rgba(0,0,0,.72)}
 </style>
 </head>
 <body>
@@ -109,7 +113,8 @@
       <option value="14">Nah</option>
       <option value="15">Detail</option>
     </select>
-    <button class="themebtn" id="livebtn" title="Live-Bild" style="display:none">Live-Bild</button>
+    <button class="themebtn" id="livebtn" title="Standbild" style="display:none">Live-Bild</button>
+    <button class="themebtn" id="streambtn" title="Flüssiger Livestream" style="display:none">Livestream</button>
     <button class="themebtn" id="themebtn" title="Hell/Dunkel umschalten">☾</button>
     <span class="clock" id="clock">—:—</span>
   </header>
@@ -137,7 +142,7 @@
         <div class="abziel" id="abfziel"></div>
       </div>
       <div class="hintbox" id="hint" style="display:none"></div>
-      <div class="camwrap" id="camwrap" style="display:none"><div class="camrec" id="camrec">● LIVE</div><img id="camimg" alt="Kamerabild"></div>
+      <div class="camwrap" id="camwrap" style="display:none"><div class="camrec" id="camrec">● LIVE</div><button class="cambig" id="cambig" title="Großes Bild">⛶</button><img id="camimg" alt="Kamerabild"><div class="camerr" id="camerr" style="display:none"></div></div>
     </section>
     <div class="side">
       <section class="card facts">
@@ -170,8 +175,17 @@
 function $(id){return document.getElementById(id)}
 var token=new URLSearchParams(location.search).get('token')||''
 ;(function(){var s=document.getElementById('switchview');if(s)s.href='/anzeige?token='+encodeURIComponent(token)})()
-var CX=110,CY=120,R=86,A0=150,A1=390,VMAX=40,fails=0,liveManual=false,camShown=false;
+var CX=110,CY=120,R=86,A0=150,A1=390,VMAX=40,fails=0,liveMode='off',camMode='',camBig=false;
 function snapUrl(){ return '/api/snapshot?token='+encodeURIComponent(token)+'&_='+Date.now() }
+function streamUrl(){ return '/api/stream?token='+encodeURIComponent(token) }
+// Bleibt das Kamerabild leer, den Grund als Klartext ins Feld schreiben (wie in der Pilot-Anzeige).
+;(function(){ var im=document.getElementById('camimg'); if(!im) return
+  im.onerror=function(){ var e=document.getElementById('camerr'); if(!e) return
+    fetch(snapUrl()).then(function(r){ return r.text().then(function(t){
+      e.textContent='Kamera: HTTP '+r.status+(t?(' · '+t.slice(0,140)):''); e.style.display='grid' }) })
+      .catch(function(){ e.textContent='Kamera: keine Antwort vom Gerät'; e.style.display='grid' }) }
+  im.onload=function(){ var e=document.getElementById('camerr'); if(e) e.style.display='none' }
+})()
 
 // Theme (hell/dunkel) wie im Kiosk
 (function(){var KEY='bw_display_theme'
@@ -272,15 +286,17 @@ function render(s){
 
   // Kamerabild überlagert den Tacho: automatisch bei einem Ereignis, oder per „Live-Bild"-Knopf.
   $('livebtn').style.display = s.cam_configured ? '' : 'none'
+  $('streambtn').style.display = s.stream_configured ? '' : 'none'
   var cam=$('camwrap')
-  if(s.cam_configured && (liveManual || s.camera_hazard)){
+  if(s.cam_configured && (liveMode!=='off' || s.camera_hazard)){
     gauge.style.display='none';vd.style.display='none';tl.style.display='none';ab.style.display='none';hint.style.display='none'
     cam.style.display='grid'
-    cam.className='camwrap'+(s.camera_hazard?' alarm':'')
-    $('camrec').textContent=s.camera_hazard?'● REC · Hinweis':'● LIVE'
+    var mode = s.camera_hazard ? 'snapshot' : (liveMode==='off' ? 'snapshot' : liveMode)
+    cam.className='camwrap'+(s.camera_hazard?' alarm':'')+(camBig?' big':'')
+    $('camrec').textContent=s.camera_hazard?'● REC · Hinweis':(mode==='stream'?'● LIVE':'● LIVE')
     $('camrec').style.color=s.camera_hazard?'var(--red)':'var(--teal)'
-    if(!camShown){ $('camimg').src=snapUrl(); camShown=true }
-  } else { cam.style.display='none'; camShown=false }
+    if(mode!==camMode){ camMode=mode; var ce=$('camerr'); if(ce)ce.style.display='none'; $('camimg').src = (mode==='stream'?streamUrl():snapUrl()) }
+  } else { cam.style.display='none'; camMode=''; camBig=false; cam.className='camwrap' }
 
   drawMap(s)
 }
@@ -371,8 +387,12 @@ async function load(){
     var s=await r.json(); fails=0; render(s)
   }catch(e){ if(++fails>=3) showMsg('Keine Verbindung zum Bordwächter …') }
 }
-$('livebtn').onclick=function(){ liveManual=!liveManual; load() }
-setInterval(function(){ if($('camwrap').style.display!=='none'){ $('camimg').src=snapUrl() } },1000)
+$('livebtn').onclick=function(){ liveMode=(liveMode==='snapshot'?'off':'snapshot'); load() }
+$('streambtn').onclick=function(){ liveMode=(liveMode==='stream'?'off':'stream'); load() }
+function toggleBig(){ camBig=!camBig; $('camwrap').classList.toggle('big',camBig) }
+$('cambig').onclick=function(ev){ ev.stopPropagation(); toggleBig() }
+$('camimg').addEventListener('click',toggleBig)
+setInterval(function(){ if($('camwrap').style.display!=='none' && camMode==='snapshot'){ $('camimg').src=snapUrl() } },1000)
 load(); setInterval(load,2000)
 </script>
 </body>

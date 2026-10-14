@@ -45,7 +45,8 @@ type Status struct {
 	PosAgeSec    int     `json:"pos_age_sec"`
 	PosValid     bool    `json:"pos_valid"`
 	CameraHazard bool    `json:"camera_hazard"`
-	CamConfigured bool   `json:"cam_configured"` // Snapshot-URL hinterlegt → Live-Bild möglich
+	CamConfigured bool   `json:"cam_configured"`    // Snapshot-URL hinterlegt → Live-Bild möglich
+	StreamConfigured bool `json:"stream_configured"` // Livestream-URL (MJPEG) hinterlegt → flüssiger Stream möglich
 	HatBordbuch  bool    `json:"hat_bordbuch"`
 	BundleAgeSec int     `json:"bundle_age_sec"`
 	Hint         string  `json:"hint"`
@@ -471,6 +472,7 @@ func (e *Engine) Tick(now time.Time) {
 	camHazard := now.Before(e.camHazardUntil)
 	st.CameraHazard = camHazard
 	st.CamConfigured = cfg.Camera.SnapshotURL != ""
+	st.StreamConfigured = cfg.Camera.StreamURL != ""
 
 	// Ursache (Fusion je nach Kombi)
 	offAlarm := st.OffState == "alarm"

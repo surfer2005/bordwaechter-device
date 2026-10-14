@@ -316,6 +316,60 @@ func (a *App) routes() *http.ServeMux {
 		_, _ = io.Copy(w, io.LimitReader(resp.Body, 10*1024*1024))
 	})
 
+	// Kamera-LIVESTREAM (MJPEG) für ein flüssiges Bild: holt den fortlaufenden Multipart-Strom von der
+	// konfigurierten Livestream-URL (AXIS: /axis-cgi/mjpg/video.cgi, Basic/Digest s. cameraStream) und
+	// reicht ihn durch — Zugang bleibt am Gerät. Dauerverbindung (kein Write-Timeout, s. ListenAndServe);
+	// endet, wenn der Browser die Verbindung schließt (r.Context()).
+	mux.HandleFunc("/api/stream", func(w http.ResponseWriter, r *http.Request) {
+		cfg := a.getCfg()
+		if cfg.DisplayToken == "" || r.URL.Query().Get("token") != cfg.DisplayToken {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if cfg.Camera.StreamURL == "" {
+			http.Error(w, "kein Livestream konfiguriert", http.StatusNotFound)
+			return
+		}
+		resp, err := cameraStream(cfg.Camera.StreamURL)
+		if err != nil {
+			http.Error(w, "Kamera nicht erreichbar", http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			http.Error(w, "Kamera-Fehler (Livestream)", http.StatusBadGateway)
+			return
+		}
+		ct := resp.Header.Get("Content-Type")
+		if ct == "" {
+			ct = "multipart/x-mixed-replace"
+		}
+		w.Header().Set("Content-Type", ct)
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Connection", "close")
+		flusher, _ := w.(http.Flusher)
+		buf := make([]byte, 32*1024)
+		for {
+			select {
+			case <-r.Context().Done():
+				return
+			default:
+			}
+			n, er := resp.Body.Read(buf)
+			if n > 0 {
+				if _, we := w.Write(buf[:n]); we != nil {
+					return
+				}
+				if flusher != nil {
+					flusher.Flush()
+				}
+			}
+			if er != nil {
+				return
+			}
+		}
+	})
+
 	mux.HandleFunc("/api/config", a.guard(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
 			var c Config

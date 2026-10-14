@@ -154,8 +154,11 @@
         <div><label>Snapshot-URL</label><input id="cam_url" placeholder="http://benutzer:passwort@192.168.62.156/axis-cgi/jpg/image.cgi"></div>
         <div><label>Hinweis-Dauer (s)</label><input id="cam_hold" type="number"></div>
       </div>
+      <div class="row">
+        <div style="grid-column:1 / -1"><label>Livestream-URL (MJPEG, optional – flüssiges Live-Bild)</label><input id="cam_stream" placeholder="http://benutzer:passwort@192.168.62.156/axis-cgi/mjpg/video.cgi?fps=15&amp;resolution=1280x720"></div>
+      </div>
       <p class="muted" id="cam_hint" style="margin-top:6px"></p>
-      <p class="muted" style="margin-top:4px">AXIS-Snapshot: <code>http://benutzer:passwort@&lt;kamera-ip&gt;/axis-cgi/jpg/image.cgi</code> (Basic oder Digest wird automatisch erkannt). Mobotix: der bisherige Snapshot-Pfad.</p>
+      <p class="muted" style="margin-top:4px">AXIS-Snapshot (Standbild, auch für den Alarm an KAI): <code>http://benutzer:passwort@&lt;kamera-ip&gt;/axis-cgi/jpg/image.cgi</code>. AXIS-Livestream (flüssig): <code>http://benutzer:passwort@&lt;kamera-ip&gt;/axis-cgi/mjpg/video.cgi</code>. Basic oder Digest wird automatisch erkannt; in der Anzeige schaltet man mit „Live-Bild"/„Livestream" um.</p>
     </fieldset>
     <fieldset><legend>Netzwerk (IP-Adresse)</legend>
       <div class="row">
@@ -269,7 +272,7 @@ async function loadCfg(){
   g('sf_dms').value=c.sifa.deadman_sec; g('sf_pre').value=c.sifa.deadman_prewarn_sec
   g('io_be').value=c.gpio.backend; g('io_horn').value=c.gpio.horn_pin; g('io_lamp').value=c.gpio.lamp_pin
   g('io_ack').value=c.gpio.ack_pin; g('io_key').value=c.gpio.sifa_key_pin; g('io_al').value=String(!!c.gpio.active_low)
-  g('cam_en').value=String(!!c.camera.enabled); g('cam_sec').value=c.camera.webhook_secret||''; g('cam_url').value=c.camera.snapshot_url||''; g('cam_hold').value=c.camera.hold_sec
+  g('cam_en').value=String(!!c.camera.enabled); g('cam_sec').value=c.camera.webhook_secret||''; g('cam_url').value=c.camera.snapshot_url||''; g('cam_stream').value=c.camera.stream_url||''; g('cam_hold').value=c.camera.hold_sec
   const n=c.network||{}; g('n_mode').value=n.mode||'dhcp'; g('n_if').value=n.interface||'eth0'; g('n_addr').value=n.address||''; g('n_gw').value=n.gateway||''; g('n_dns').value=n.dns||''
   g('manualCard').style.display = c.gps.source==='manual' ? 'block':'none'
   g('cam_hint').textContent='Ereignis-Webhook (in die Kamera eintragen — Mobotix MxMessage bzw. AXIS „Benachrichtigung senden über HTTP"): '+location.origin+'/api/camera/event?secret='+(c.camera.webhook_secret||'<secret>')
@@ -281,7 +284,7 @@ async function saveCfg(){
     gps:{source:g('g_src').value,host:g('g_host').value,port:num('g_port'),unit:num('g_unit'),lat_reg:num('g_lat'),lng_reg:num('g_lng'),speed_reg:num('g_speed'),heading_reg:num('g_head'),format:g('g_fmt').value,poll_sec:num('g_poll')},
     sifa:{trigger_combo:g('sf_combo').value,realarm_sec:num('sf_re'),deadman_on:g('sf_dm').value==='true',deadman_sec:num('sf_dms'),deadman_prewarn_sec:num('sf_pre')},
     gpio:{backend:g('io_be').value,horn_pin:num('io_horn'),lamp_pin:num('io_lamp'),ack_pin:num('io_ack'),sifa_key_pin:num('io_key'),active_low:g('io_al').value==='true'},
-    camera:{enabled:g('cam_en').value==='true',webhook_secret:g('cam_sec').value,snapshot_url:g('cam_url').value,hold_sec:num('cam_hold')},
+    camera:{enabled:g('cam_en').value==='true',webhook_secret:g('cam_sec').value,snapshot_url:g('cam_url').value,stream_url:g('cam_stream').value,hold_sec:num('cam_hold')},
     network:{mode:g('n_mode').value,interface:g('n_if').value,address:g('n_addr').value,gateway:g('n_gw').value,dns:g('n_dns').value} }
   const r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)})
   g('saveMsg').textContent = r.ok ? 'Gespeichert.' : 'Fehler.'

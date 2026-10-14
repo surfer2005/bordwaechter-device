@@ -53,6 +53,7 @@ type Config struct {
 		Enabled       bool   `json:"enabled"`
 		WebhookSecret string `json:"webhook_secret"` // MxMessage ruft /api/camera/event?secret=… auf
 		SnapshotURL   string `json:"snapshot_url"`   // HTTP-Snapshot (bei Alarm geholt, an KAI gehängt)
+		StreamURL     string `json:"stream_url"`     // MJPEG-Livestream (flüssiges Live-Bild, AXIS /axis-cgi/mjpg/video.cgi)
 		HoldSec       int    `json:"hold_sec"`       // wie lange ein Kamera-Hinweis als aktiv gilt
 	} `json:"camera"`
 

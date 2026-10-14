@@ -16,6 +16,16 @@ import (
 // Basic kommt sonst nur HTTP 401 zurück). Die Zugangsdaten stehen als userinfo in der URL
 // (http://benutzer:passwort@host/pfad). Ohne userinfo wird anonym geladen.
 func cameraGet(rawURL string) (*http.Response, error) {
+	return cameraDo(rawURL, &http.Client{Timeout: 8 * time.Second})
+}
+
+// cameraStream wie cameraGet, aber OHNE Gesamt-Timeout (ein MJPEG-Livestream läuft dauerhaft) —
+// nur ein Timeout bis zum Antwort-Header, damit ein toter Host nicht ewig hängt.
+func cameraStream(rawURL string) (*http.Response, error) {
+	return cameraDo(rawURL, &http.Client{Transport: &http.Transport{ResponseHeaderTimeout: 10 * time.Second}})
+}
+
+func cameraDo(rawURL string, cl *http.Client) (*http.Response, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -27,8 +37,6 @@ func cameraGet(rawURL string) (*http.Response, error) {
 	}
 	reqURL := *u
 	reqURL.User = nil // Zugangsdaten nicht in die Request-Line schreiben
-
-	cl := &http.Client{Timeout: 8 * time.Second}
 
 	// 1) Erstversuch: anonym bzw. mit Basic.
 	req, _ := http.NewRequest("GET", reqURL.String(), nil)
