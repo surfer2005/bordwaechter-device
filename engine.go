@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"sync"
 	"time"
 )
@@ -605,8 +604,7 @@ func (e *Engine) Status() Status {
 }
 
 func fetchSnapshotB64(u string) string {
-	cl := &http.Client{Timeout: 8 * time.Second}
-	resp, err := cl.Get(u)
+	resp, err := cameraGet(u) // Basic (Mobotix) ODER Digest (AXIS)
 	if err != nil {
 		return ""
 	}

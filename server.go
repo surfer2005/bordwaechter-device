@@ -283,8 +283,9 @@ func (a *App) routes() *http.ServeMux {
 		writeJSON(w, a.eng.Status())
 	})
 
-	// Kamera-Snapshot für die Anzeige: holt das Bild vom konfigurierten Mobotix-Snapshot-URL und
-	// reicht es weiter — so bleibt die Kamera-Adresse/der Zugang auf dem Gerät, nicht im Monitor-Browser.
+	// Kamera-Snapshot für die Anzeige: holt das Bild von der konfigurierten Kamera-Snapshot-URL
+	// (Mobotix per Basic, AXIS per Digest — s. cameraGet) und reicht es weiter — so bleibt die
+	// Kamera-Adresse/der Zugang auf dem Gerät, nicht im Monitor-Browser.
 	// Token wie bei /api/display (die Anzeige ist ohne Login, aber mit Token in der Adresse).
 	mux.HandleFunc("/api/snapshot", func(w http.ResponseWriter, r *http.Request) {
 		cfg := a.getCfg()
@@ -296,8 +297,7 @@ func (a *App) routes() *http.ServeMux {
 			http.Error(w, "keine Kamera konfiguriert", http.StatusNotFound)
 			return
 		}
-		cl := &http.Client{Timeout: 8 * time.Second}
-		resp, err := cl.Get(cfg.Camera.SnapshotURL)
+		resp, err := cameraGet(cfg.Camera.SnapshotURL)
 		if err != nil {
 			http.Error(w, "Kamera nicht erreichbar", http.StatusBadGateway)
 			return

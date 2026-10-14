@@ -147,14 +147,15 @@
         <div><label>Aktiv-Low</label><select id="io_al"><option value="false">nein</option><option value="true">ja</option></select></div>
       </div>
     </fieldset>
-    <fieldset><legend>Kamera (Mobotix, optional)</legend>
+    <fieldset><legend>Kamera (Mobotix/AXIS, optional)</legend>
       <div class="row">
         <div><label>Kamera aktiv</label><select id="cam_en"><option value="false">nein</option><option value="true">ja</option></select></div>
         <div><label>Webhook-Secret</label><input id="cam_sec"></div>
-        <div><label>Snapshot-URL</label><input id="cam_url"></div>
+        <div><label>Snapshot-URL</label><input id="cam_url" placeholder="http://benutzer:passwort@192.168.62.156/axis-cgi/jpg/image.cgi"></div>
         <div><label>Hinweis-Dauer (s)</label><input id="cam_hold" type="number"></div>
       </div>
       <p class="muted" id="cam_hint" style="margin-top:6px"></p>
+      <p class="muted" style="margin-top:4px">AXIS-Snapshot: <code>http://benutzer:passwort@&lt;kamera-ip&gt;/axis-cgi/jpg/image.cgi</code> (Basic oder Digest wird automatisch erkannt). Mobotix: der bisherige Snapshot-Pfad.</p>
     </fieldset>
     <fieldset><legend>Netzwerk (IP-Adresse)</legend>
       <div class="row">
@@ -271,7 +272,7 @@ async function loadCfg(){
   g('cam_en').value=String(!!c.camera.enabled); g('cam_sec').value=c.camera.webhook_secret||''; g('cam_url').value=c.camera.snapshot_url||''; g('cam_hold').value=c.camera.hold_sec
   const n=c.network||{}; g('n_mode').value=n.mode||'dhcp'; g('n_if').value=n.interface||'eth0'; g('n_addr').value=n.address||''; g('n_gw').value=n.gateway||''; g('n_dns').value=n.dns||''
   g('manualCard').style.display = c.gps.source==='manual' ? 'block':'none'
-  g('cam_hint').textContent='MxMessage-Webhook (in die Kamera eintragen): '+location.origin+'/api/camera/event?secret='+(c.camera.webhook_secret||'<secret>')
+  g('cam_hint').textContent='Ereignis-Webhook (in die Kamera eintragen — Mobotix MxMessage bzw. AXIS „Benachrichtigung senden über HTTP"): '+location.origin+'/api/camera/event?secret='+(c.camera.webhook_secret||'<secret>')
 }
 async function saveCfg(){
   const num=(id)=>parseInt(g(id).value||'0',10)
