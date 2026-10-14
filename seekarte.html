@@ -99,7 +99,7 @@
  .camwrap.big .camctl{display:flex}
  .camctl button{background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:10px;font-size:1.4rem;line-height:1;width:48px;height:48px;cursor:pointer}
  .camrec{position:absolute;top:10px;left:12px;font-family:var(--mono);font-weight:700;font-size:.85rem;color:var(--red);background:rgba(0,0,0,.45);padding:3px 9px;border-radius:6px}
- .camerr{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:14px;color:#E8614E;font-family:var(--mono);font-size:.82rem;line-height:1.4;background:rgba(0,0,0,.72)}
+ .camerr{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:14px;color:#E8614E;font-family:var(--mono);font-size:.82rem;line-height:1.4;background:rgba(0,0,0,.72);pointer-events:none}
 </style>
 </head>
 <body>
@@ -299,7 +299,7 @@ function render(s){
     $('camrec').textContent=s.camera_hazard?'● REC · Hinweis':(mode==='stream'?'● LIVE':'● LIVE')
     $('camrec').style.color=s.camera_hazard?'var(--red)':'var(--teal)'
     if(mode!==camMode){ camMode=mode; var ce=$('camerr'); if(ce)ce.style.display='none'; $('camimg').src = (mode==='stream'?streamUrl():snapUrl()) }
-  } else { cam.style.display='none'; camMode=''; camBig=false; camZoom=1; camPanX=0; camPanY=0; var ci=$('camimg'); if(ci) ci.style.transform=''; cam.className='camwrap' }
+  } else { cam.style.display='none'; camMode=''; camBig=false; camScale=1; camTX=0; camTY=0; var ci=$('camimg'); if(ci){ci.style.transform='';ci.style.transformOrigin=''} cam.className='camwrap' }
 
   drawMap(s)
 }
@@ -392,23 +392,33 @@ async function load(){
 }
 $('livebtn').onclick=function(){ liveMode=(liveMode==='snapshot'?'off':'snapshot'); load() }
 $('streambtn').onclick=function(){ liveMode=(liveMode==='stream'?'off':'stream'); load() }
-// Großes Bild (Vollbild-Maske) mit Rein-/Rauszoomen + Verschieben — ähnlich wie bei der Karte.
-var camZoom=1,camPanX=0,camPanY=0,panning=false,panSX=0,panSY=0
-function camApply(){ $('camimg').style.transform='translate('+camPanX+'px,'+camPanY+'px) scale('+camZoom+')' }
-function camResetZoom(){ camZoom=1;camPanX=0;camPanY=0;camApply() }
+// Großes Bild (Vollbild-Maske): auf einen Punkt zoomen + verschieben — wie bei einer Karte.
+var camScale=1,camTX=0,camTY=0,panning=false,pLX=0,pLY=0,pMoved=false,lastTap=0
+function camApply(){ var ci=$('camimg'); ci.style.transformOrigin='0 0'; ci.style.transform='translate('+camTX+'px,'+camTY+'px) scale('+camScale+')' }
+function camResetZoom(){ camScale=1;camTX=0;camTY=0; var ci=$('camimg'); if(ci){ci.style.transform='';ci.style.transformOrigin=''} }
+function camRel(e){ var r=$('camwrap').getBoundingClientRect(); return [e.clientX-r.left,e.clientY-r.top] }
+function camZoomAt(fx,fy,factor){ var ns=Math.min(6,Math.max(1,Math.round(camScale*factor*100)/100))
+  camTX=fx-(fx-camTX)*(ns/camScale); camTY=fy-(fy-camTY)*(ns/camScale); camScale=ns
+  if(camScale<=1.001){camScale=1;camTX=0;camTY=0} camApply() }
+function camCenterZoom(factor){ var r=$('camwrap').getBoundingClientRect(); camZoomAt(r.width/2,r.height/2,factor) }
 function openBig(){ camBig=true; $('camwrap').classList.add('big') }
 function closeBig(){ camBig=false; $('camwrap').classList.remove('big'); camResetZoom() }
 function toggleBig(){ if(camBig){ closeBig() } else { openBig() } }
 $('cambig').onclick=function(ev){ ev.stopPropagation(); toggleBig() }
 $('camclose').onclick=function(ev){ ev.stopPropagation(); closeBig() }
-$('camzin').onclick=function(ev){ ev.stopPropagation(); camZoom=Math.min(5,Math.round((camZoom+0.5)*10)/10); camApply() }
-$('camzout').onclick=function(ev){ ev.stopPropagation(); camZoom=Math.max(1,Math.round((camZoom-0.5)*10)/10); if(camZoom<=1){camPanX=0;camPanY=0} camApply() }
-var cim=$('camimg')
-cim.addEventListener('click',function(){ if(!camBig) openBig() })
-cim.addEventListener('pointerdown',function(e){ if(!camBig||camZoom<=1)return; panning=true; panSX=e.clientX-camPanX; panSY=e.clientY-camPanY; try{cim.setPointerCapture(e.pointerId)}catch(_){} })
-cim.addEventListener('pointermove',function(e){ if(!panning)return; camPanX=e.clientX-panSX; camPanY=e.clientY-panSY; camApply() })
-cim.addEventListener('pointerup',function(){ panning=false })
-cim.addEventListener('pointercancel',function(){ panning=false })
+$('camzin').onclick=function(ev){ ev.stopPropagation(); camCenterZoom(1.5) }
+$('camzout').onclick=function(ev){ ev.stopPropagation(); camCenterZoom(1/1.5) }
+$('camimg').addEventListener('click',function(){ if(!camBig) openBig() })
+var cw=$('camwrap')
+cw.addEventListener('wheel',function(e){ if(!camBig)return; e.preventDefault(); var c=camRel(e); camZoomAt(c[0],c[1], e.deltaY<0?1.2:1/1.2) },{passive:false})
+cw.addEventListener('pointerdown',function(e){ if(!camBig)return; if(e.target&&e.target.closest&&e.target.closest('.camctl,.cambig'))return; panning=true;pMoved=false;pLX=e.clientX;pLY=e.clientY; try{cw.setPointerCapture(e.pointerId)}catch(_){} })
+cw.addEventListener('pointermove',function(e){ if(!panning)return; var dx=e.clientX-pLX,dy=e.clientY-pLY; if(Math.abs(dx)+Math.abs(dy)>3)pMoved=true; if(camScale>1){camTX+=dx;camTY+=dy;camApply()} pLX=e.clientX;pLY=e.clientY })
+function camPanEnd(e){ if(!panning)return; panning=false
+  if(!pMoved && e.target && !(e.target.closest&&e.target.closest('.camctl,.cambig'))){
+    var now=Date.now(),c=camRel(e)
+    if(now-lastTap<350){ if(camScale>1){camResetZoom()}else{camZoomAt(c[0],c[1],2.5)} lastTap=0 } else { lastTap=now } } }
+cw.addEventListener('pointerup',camPanEnd)
+cw.addEventListener('pointercancel',function(){ panning=false })
 setInterval(function(){ if($('camwrap').style.display!=='none' && camMode==='snapshot'){ $('camimg').src=snapUrl() } },1000)
 load(); setInterval(load,2000)
 </script>
