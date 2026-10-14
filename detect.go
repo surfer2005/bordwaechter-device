@@ -9,10 +9,8 @@ package main
 // schläft die Schleife bloß — dasselbe Image läuft so als normaler Bordwächter weiter.
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -90,7 +88,7 @@ func (a *App) pollFrigate(cfg *Config, seen map[string]bool) {
 		if score < cfg.Detect.MinScore {
 			continue
 		}
-		snap := fetchSnapshotB64(base, e.ID)
+		snap := fetchSnapshotB64(fmt.Sprintf("%s/api/events/%s/snapshot.jpg", base, url.PathEscape(e.ID)))
 		detail := fmt.Sprintf("%s erkannt (%.0f%%)", labelDe(e.Label), score*100)
 		k := a.getKai()
 		if k == nil || cfg.EdgeToken == "" {
@@ -107,22 +105,4 @@ func (a *App) pollFrigate(cfg *Config, seen map[string]bool) {
 			delete(seen, id)
 		}
 	}
-}
-
-// fetchSnapshotB64 holt das Standbild eines Ereignisses und gibt es base64-kodiert zurück
-// (leer bei Fehler — die Meldung geht dann ohne Bild raus).
-func fetchSnapshotB64(base, id string) string {
-	resp, err := detectHTTP.Get(fmt.Sprintf("%s/api/events/%s/snapshot.jpg", base, url.PathEscape(id)))
-	if err != nil {
-		return ""
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return ""
-	}
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 8*1024*1024))
-	if err != nil {
-		return ""
-	}
-	return base64.StdEncoding.EncodeToString(b)
 }
