@@ -72,7 +72,7 @@
  .camwrap{width:100%;max-width:560px;position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:16/9;display:grid;place-items:center;border:1px solid var(--line)}
  .camwrap.alarm{border:3px solid var(--red);box-shadow:0 0 0 3px rgba(232,97,78,.25)}
  .camwrap img{width:100%;height:100%;object-fit:contain;cursor:zoom-in;transform-origin:center center}
- .camwrap.big{position:fixed;inset:0;max-width:none;width:100vw;height:100vh;aspect-ratio:auto;z-index:2000;border-radius:0;border:none}
+ .camwrap.big{position:fixed;inset:0;max-width:none;width:100vw;height:100vh;aspect-ratio:auto;z-index:2000;border-radius:0;border:none;touch-action:none;user-select:none}
  .camwrap.big img{cursor:grab;touch-action:none}
  .cambig{position:absolute;top:10px;right:12px;z-index:5;background:rgba(0,0,0,.5);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:8px;font-size:1.15rem;line-height:1;padding:5px 10px;cursor:pointer}
  .camctl{display:none;position:absolute;left:12px;bottom:12px;z-index:6;gap:8px}
@@ -322,34 +322,44 @@ async function load(){
 }
 $('livebtn').onclick=function(){ liveMode=(liveMode==='snapshot'?'off':'snapshot'); load() }
 $('streambtn').onclick=function(){ liveMode=(liveMode==='stream'?'off':'stream'); load() }
-// Großes Bild (Vollbild-Maske): auf einen Punkt zoomen + verschieben — wie bei einer Karte.
-var camScale=1,camTX=0,camTY=0,panning=false,pLX=0,pLY=0,pMoved=false,lastTap=0
+// Großes Bild (Vollbild-Maske): auf einen Punkt zoomen, ziehen (1 Finger/Maus), Pinch (2 Finger) — wie eine Karte.
+var camScale=1,camTX=0,camTY=0,lastTap=0
+var ptrs={},pinchD0=0,pinchS0=1,pinchTX0=0,pinchTY0=0,pinchMid=[0,0]
 function camApply(){ var ci=$('camimg'); ci.style.transformOrigin='0 0'; ci.style.transform='translate('+camTX+'px,'+camTY+'px) scale('+camScale+')' }
 function camResetZoom(){ camScale=1;camTX=0;camTY=0; var ci=$('camimg'); if(ci){ci.style.transform='';ci.style.transformOrigin=''} }
-function camRel(e){ var r=$('camwrap').getBoundingClientRect(); return [e.clientX-r.left,e.clientY-r.top] }
-function camZoomAt(fx,fy,factor){ var ns=Math.min(6,Math.max(1,Math.round(camScale*factor*100)/100))
-  camTX=fx-(fx-camTX)*(ns/camScale); camTY=fy-(fy-camTY)*(ns/camScale); camScale=ns
-  if(camScale<=1.001){camScale=1;camTX=0;camTY=0} camApply() }
-function camCenterZoom(factor){ var r=$('camwrap').getBoundingClientRect(); camZoomAt(r.width/2,r.height/2,factor) }
+function camRel(cx,cy){ var r=$('camwrap').getBoundingClientRect(); return [cx-r.left,cy-r.top] }
+function camZoomTo(fx,fy,ns){ ns=Math.min(6,Math.max(1,ns)); camTX=fx-(fx-camTX)*(ns/camScale); camTY=fy-(fy-camTY)*(ns/camScale); camScale=ns; if(camScale<=1.001){camScale=1;camTX=0;camTY=0} camApply() }
+function camCenterZoom(f){ var r=$('camwrap').getBoundingClientRect(); camZoomTo(r.width/2,r.height/2,camScale*f) }
 function openBig(){ camBig=true; $('camwrap').classList.add('big') }
 function closeBig(){ camBig=false; $('camwrap').classList.remove('big'); camResetZoom() }
 function toggleBig(){ if(camBig){ closeBig() } else { openBig() } }
+function camOnBtn(t){ return t&&t.closest&&t.closest('.camctl,.cambig') }
 $('cambig').onclick=function(ev){ ev.stopPropagation(); toggleBig() }
 $('camclose').onclick=function(ev){ ev.stopPropagation(); closeBig() }
 $('camzin').onclick=function(ev){ ev.stopPropagation(); camCenterZoom(1.5) }
 $('camzout').onclick=function(ev){ ev.stopPropagation(); camCenterZoom(1/1.5) }
-// Tippen aufs Bild (NICHT groß) öffnet die Maske.
 $('camimg').addEventListener('click',function(){ if(!camBig) openBig() })
 var cw=$('camwrap')
-cw.addEventListener('wheel',function(e){ if(!camBig)return; e.preventDefault(); var c=camRel(e); camZoomAt(c[0],c[1], e.deltaY<0?1.2:1/1.2) },{passive:false})
-cw.addEventListener('pointerdown',function(e){ if(!camBig)return; if(e.target&&e.target.closest&&e.target.closest('.camctl,.cambig'))return; panning=true;pMoved=false;pLX=e.clientX;pLY=e.clientY; try{cw.setPointerCapture(e.pointerId)}catch(_){} })
-cw.addEventListener('pointermove',function(e){ if(!panning)return; var dx=e.clientX-pLX,dy=e.clientY-pLY; if(Math.abs(dx)+Math.abs(dy)>3)pMoved=true; if(camScale>1){camTX+=dx;camTY+=dy;camApply()} pLX=e.clientX;pLY=e.clientY })
-function camPanEnd(e){ if(!panning)return; panning=false
-  if(!pMoved && e.target && !(e.target.closest&&e.target.closest('.camctl,.cambig'))){ // reiner Tipp → Doppeltipp zoomt in den Punkt
-    var now=Date.now(),c=camRel(e)
-    if(now-lastTap<350){ if(camScale>1){camResetZoom()}else{camZoomAt(c[0],c[1],2.5)} lastTap=0 } else { lastTap=now } } }
-cw.addEventListener('pointerup',camPanEnd)
-cw.addEventListener('pointercancel',function(){ panning=false })
+cw.addEventListener('wheel',function(e){ if(!camBig)return; e.preventDefault(); var c=camRel(e.clientX,e.clientY); camZoomTo(c[0],c[1], camScale*(e.deltaY<0?1.2:1/1.2)) },{passive:false})
+cw.addEventListener('pointerdown',function(e){ if(!camBig||camOnBtn(e.target))return
+  ptrs[e.pointerId]={x:e.clientX,y:e.clientY,x0:e.clientX,y0:e.clientY,moved:false}
+  try{cw.setPointerCapture(e.pointerId)}catch(_){}
+  var ids=Object.keys(ptrs)
+  if(ids.length===2){ var a=ptrs[ids[0]],b=ptrs[ids[1]]; pinchD0=Math.hypot(a.x-b.x,a.y-b.y); pinchS0=camScale; pinchTX0=camTX; pinchTY0=camTY; pinchMid=camRel((a.x+b.x)/2,(a.y+b.y)/2) } })
+cw.addEventListener('pointermove',function(e){ var pt=ptrs[e.pointerId]; if(!pt)return
+  var dx=e.clientX-pt.x, dy=e.clientY-pt.y; pt.x=e.clientX; pt.y=e.clientY
+  if(Math.abs(e.clientX-pt.x0)+Math.abs(e.clientY-pt.y0)>4)pt.moved=true
+  var ids=Object.keys(ptrs)
+  if(ids.length>=2){ var a=ptrs[ids[0]],b=ptrs[ids[1]]; var d=Math.hypot(a.x-b.x,a.y-b.y)
+    if(pinchD0>0){ var ns=Math.min(6,Math.max(1,pinchS0*(d/pinchD0)))
+      camTX=pinchMid[0]-(pinchMid[0]-pinchTX0)*(ns/pinchS0); camTY=pinchMid[1]-(pinchMid[1]-pinchTY0)*(ns/pinchS0); camScale=ns
+      if(camScale<=1.001){camScale=1;camTX=0;camTY=0} camApply() } }
+  else if(camScale>1){ camTX+=dx; camTY+=dy; camApply() } })
+function camPtrUp(e){ var pt=ptrs[e.pointerId]; if(!pt)return; var mv=pt.moved; delete ptrs[e.pointerId]
+  if(!mv && !camOnBtn(e.target)){ var now=Date.now(),c=camRel(e.clientX,e.clientY)
+    if(now-lastTap<350){ if(camScale>1){camResetZoom()}else{camZoomTo(c[0],c[1],2.5)} lastTap=0 } else { lastTap=now } } }
+cw.addEventListener('pointerup',camPtrUp)
+cw.addEventListener('pointercancel',function(e){ delete ptrs[e.pointerId] })
 // Nur im Standbild-Modus alle 1 s neu holen; der Livestream (MJPEG) läuft von selbst.
 setInterval(function(){ if($('camwrap').style.display!=='none' && camMode==='snapshot'){ $('camimg').src=snapUrl() } },1000)
 load(); setInterval(load,2000)
