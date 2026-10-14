@@ -152,7 +152,7 @@ function streamUrl(){ return '/api/stream?token='+encodeURIComponent(token) }
       e.textContent='Kamera: HTTP '+r.status+(t?(' · '+t.slice(0,140)):''); e.style.display='grid' }) })
       .catch(function(){ e.textContent='Kamera: keine Antwort vom Gerät'; e.style.display='grid' }) }
   im.onload=function(){ var e=document.getElementById('camerr'); if(e) e.style.display='none' }
-})()
+})();
 
 // Theme (hell/dunkel) wie im Kiosk
 (function(){var KEY='bw_display_theme'
