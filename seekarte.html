@@ -102,6 +102,13 @@
     <div><div class="shipname" id="shipname">—</div><div class="reg" id="reg"></div></div>
     <span class="kurs" id="kurs"></span>
     <a class="themebtn switchbtn" id="switchview" title="Zur Pilot-Ansicht">Pilot</a>
+    <select class="themebtn" id="scalesel" title="Maßstab der Seekarte">
+      <option value="11">Übersicht</option>
+      <option value="12">Weit</option>
+      <option value="13">Standard</option>
+      <option value="14">Nah</option>
+      <option value="15">Detail</option>
+    </select>
     <button class="themebtn" id="livebtn" title="Live-Bild" style="display:none">Live-Bild</button>
     <button class="themebtn" id="themebtn" title="Hell/Dunkel umschalten">☾</button>
     <span class="clock" id="clock">—:—</span>
@@ -281,7 +288,10 @@ function render(s){
 // Karte wie im Kiosk (Route + Start/Ziel + Position). Lädt Leaflet/OSM vom Netz; ohne Verbindung
 // (reiner Offline-Bordmonitor) wird die Karten-Kachel ausgeblendet statt grau zu bleiben.
 var kmap=null,klayer=null,seamark=null,mapFitted=false,mapPts=[],shipLL=null,lastInteract=0,userMoved=false,recentering=false,lastDrawData=null
-var INITZOOM=13
+// Maßstab (Zoomstufe) — vom Nutzer wählbar, bleibt über Neustarts erhalten.
+var INITZOOM=(function(){try{var z=parseInt(localStorage.getItem('bw_seekarte_zoom'),10);return (z>=10&&z<=17)?z:13}catch(e){return 13}})()
+function setMassstab(z){ INITZOOM=z; try{localStorage.setItem('bw_seekarte_zoom',String(z))}catch(e){}
+  if(kmap){ recentering=true; if(kmap.setBearing)kmap.setBearing(-curBearing); kmap.setView(shipLL||kmap.getCenter(), z, {animate:false}); recentering=false } }
 var curBearing=0
 var IDLE_MS=30000 // nach 30 s ohne Nutzer-Aktion automatisch wieder einpassen
 function cardinal(d){ return ['N','NO','O','SO','S','SW','W','NW'][Math.round(((d%360)/45))%8] }
@@ -307,6 +317,9 @@ function drawMap(s){
     // Zentrieren-Knopf (zurück auf das Schiff, Ausgangszoom)
     var Z=L.Control.extend({options:{position:'topleft'},onAdd:function(){var d=L.DomUtil.create('div','leaflet-bar leaflet-control');var a=L.DomUtil.create('a','',d);a.href='#';a.title='Auf Schiff zentrieren';a.innerHTML='&#9678;';a.style.fontSize='18px';a.style.lineHeight='26px';a.style.textAlign='center';L.DomEvent.on(a,'click',function(e){L.DomEvent.stop(e);recenterMap(true);});return d;}})
     kmap.addControl(new Z())
+    // Maßstab-Auswahl oben mit der Karte verbinden (vorbelegen + Umschalten).
+    var sel=document.getElementById('scalesel')
+    if(sel){ try{sel.value=String(INITZOOM)}catch(e){} sel.onchange=function(){ setMassstab(parseInt(sel.value,10)) } }
     setTimeout(function(){if(kmap)kmap.invalidateSize()},150)
   }
   klayer.clearLayers()
