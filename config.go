@@ -57,6 +57,14 @@ type Config struct {
 		HoldSec       int    `json:"hold_sec"`       // wie lange ein Kamera-Hinweis als aktiv gilt
 	} `json:"camera"`
 
+	Detect struct {
+		Enabled    bool    `json:"enabled"`     // Objekterkennung (Frigate) ein/aus — ein Image, Feature zuschaltbar
+		FrigateURL string  `json:"frigate_url"` // lokal laufendes Frigate, z. B. http://127.0.0.1:5000
+		Labels     string  `json:"labels"`      // Komma-getrennt, z. B. "person,boat"
+		MinScore   float64 `json:"min_score"`   // Mindest-Score 0..1, darunter wird nicht gemeldet
+		PollSec    int     `json:"poll_sec"`    // Abfrageintervall der Frigate-API
+	} `json:"detect"`
+
 	// Netzwerk: DHCP (Vorgabe) oder feste IP. Wird als NetworkManager-Keyfile geschrieben und
 	// wirkt nach einem Neustart des Geräts — ohne Shell/nmcli (reines Datei-Schreiben).
 	Network struct {
@@ -92,6 +100,10 @@ func defaultConfig() *Config {
 	c.GPIO.HornPin, c.GPIO.LampPin = 17, 27
 	c.GPIO.AckPin, c.GPIO.SifaKeyPin = 22, -1
 	c.Camera.HoldSec = 20
+	c.Detect.FrigateURL = "http://127.0.0.1:5000"
+	c.Detect.Labels = "person,boat"
+	c.Detect.MinScore = 0.6
+	c.Detect.PollSec = 3
 	c.Network.Mode = "dhcp"
 	c.Network.Interface = "eth0"
 	return c

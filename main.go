@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const version = "0.1.42"
+const version = "0.1.43"
 
 type App struct {
 	mu     sync.Mutex
@@ -106,6 +106,7 @@ func main() {
 	go app.bundleLoop()
 	go app.gpsLoop()
 	go app.tickLoop()
+	go app.detectLoop() // Objekterkennung (nur aktiv, wenn cfg.Detect.Enabled)
 
 	log.Printf("Bordwächter %s — lokale Oberfläche auf %s (GPS-Quelle: %s, GPIO: %s)",
 		version, cfg.Listen, cfg.GPS.Source, cfg.GPIO.Backend)
