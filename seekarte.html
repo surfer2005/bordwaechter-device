@@ -91,10 +91,13 @@
  .hintbox{padding:34px 20px;text-align:center;color:var(--muted);font-size:1.25rem;font-weight:600}
  .camwrap{width:100%;max-width:560px;position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:16/9;display:grid;place-items:center;border:1px solid var(--line)}
  .camwrap.alarm{border:3px solid var(--red);box-shadow:0 0 0 3px rgba(232,97,78,.25)}
- .camwrap img{width:100%;height:100%;object-fit:contain;cursor:zoom-in}
+ .camwrap img{width:100%;height:100%;object-fit:contain;cursor:zoom-in;transform-origin:center center}
  .camwrap.big{position:fixed;inset:0;max-width:none;width:100vw;height:100vh;aspect-ratio:auto;z-index:300;border-radius:0;border:none}
- .camwrap.big img{cursor:zoom-out}
+ .camwrap.big img{cursor:grab;touch-action:none}
  .cambig{position:absolute;top:10px;right:12px;z-index:5;background:rgba(0,0,0,.5);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:8px;font-size:1.15rem;line-height:1;padding:5px 10px;cursor:pointer}
+ .camctl{display:none;position:absolute;left:12px;bottom:12px;z-index:6;gap:8px}
+ .camwrap.big .camctl{display:flex}
+ .camctl button{background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:10px;font-size:1.4rem;line-height:1;width:48px;height:48px;cursor:pointer}
  .camrec{position:absolute;top:10px;left:12px;font-family:var(--mono);font-weight:700;font-size:.85rem;color:var(--red);background:rgba(0,0,0,.45);padding:3px 9px;border-radius:6px}
  .camerr{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:14px;color:#E8614E;font-family:var(--mono);font-size:.82rem;line-height:1.4;background:rgba(0,0,0,.72)}
 </style>
@@ -142,7 +145,7 @@
         <div class="abziel" id="abfziel"></div>
       </div>
       <div class="hintbox" id="hint" style="display:none"></div>
-      <div class="camwrap" id="camwrap" style="display:none"><div class="camrec" id="camrec">● LIVE</div><button class="cambig" id="cambig" title="Großes Bild">⛶</button><img id="camimg" alt="Kamerabild"><div class="camerr" id="camerr" style="display:none"></div></div>
+      <div class="camwrap" id="camwrap" style="display:none"><div class="camrec" id="camrec">● LIVE</div><button class="cambig" id="cambig" title="Großes Bild">⛶</button><div class="camctl" id="camctl"><button id="camzin" title="Reinzoomen">+</button><button id="camzout" title="Rauszoomen">−</button><button id="camclose" title="Schließen">✕</button></div><img id="camimg" alt="Kamerabild"><div class="camerr" id="camerr" style="display:none"></div></div>
     </section>
     <div class="side">
       <section class="card facts">
@@ -296,7 +299,7 @@ function render(s){
     $('camrec').textContent=s.camera_hazard?'● REC · Hinweis':(mode==='stream'?'● LIVE':'● LIVE')
     $('camrec').style.color=s.camera_hazard?'var(--red)':'var(--teal)'
     if(mode!==camMode){ camMode=mode; var ce=$('camerr'); if(ce)ce.style.display='none'; $('camimg').src = (mode==='stream'?streamUrl():snapUrl()) }
-  } else { cam.style.display='none'; camMode=''; camBig=false; cam.className='camwrap' }
+  } else { cam.style.display='none'; camMode=''; camBig=false; camZoom=1; camPanX=0; camPanY=0; var ci=$('camimg'); if(ci) ci.style.transform=''; cam.className='camwrap' }
 
   drawMap(s)
 }
@@ -389,9 +392,23 @@ async function load(){
 }
 $('livebtn').onclick=function(){ liveMode=(liveMode==='snapshot'?'off':'snapshot'); load() }
 $('streambtn').onclick=function(){ liveMode=(liveMode==='stream'?'off':'stream'); load() }
-function toggleBig(){ camBig=!camBig; $('camwrap').classList.toggle('big',camBig) }
+// Großes Bild (Vollbild-Maske) mit Rein-/Rauszoomen + Verschieben — ähnlich wie bei der Karte.
+var camZoom=1,camPanX=0,camPanY=0,panning=false,panSX=0,panSY=0
+function camApply(){ $('camimg').style.transform='translate('+camPanX+'px,'+camPanY+'px) scale('+camZoom+')' }
+function camResetZoom(){ camZoom=1;camPanX=0;camPanY=0;camApply() }
+function openBig(){ camBig=true; $('camwrap').classList.add('big') }
+function closeBig(){ camBig=false; $('camwrap').classList.remove('big'); camResetZoom() }
+function toggleBig(){ if(camBig){ closeBig() } else { openBig() } }
 $('cambig').onclick=function(ev){ ev.stopPropagation(); toggleBig() }
-$('camimg').addEventListener('click',toggleBig)
+$('camclose').onclick=function(ev){ ev.stopPropagation(); closeBig() }
+$('camzin').onclick=function(ev){ ev.stopPropagation(); camZoom=Math.min(5,Math.round((camZoom+0.5)*10)/10); camApply() }
+$('camzout').onclick=function(ev){ ev.stopPropagation(); camZoom=Math.max(1,Math.round((camZoom-0.5)*10)/10); if(camZoom<=1){camPanX=0;camPanY=0} camApply() }
+var cim=$('camimg')
+cim.addEventListener('click',function(){ if(!camBig) openBig() })
+cim.addEventListener('pointerdown',function(e){ if(!camBig||camZoom<=1)return; panning=true; panSX=e.clientX-camPanX; panSY=e.clientY-camPanY; try{cim.setPointerCapture(e.pointerId)}catch(_){} })
+cim.addEventListener('pointermove',function(e){ if(!panning)return; camPanX=e.clientX-panSX; camPanY=e.clientY-panSY; camApply() })
+cim.addEventListener('pointerup',function(){ panning=false })
+cim.addEventListener('pointercancel',function(){ panning=false })
 setInterval(function(){ if($('camwrap').style.display!=='none' && camMode==='snapshot'){ $('camimg').src=snapUrl() } },1000)
 load(); setInterval(load,2000)
 </script>
