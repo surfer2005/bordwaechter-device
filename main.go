@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const version = "0.1.64"
+const version = "0.1.65"
 
 type App struct {
 	mu     sync.Mutex
@@ -142,6 +142,7 @@ func main() {
 	go app.infoLoop()   // Wetter + Pegel für die Anzeige (nur aktiv, wenn cfg.Info.Weather/Pegel)
 	go app.sysLoop()    // Pi-Zustand (CPU-Temp/Last/RAM/Platte) für die HA-Integration
 	go app.kmLoop()     // Tageskilometer vom/auf die Platte (reboot-fest)
+	go app.releaseCheckLoop() // GitHub-Release-Tag stündlich cachen (für „neue Version"-Hinweis)
 
 	log.Printf("Bordwächter %s — lokale Oberfläche auf %s (GPS-Quelle: %s, GPIO: %s)",
 		version, cfg.Listen, cfg.GPS.Source, cfg.GPIO.Backend)

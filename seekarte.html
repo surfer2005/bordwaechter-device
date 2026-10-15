@@ -304,7 +304,7 @@ function render(s){
   showApp()
   $('shipname').textContent=s.ship||'—'
   $('reg').textContent=s.registration_number||''
-  $('verfoot').textContent=s.version?('v'+s.version):''
+  $('verfoot').innerHTML=(s.version?('v'+s.version):'')+(s.update_available?(' · <span style="color:#F0A93C;font-weight:700">neue Version '+s.latest_version+' verfügbar</span>'):'')
   $('kurs').textContent=s.pos_valid?('Kurs '+Math.round(s.heading||0)+'° · '+cardinal(s.heading||0)):''
   setInfo(s.info)
 

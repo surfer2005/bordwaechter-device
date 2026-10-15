@@ -95,6 +95,22 @@ var (
 	relAt  time.Time
 )
 
+// cachedLatestTag liefert den zuletzt bekannten Release-Tag OHNE Netzzugriff (für den Status-Tick).
+func cachedLatestTag() string {
+	relMu.Lock()
+	defer relMu.Unlock()
+	return relTag
+}
+
+// releaseCheckLoop hält den Release-Tag im Hintergrund aktuell (für den „neue Version"-Hinweis),
+// ohne dass ein /api/display-Abruf je auf das Netz warten muss.
+func (a *App) releaseCheckLoop() {
+	for {
+		latestReleaseTag()
+		time.Sleep(time.Hour)
+	}
+}
+
 func latestReleaseTag() string {
 	relMu.Lock()
 	if relTag != "" && time.Since(relAt) < time.Hour {
@@ -182,6 +198,10 @@ func (a *App) statusWithInfo() map[string]any {
 	}
 	if sys := a.getSys(); sys != nil {
 		m["system"] = sys
+	}
+	if lt := cachedLatestTag(); lt != "" {
+		m["latest_version"] = lt
+		m["update_available"] = verNewer(lt, version)
 	}
 	return m
 }
