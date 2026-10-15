@@ -209,8 +209,8 @@
       <div class="btns" style="margin-top:8px"><button class="ghost" onclick="genDispTok()">Neu erzeugen</button><a id="dispOpen" class="ghost" style="display:inline-block;text-decoration:none" href="#" target="_blank" rel="noopener">Anzeige öffnen</a></div>
       <p class="muted" style="margin-top:6px">Vollbild-Anzeige für einen Monitor an Bord — ohne Login, der Token steckt in der Adresse. Diese Adresse am Monitor hinterlegen:<br><code id="dispUrl" style="word-break:break-all"></code></p>
     </fieldset>
-    <div class="btns"><button onclick="saveCfg()">Speichern</button><button class="ghost" onclick="updateDev()">Aktualisieren</button><span id="updBadge" style="display:none;align-self:center;padding:2px 8px;border-radius:10px;background:#f3e2c0;color:#8a5a00;font-weight:600;font-size:13px"></span><button class="ghost" onclick="restartDev()">Neustart</button><span id="saveMsg" class="muted"></span></div>
-    <p class="muted" style="margin-top:6px">Hinweis: Änderung von GPS-Quelle oder GPIO-Backend wird nach einem Neustart des Dienstes wirksam.</p>
+    <div class="btns"><button onclick="saveCfg()">Speichern</button><button class="ghost" onclick="updateDev()">Aktualisieren</button><span id="updBadge" style="display:none;align-self:center;padding:2px 8px;border-radius:10px;background:#f3e2c0;color:#8a5a00;font-weight:600;font-size:13px"></span><button class="ghost" onclick="restartDev()">Neustart Dienst</button><button class="ghost" onclick="rebootPi()">Gerät (Pi) neu starten</button><span id="saveMsg" class="muted"></span></div>
+    <p class="muted" style="margin-top:6px">Hinweis: Änderung von GPS-Quelle oder GPIO-Backend wird nach einem Neustart des <b>Dienstes</b> wirksam. „Gerät (Pi) neu starten" bootet den ganzen Raspberry — danach kommt (bei aktivem Kiosk) die Anzeige automatisch wieder hoch.</p>
   </div>
 
 <script>
@@ -263,7 +263,7 @@ async function applyNet(){
     g('netMsg').textContent='Gespeichert. Wirkt nach Geräte-Neustart.' }
   catch(e){ g('netMsg').textContent='Fehler: '+e }
 }
-async function rebootPi(){ if(!(await ask('Das GERÄT (Raspberry) jetzt komplett neu starten?')))return; g('netMsg').textContent='Gerät startet neu …'; await post('/api/reboot') }
+async function rebootPi(){ if(!(await ask('Das GERÄT (Raspberry) jetzt komplett neu starten? Der Pi bootet neu — bei aktivem Kiosk kommt die Anzeige danach von selbst wieder.')))return; var m='Gerät startet neu … (ca. 30–60 s)'; if(g('netMsg'))g('netMsg').textContent=m; if(g('saveMsg'))g('saveMsg').textContent=m; await post('/api/reboot') }
 function updateDispUrl(){
   const t=g('c_disptok').value.trim()
   const u=t? (location.origin+'/anzeige?token='+encodeURIComponent(t)) : ''
