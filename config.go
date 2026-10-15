@@ -20,6 +20,10 @@ type Config struct {
 	DisplayToken string `json:"display_token"`  // Token für die Kiosk-Anzeige (/anzeige?token=…), leer = Anzeige aus
 	DisplayView  string `json:"display_view"`   // Startansicht des Geräte-Kiosks: "pilot" | "seekarte"
 	DisplayRotate string `json:"display_rotate"` // Bildschirmdrehung des Monitors: "normal"|"left"|"right"|"inverted"
+	// Standalone-/Offline-Navigation OHNE KAI: Ziel aus dem gespeicherten Streckennetz wählen.
+	// Nur dann zeigt die Seekarte das Ziel-Auswahlfeld. Wer KAI nutzt, bekommt die Route automatisch
+	// aus dem Bundle und braucht das nicht. Vorgabe: aus.
+	Standalone bool `json:"standalone"`
 
 	GPS struct {
 		Source     string `json:"source"` // "teltonika" | "nmea" (USB-GPS-Maus) | "manual"

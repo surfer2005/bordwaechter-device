@@ -112,6 +112,7 @@
       <div><label>Edge-Token</label><input id="c_token"></div>
       <div><label>Schiff-ID (0 = aus Bundle)</label><input id="c_ship" type="number"></div>
       <div><label>GPS an KAI melden</label><select id="c_sendpos"><option value="true">ja</option><option value="false">nein</option></select></div>
+      <div><label>Standalone-Modus (Ziel ohne KAI)</label><select id="c_standalone" title="Nur ohne KAI nötig: Ziel in der Seekarte selbst wählen (Fahrrinne/Luftlinie) statt der KAI-Route"><option value="false">aus (KAI liefert die Route)</option><option value="true">an (Ziel selbst wählen)</option></select></div>
       <div><label>Benutzer (Anmeldung)</label><input value="admin" readonly></div>
       <div><label>UI-Passwort</label><input id="c_uipw" type="password" autocomplete="new-password"></div>
       <div><label>HA-Passwort (leer = wie UI)</label><input id="c_hapw" type="password" autocomplete="new-password"></div>
@@ -353,7 +354,7 @@ async function loadCfg(){
   const c=await rc.json()
   g('ver').textContent='Konfiguration · Schiff-ID '+(c.ship_id||0)
   g('c_base').value=c.kai_base_url||''; g('c_token').value=c.edge_token||''; g('c_ship').value=c.ship_id||0
-  g('c_sendpos').value=String(!!c.send_position); g('c_uipw').value=c.ui_password||''; g('c_hapw').value=c.ha_password||''
+  g('c_sendpos').value=String(!!c.send_position); g('c_standalone').value=String(!!c.standalone); g('c_uipw').value=c.ui_password||''; g('c_hapw').value=c.ha_password||''
   g('c_disptok').value=c.display_token||''; g('c_dispview').value=c.display_view||'pilot'; g('c_disprot').value=c.display_rotate||'normal'; updateDispUrl()
   g('g_src').value=c.gps.source; g('g_dev').value=c.gps.device||''; g('g_baud').value=c.gps.baud||9600; g('g_host').value=c.gps.host||''; g('g_port').value=c.gps.port; g('g_unit').value=c.gps.unit
   g('g_lat').value=c.gps.lat_reg; g('g_lng').value=c.gps.lng_reg; g('g_speed').value=c.gps.speed_reg; g('g_head').value=c.gps.heading_reg; g('g_fmt').value=c.gps.format; g('g_poll').value=c.gps.poll_sec
@@ -372,7 +373,7 @@ async function loadCfg(){
 async function saveCfg(){
   const num=(id)=>parseInt(g(id).value||'0',10)
   const c={ kai_base_url:g('c_base').value, edge_token:g('c_token').value, ship_id:num('c_ship'),
-    send_position:g('c_sendpos').value==='true', listen:':8090', ui_password:g('c_uipw').value, ha_password:g('c_hapw').value, display_token:g('c_disptok').value, display_view:g('c_dispview').value, display_rotate:g('c_disprot').value, bundle_refresh_sec:300,
+    send_position:g('c_sendpos').value==='true', standalone:g('c_standalone').value==='true', listen:':8090', ui_password:g('c_uipw').value, ha_password:g('c_hapw').value, display_token:g('c_disptok').value, display_view:g('c_dispview').value, display_rotate:g('c_disprot').value, bundle_refresh_sec:300,
     gps:{source:g('g_src').value,device:g('g_dev').value,baud:num('g_baud'),host:g('g_host').value,port:num('g_port'),unit:num('g_unit'),lat_reg:num('g_lat'),lng_reg:num('g_lng'),speed_reg:num('g_speed'),heading_reg:num('g_head'),format:g('g_fmt').value,poll_sec:num('g_poll')},
     sifa:{trigger_combo:g('sf_combo').value,realarm_sec:num('sf_re'),deadman_on:g('sf_dm').value==='true',deadman_sec:num('sf_dms'),deadman_prewarn_sec:num('sf_pre')},
     gpio:{backend:g('io_be').value,horn_pin:num('io_horn'),lamp_pin:num('io_lamp'),ack_pin:num('io_ack'),ack_active_low:g('io_ackal').value==='true',sifa_key_pin:num('io_key'),active_low:g('io_al').value==='true',input_bias:g('io_inbias').value},

@@ -368,6 +368,11 @@ func (a *App) routes() *http.ServeMux {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
+		// Nur im Standalone-Modus (Betrieb ohne KAI) anbieten; sonst kommt die Route aus dem Bundle.
+		if !a.getCfg().Standalone {
+			writeJSON(w, map[string]any{"landings": []any{}, "has_net": false})
+			return
+		}
 		n := a.getNet()
 		ls := landingsFromNet(n)
 		writeJSON(w, map[string]any{"landings": ls, "has_net": n != nil && len(n.Segments) > 0})
@@ -376,6 +381,10 @@ func (a *App) routes() *http.ServeMux {
 	mux.HandleFunc("/api/manual-route", func(w http.ResponseWriter, r *http.Request) {
 		if !a.displayAuthOK(r) {
 			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if !a.getCfg().Standalone {
+			writeJSON(w, map[string]any{"ok": false, "note": "Standalone-Modus aus"})
 			return
 		}
 		pos := a.eng.CurrentPos()
@@ -522,7 +531,10 @@ func (a *App) routes() *http.ServeMux {
 
 	// Versionsprüfung: meldet die laufende und die neueste verfügbare Version (GitHub releases/latest).
 	mux.HandleFunc("/api/update-check", a.guard(func(w http.ResponseWriter, r *http.Request) {
-		latest := latestReleaseTag()
+		// Den STÜNDLICH gecachten Tag nehmen (wie die Anzeige-Fußzeile), nicht bei jedem Aufruf frisch
+		// die GitHub-API fragen — die ist unauthentifiziert rate-limitiert und antwortete dann leer,
+		// sodass die Konfigseite „aktuell" zeigte, obwohl es eine neue Version gab.
+		latest := cachedLatestTag()
 		writeJSON(w, map[string]any{
 			"current":         version,
 			"latest":          latest,
