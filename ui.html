@@ -215,6 +215,7 @@
     </fieldset>
     <div class="btns"><button onclick="saveCfg()">Speichern</button><button class="ghost" onclick="updateDev()">Aktualisieren</button><span id="updBadge" style="display:none;align-self:center;padding:2px 8px;border-radius:10px;background:#f3e2c0;color:#8a5a00;font-weight:600;font-size:13px"></span><button class="ghost" onclick="restartDev()">Neustart Dienst</button><button class="ghost" onclick="rebootPi()">Gerät (Pi) neu starten</button><span id="saveMsg" class="muted"></span></div>
     <p class="muted" style="margin-top:6px">Hinweis: Änderung von GPS-Quelle oder GPIO-Backend wird nach einem Neustart des <b>Dienstes</b> wirksam. „Gerät (Pi) neu starten" bootet den ganzen Raspberry — danach kommt (bei aktivem Kiosk) die Anzeige automatisch wieder hoch.</p>
+    <div id="cfgfoot" style="text-align:center;margin-top:14px;font-size:13px;color:var(--muted)"></div>
   </div>
 
 <script>
@@ -302,6 +303,7 @@ async function checkUpdate(){
     const j=await r.json(); const b=g('updBadge')
     if(j.updateAvailable){ b.textContent='● Neue Version '+j.latest+' verfügbar'; b.style.display='inline-block'; b.title='Jetzt „Aktualisieren" drücken' }
     else b.style.display='none'
+    var cf=g('cfgfoot'); if(cf){ cf.innerHTML='Bordwächter v'+(j.current||'?')+(j.updateAvailable?(' · <span style="color:#b26a00;font-weight:700">neue Version '+j.latest+' verfügbar</span> — „Aktualisieren" drücken'):' · aktuell') }
   }catch(e){ updChecked=false }
 }
 function fmt(n,u){ return (n==null||n===0&&u==='km'?'—':n)+(u?(' '+u):'') }
