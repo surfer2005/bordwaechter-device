@@ -66,6 +66,19 @@ type Config struct {
 		PollSec    int     `json:"poll_sec"`    // Abfrageintervall der Frigate-API
 	} `json:"detect"`
 
+	// Wetter + Pegel in der Anzeige. Werte kommen aus denselben öffentlichen Quellen wie KAI
+	// (Open-Meteo / PEGELONLINE) → identische Zahlen, ohne Eingriff ins Pilot-Bundle; läuft mit
+	// UND ohne KAI-Verbindung. Vorgabe: beides an, Bodensee/Konstanz.
+	Info struct {
+		Weather    bool   `json:"weather"`     // Wetter anzeigen
+		Pegel      bool   `json:"pegel"`       // Pegel anzeigen
+		Lat        string `json:"lat"`         // Wetter-Koordinaten (Vorgabe Bodensee/Konstanz)
+		Lng        string `json:"lng"`
+		PegelUUID  string `json:"pegel_uuid"`  // PEGELONLINE-Stations-UUID (Vorgabe Konstanz)
+		PegelLabel string `json:"pegel_label"` // Anzeigename der Station
+		PollSec    int    `json:"poll_sec"`    // Abrufintervall
+	} `json:"info"`
+
 	// Netzwerk: DHCP (Vorgabe) oder feste IP. Wird als NetworkManager-Keyfile geschrieben und
 	// wirkt nach einem Neustart des Geräts — ohne Shell/nmcli (reines Datei-Schreiben).
 	Network struct {
@@ -106,6 +119,13 @@ func defaultConfig() *Config {
 	c.Detect.Labels = "person,boat"
 	c.Detect.MinScore = 0.6
 	c.Detect.PollSec = 3
+	c.Info.Weather = true
+	c.Info.Pegel = true
+	c.Info.Lat = "47.66"
+	c.Info.Lng = "9.18"
+	c.Info.PegelUUID = "aa9179c1-17ef-4c61-a48a-74193fa7bfdf" // Konstanz
+	c.Info.PegelLabel = "Konstanz"
+	c.Info.PollSec = 600
 	c.Network.Mode = "dhcp"
 	c.Network.Interface = "eth0"
 	return c

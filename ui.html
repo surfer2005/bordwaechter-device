@@ -170,6 +170,18 @@
       </div>
       <p class="muted" style="margin-top:6px">Erkennt Personen/Boote im Kamerastream über ein lokal laufendes Frigate (Pi 5 + AI-HAT/Hailo oder Coral) und meldet jeden Treffer mit Standbild an KAI (als Edge-Ereignis „detection"). Ist die Erkennung aus, läuft das Gerät als ganz normaler Bordwächter.</p>
     </fieldset>
+    <fieldset><legend>Wetter &amp; Pegel (Anzeige)</legend>
+      <div class="row">
+        <div><label>Wetter anzeigen</label><select id="inf_w"><option value="true">ja</option><option value="false">nein</option></select></div>
+        <div><label>Pegel anzeigen</label><select id="inf_p"><option value="true">ja</option><option value="false">nein</option></select></div>
+        <div><label>Breite (Wetter)</label><input id="inf_lat" placeholder="47.66"></div>
+        <div><label>Länge (Wetter)</label><input id="inf_lng" placeholder="9.18"></div>
+        <div><label>Pegel-Station (PEGELONLINE-UUID)</label><input id="inf_uuid" placeholder="aa9179c1-17ef-4c61-a48a-74193fa7bfdf"></div>
+        <div><label>Pegel-Name</label><input id="inf_label" placeholder="Konstanz"></div>
+        <div><label>Abrufintervall (s)</label><input id="inf_poll" type="number"></div>
+      </div>
+      <p class="muted" style="margin-top:6px">Standard: Wetter &amp; Pegel kommen aus denselben Quellen wie KAI (Open-Meteo / PEGELONLINE) — dieselben Werte, und es läuft mit UND ohne KAI-Verbindung. Nur ändern, wenn das Gerät eine andere Station/Position nutzen soll oder das Gerät ohne KAI betrieben wird.</p>
+    </fieldset>
     <fieldset><legend>Netzwerk (IP-Adresse)</legend>
       <div class="row">
         <div><label>Modus</label><select id="n_mode"><option value="dhcp">DHCP (automatisch)</option><option value="static">Feste IP</option></select></div>
@@ -285,6 +297,7 @@ async function loadCfg(){
   g('io_ack').value=c.gpio.ack_pin; g('io_key').value=c.gpio.sifa_key_pin; g('io_al').value=String(!!c.gpio.active_low)
   g('cam_en').value=String(!!c.camera.enabled); g('cam_sec').value=c.camera.webhook_secret||''; g('cam_url').value=c.camera.snapshot_url||''; g('cam_stream').value=c.camera.stream_url||''; g('cam_hold').value=c.camera.hold_sec
   { const d=c.detect||{}; g('det_en').value=String(!!d.enabled); g('det_url').value=d.frigate_url||''; g('det_labels').value=d.labels||''; g('det_min').value=(d.min_score!=null?d.min_score:0.6); g('det_poll').value=(d.poll_sec||3) }
+  { const i=c.info||{}; g('inf_w').value=String(i.weather!==false); g('inf_p').value=String(i.pegel!==false); g('inf_lat').value=i.lat||''; g('inf_lng').value=i.lng||''; g('inf_uuid').value=i.pegel_uuid||''; g('inf_label').value=i.pegel_label||''; g('inf_poll').value=(i.poll_sec||600) }
   const n=c.network||{}; g('n_mode').value=n.mode||'dhcp'; g('n_if').value=n.interface||'eth0'; g('n_addr').value=n.address||''; g('n_gw').value=n.gateway||''; g('n_dns').value=n.dns||''
   g('manualCard').style.display = c.gps.source==='manual' ? 'block':'none'
   g('cam_hint').textContent='Ereignis-Webhook (in die Kamera eintragen — Mobotix MxMessage bzw. AXIS „Benachrichtigung senden über HTTP"): '+location.origin+'/api/camera/event?secret='+(c.camera.webhook_secret||'<secret>')
@@ -298,6 +311,7 @@ async function saveCfg(){
     gpio:{backend:g('io_be').value,horn_pin:num('io_horn'),lamp_pin:num('io_lamp'),ack_pin:num('io_ack'),sifa_key_pin:num('io_key'),active_low:g('io_al').value==='true'},
     camera:{enabled:g('cam_en').value==='true',webhook_secret:g('cam_sec').value,snapshot_url:g('cam_url').value,stream_url:g('cam_stream').value,hold_sec:num('cam_hold')},
     detect:{enabled:g('det_en').value==='true',frigate_url:g('det_url').value,labels:g('det_labels').value,min_score:Number(g('det_min').value)||0,poll_sec:num('det_poll')},
+    info:{weather:g('inf_w').value==='true',pegel:g('inf_p').value==='true',lat:g('inf_lat').value,lng:g('inf_lng').value,pegel_uuid:g('inf_uuid').value,pegel_label:g('inf_label').value,poll_sec:num('inf_poll')},
     network:{mode:g('n_mode').value,interface:g('n_if').value,address:g('n_addr').value,gateway:g('n_gw').value,dns:g('n_dns').value} }
   const r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)})
   g('saveMsg').textContent = r.ok ? 'Gespeichert.' : 'Fehler.'

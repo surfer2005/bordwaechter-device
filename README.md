@@ -168,3 +168,11 @@ Der Bordwächter liefert eine Vollbild-Anzeige (`/anzeige` = Pilot, `/seekarte`)
   `sudo bash install.sh --kiosk`
   Danach bootet der Pi in ein Vollbild-Chromium auf die lokale Anzeige (localhost braucht **keinen**
   Token). Startansicht über `display_view` (`pilot`|`seekarte`) in der Konfig-Seite.
+
+## Wetter & Pegel in der Anzeige
+
+Pilot- und Seekarten-Ansicht zeigen oben eine Leiste mit **Wetter** (Temperatur, Wind, Regen) und
+**Pegel** (cm, Trend ▲/▼ + Rate, Mini-Verlaufslinie). Die Werte kommen aus **denselben Quellen wie
+KAI** — Wetter von **Open-Meteo**, Pegel von **PEGELONLINE** —, also identische Zahlen, **ohne Eingriff
+ins Pilot-Bundle**; es läuft mit UND ohne KAI-Verbindung. Konfig: *Wetter & Pegel (Anzeige)* (an/aus,
+Koordinaten, Pegel-Station/-Name, Intervall). Vorgabe: beides an, Bodensee/Konstanz.

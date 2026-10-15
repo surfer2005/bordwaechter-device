@@ -48,6 +48,15 @@
     "min_score": 0.6,
     "poll_sec": 3
   },
+  "info": {
+    "weather": true,
+    "pegel": true,
+    "lat": "47.66",
+    "lng": "9.18",
+    "pegel_uuid": "aa9179c1-17ef-4c61-a48a-74193fa7bfdf",
+    "pegel_label": "Konstanz",
+    "poll_sec": 600
+  },
   "network": {
     "mode": "dhcp",
     "interface": "eth0",

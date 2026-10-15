@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const version = "0.1.44"
+const version = "0.1.45"
 
 type App struct {
 	mu     sync.Mutex
@@ -17,11 +17,14 @@ type App struct {
 	manual *ManualGPS
 	src    GPSSource
 	eng    *Engine
+	info   *InfoData
 }
 
 func (a *App) getCfg() *Config     { a.mu.Lock(); defer a.mu.Unlock(); return a.cfg }
 func (a *App) getKai() *KaiClient  { a.mu.Lock(); defer a.mu.Unlock(); return a.kai }
 func (a *App) getSrc() GPSSource   { a.mu.Lock(); defer a.mu.Unlock(); return a.src }
+func (a *App) getInfo() *InfoData  { a.mu.Lock(); defer a.mu.Unlock(); return a.info }
+func (a *App) setInfo(i *InfoData) { a.mu.Lock(); a.info = i; a.mu.Unlock() }
 
 func (a *App) applyConfig(n *Config) error {
 	if err := saveConfig(n); err != nil {
@@ -107,6 +110,7 @@ func main() {
 	go app.gpsLoop()
 	go app.tickLoop()
 	go app.detectLoop() // Objekterkennung (nur aktiv, wenn cfg.Detect.Enabled)
+	go app.infoLoop()   // Wetter + Pegel für die Anzeige (nur aktiv, wenn cfg.Info.Weather/Pegel)
 
 	log.Printf("Bordwächter %s — lokale Oberfläche auf %s (GPS-Quelle: %s, GPIO: %s)",
 		version, cfg.Listen, cfg.GPS.Source, cfg.GPIO.Backend)

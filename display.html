@@ -80,6 +80,15 @@
  .camctl button{background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:10px;font-size:1.4rem;line-height:1;width:48px;height:48px;cursor:pointer}
  .camrec{position:absolute;top:10px;left:12px;font-family:var(--mono);font-weight:700;font-size:.85rem;color:var(--red);background:rgba(0,0,0,.45);padding:3px 9px;border-radius:6px}
  .camerr{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:14px;color:#E8614E;font-family:var(--mono);font-size:.82rem;line-height:1.4;background:rgba(0,0,0,.72);pointer-events:none}
+ .umwelt{display:flex;align-items:center;gap:18px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 16px;flex-wrap:wrap}
+ .useg{display:flex;align-items:center;gap:9px}
+ .useg .uic{width:22px;height:22px;flex:none}
+ .useg b{font-size:1.2rem;font-family:var(--mono)}
+ .useg .umu{color:var(--muted);font-size:.82rem}
+ .utrend{display:inline-flex;align-items:center;gap:3px;font-family:var(--mono);font-weight:700;color:var(--muted)}
+ .utrend.up{color:var(--green)}.utrend.down{color:var(--red)}
+ .uspark{width:84px;height:24px}
+ .usep{width:1px;align-self:stretch;min-height:22px;background:var(--line)}
 </style>
 </head>
 <body>
@@ -94,6 +103,12 @@
     <button class="themebtn" id="themebtn" title="Hell/Dunkel umschalten">☾</button>
     <span class="clock" id="clock">—:—</span>
   </header>
+
+  <div class="umwelt" id="umwelt" style="display:none">
+    <div class="useg" id="segw" style="display:none"><svg class="uic" viewBox="0 0 24 24" fill="none" stroke="#F0A93C" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><b id="w_temp">—</b><span class="umu" id="w_sub"></span></div>
+    <div class="usep" id="umwsep" style="display:none"></div>
+    <div class="useg" id="segp" style="display:none"><svg class="uic" viewBox="0 0 24 24" fill="none" stroke="#4FA7D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8c2 1.6 4 1.6 6 0s4-1.6 6 0 4 1.6 6 0"/><path d="M3 14c2 1.6 4 1.6 6 0s4-1.6 6 0 4 1.6 6 0"/><path d="M3 20c2 1.6 4 1.6 6 0s4-1.6 6 0 4 1.6 6 0"/></svg><b id="p_cm">—</b><span class="utrend" id="p_trend"></span><svg class="uspark" id="p_spark" viewBox="0 0 88 26" preserveAspectRatio="none"></svg><span class="umu" id="p_sub"></span></div>
+  </div>
 
   <div id="ampel" class="ampel" style="display:none"><span class="lamp"></span><b id="ampelw">—</b><span class="ab" id="ampelab"></span></div>
 
@@ -175,10 +190,18 @@ function hhmm(d){return (d.getHours()<10?'0':'')+d.getHours()+':'+(d.getMinutes(
 function tick(){ $('clock').textContent=hhmm(new Date()) }
 tick(); setInterval(tick,10000)
 
-function showMsg(t){ $('msg').style.display='grid'; $('msg').textContent=t; $('main').style.display='none'; $('ampel').style.display='none' }
+function showMsg(t){ $('msg').style.display='grid'; $('msg').textContent=t; $('main').style.display='none'; $('ampel').style.display='none'; var u=$('umwelt'); if(u)u.style.display='none' }
 function showApp(){ $('msg').style.display='none'; $('main').style.display='grid' }
 
 function fmt1(v){return (Math.round(v*10)/10).toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1})}
+function windDir(d){return cardinal(d)}
+function drawSpark(svg,arr){ if(!svg)return; if(!arr||arr.length<2){svg.innerHTML='';return} var mn=Math.min.apply(null,arr),mx=Math.max.apply(null,arr),rg=(mx-mn)||1,W=88,H=26,p=3; var pts=arr.map(function(v,i){var x=p+i*(W-2*p)/(arr.length-1);var y=H-p-(v-mn)/rg*(H-2*p);return x.toFixed(1)+','+y.toFixed(1)}); var l=pts[pts.length-1].split(','); svg.innerHTML='<polyline points="'+pts.join(' ')+'" fill="none" stroke="#3FC28C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+l[0]+'" cy="'+l[1]+'" r="2.4" fill="#3FC28C"/>' }
+function setInfo(info){ var box=$('umwelt'); if(!box)return; if(!info){ box.style.display='none'; return }
+  var w=info.weather,p=info.pegel,any=false
+  if(w&&w.temp_c!=null){ $('segw').style.display='flex'; $('w_temp').textContent=fmt1(w.temp_c)+' °C'; var sub=[]; if(w.wind_kmh!=null)sub.push('Wind '+Math.round(w.wind_kmh)+' km/h'+(w.wind_dir_deg!=null?' '+windDir(w.wind_dir_deg):'')); if(w.precip_mm!=null)sub.push(fmt1(w.precip_mm)+' mm'); $('w_sub').textContent=sub.join(' · '); any=true } else $('segw').style.display='none'
+  if(p&&p.cm!=null){ $('segp').style.display='flex'; $('p_cm').textContent=Math.round(p.cm)+' '+(p.unit||'cm'); var tr=$('p_trend'); if(p.trend>0){tr.textContent='▲ '+(p.rate_cm_per_h!=null?'+'+fmt1(p.rate_cm_per_h)+' cm/h':'steigend');tr.className='utrend up'} else if(p.trend<0){tr.textContent='▼ '+(p.rate_cm_per_h!=null?fmt1(p.rate_cm_per_h)+' cm/h':'fallend');tr.className='utrend down'} else {tr.textContent='→ stabil';tr.className='utrend'} drawSpark($('p_spark'),p.spark); $('p_sub').textContent='Pegel '+(p.station||'')+(p.age_sec!=null?' · vor '+Math.round(p.age_sec/60)+' min':''); any=true } else $('segp').style.display='none'
+  $('umwsep').style.display=(w&&w.temp_c!=null&&p&&p.cm!=null)?'block':'none'
+  box.style.display=any?'flex':'none' }
 function setNeedle(ist){var np=pol(angOf(ist),R-6),l=$('needle').querySelector('line');l.setAttribute('x2',np[0]);l.setAttribute('y2',np[1])}
 function setTarget(soll){var m=$('tgtMark');if(soll>0){var t0=pol(angOf(soll),R-13),t1=pol(angOf(soll),R+5);m.setAttribute('x1',t0[0]);m.setAttribute('y1',t0[1]);m.setAttribute('x2',t1[0]);m.setAttribute('y2',t1[1]);m.style.display=''}else m.style.display='none'}
 
@@ -189,6 +212,7 @@ function render(s){
   $('reg').textContent=s.registration_number||''
   $('verfoot').textContent=s.version?('v'+s.version):''
   $('kurs').textContent=s.pos_valid?('Kurs '+Math.round(s.heading||0)+'° · '+cardinal(s.heading||0)):''
+  setInfo(s.info)
 
   // Fußzeile: Live · Quelle + Position
   if(s.pos_valid){$('src').textContent='Live · bordwaechter';$('agetxt').textContent='letzte Position vor '+s.pos_age_sec+' s';$('blip').style.background=(s.pos_age_sec>120?'var(--amber)':'var(--teal)')}
@@ -312,10 +336,10 @@ function drawMap(s){
 }
 
 async function load(){
-  if(!token){ showMsg('Kein Token in der Adresse. In den Einstellungen des Bordwächters ein Display-Token setzen und die vollständige Adresse verwenden.'); return }
   try{
-    var r=await fetch('/api/display?token='+encodeURIComponent(token),{cache:'no-store'})
-    if(r.status===401||r.status===403){ showMsg('Token ungültig. Bitte die Adresse aus den Einstellungen erneut übernehmen.'); return }
+    // Am Gerät selbst (Monitor am Pi, localhost) ist KEIN Token nötig; aus dem Netz schon.
+    var r=await fetch('/api/display'+(token?('?token='+encodeURIComponent(token)):''),{cache:'no-store'})
+    if(r.status===401||r.status===403){ showMsg('Für die Anzeige aus dem Netz ein Display-Token in der Adresse verwenden (Einstellungen → Display-Token). Am Monitor direkt am Gerät ist kein Token nötig.'); return }
     if(!r.ok) throw new Error('http '+r.status)
     var s=await r.json(); fails=0; render(s)
   }catch(e){ if(++fails>=3) showMsg('Keine Verbindung zum Bordwächter …') }

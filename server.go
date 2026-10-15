@@ -171,6 +171,18 @@ func isLoopback(r *http.Request) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// statusWithInfo: Engine-Status plus das optionale Wetter/Pegel-Objekt (info) für die Anzeige.
+// Additiv — fehlt info, ist es einfach nicht enthalten; der bestehende Status bleibt unverändert.
+func (a *App) statusWithInfo() map[string]any {
+	b, _ := json.Marshal(a.eng.Status())
+	m := map[string]any{}
+	_ = json.Unmarshal(b, &m)
+	if inf := a.getInfo(); inf != nil {
+		m["info"] = inf
+	}
+	return m
+}
+
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
@@ -270,7 +282,7 @@ func (a *App) routes() *http.ServeMux {
 
 	// Status — auch für die HACS-Integration (Basic-Auth mit UI-Passwort).
 	mux.HandleFunc("/api/status", a.guard(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, a.eng.Status())
+		writeJSON(w, a.statusWithInfo())
 	}))
 
 	// Kiosk-Anzeige (schöne Vollbild-Seite für einen Monitor an Bord): ohne Login, dafür Token in der
@@ -296,7 +308,7 @@ func (a *App) routes() *http.ServeMux {
 				return
 			}
 		}
-		writeJSON(w, a.eng.Status())
+		writeJSON(w, a.statusWithInfo())
 	})
 
 	// Startziel für den Geräte-Kiosk (kiosk-browser.sh) — NUR localhost, nicht sensibel: nur der
