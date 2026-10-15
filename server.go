@@ -187,6 +187,15 @@ func isLoopback(r *http.Request) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// displayAuthOK: wie /api/display — localhost (Gerät) darf ohne Token, aus dem Netz nur mit Token.
+func (a *App) displayAuthOK(r *http.Request) bool {
+	if isLoopback(r) {
+		return true
+	}
+	tok := a.getCfg().DisplayToken
+	return tok != "" && r.URL.Query().Get("token") == tok
+}
+
 // statusWithInfo: Engine-Status plus das optionale Wetter/Pegel-Objekt (info) für die Anzeige.
 // Additiv — fehlt info, ist es einfach nicht enthalten; der bestehende Status bleibt unverändert.
 func (a *App) statusWithInfo() map[string]any {
@@ -351,6 +360,32 @@ func (a *App) routes() *http.ServeMux {
 			rot = "normal"
 		}
 		writeJSON(w, map[string]any{"path": path, "rotate": rot})
+	})
+
+	// Standalone-/Offline-Navigation: Anlegestellen-Liste (für das „Ziel"-Auswahlfeld der Anzeige).
+	mux.HandleFunc("/api/landings", func(w http.ResponseWriter, r *http.Request) {
+		if !a.displayAuthOK(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		n := a.getNet()
+		ls := landingsFromNet(n)
+		writeJSON(w, map[string]any{"landings": ls, "has_net": n != nil && len(n.Segments) > 0})
+	})
+	// Route von der aktuellen Position zum gewählten Ziel (Luftlinie oder Fahrrinne) — auch offline.
+	mux.HandleFunc("/api/manual-route", func(w http.ResponseWriter, r *http.Request) {
+		if !a.displayAuthOK(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		pos := a.eng.CurrentPos()
+		if !pos.Valid {
+			writeJSON(w, map[string]any{"ok": false, "note": "keine Position"})
+			return
+		}
+		mode := r.URL.Query().Get("mode")
+		to := r.URL.Query().Get("to")
+		writeJSON(w, manualRoute(a.getNet(), pos.Lat, pos.Lng, to, mode))
 	})
 
 	// Kamera-Snapshot für die Anzeige: holt das Bild von der konfigurierten Kamera-Snapshot-URL
