@@ -180,6 +180,9 @@ func (a *App) statusWithInfo() map[string]any {
 	if inf := a.getInfo(); inf != nil {
 		m["info"] = inf
 	}
+	if sys := a.getSys(); sys != nil {
+		m["system"] = sys
+	}
 	return m
 }
 
