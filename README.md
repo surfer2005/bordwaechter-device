@@ -158,3 +158,13 @@ Build → keine Debian-Keyring-/Paket-Probleme, baut in wenigen Minuten.
 - **Pro Schiff** nur eine Datei **`bordwaechter.json`** auf die **Boot-Partition** legen (Token/Schiff);
   der Dienst übernimmt sie als `/etc/bordwaechter/config.json`. Alternativ einmal im Web-UI eintragen.
 - Standard-Login `pi` / `bordwaechter` (nach dem ersten Start ändern).
+
+## Monitor direkt am Bordwächter-Pi (Geräte-Kiosk)
+
+Der Bordwächter liefert eine Vollbild-Anzeige (`/anzeige` = Pilot, `/seekarte`). Zwei Wege:
+
+- **Anderes Gerät:** im Browser `http://<bordwächter-ip>:8090/anzeige?token=<display_token>` öffnen.
+- **Monitor direkt am Pi:** einmalig den Geräte-Kiosk mitinstallieren:
+  `sudo bash install.sh --kiosk`
+  Danach bootet der Pi in ein Vollbild-Chromium auf die lokale Anzeige (localhost braucht **keinen**
+  Token). Startansicht über `display_view` (`pilot`|`seekarte`) in der Konfig-Seite.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -159,6 +160,17 @@ func verNewer(latest, current string) bool {
 	return false
 }
 
+// isLoopback: kommt die Anfrage vom Gerät selbst (127.0.0.1/::1)? Dann ist es der Kiosk auf dem
+// angeschlossenen Monitor — der darf die Anzeige ohne Token sehen (der Token schützt nur das Netz).
+func isLoopback(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
@@ -275,12 +287,30 @@ func (a *App) routes() *http.ServeMux {
 		_, _ = w.Write(seekarteHTML)
 	})
 	mux.HandleFunc("/api/display", func(w http.ResponseWriter, r *http.Request) {
-		tok := a.getCfg().DisplayToken
-		if tok == "" || r.URL.Query().Get("token") != tok {
+		// Der Kiosk AUF DEM GERÄT selbst (localhost) darf ohne Token lesen — physisch sicher;
+		// der Token schützt nur den Zugriff aus dem Netz.
+		if !isLoopback(r) {
+			tok := a.getCfg().DisplayToken
+			if tok == "" || r.URL.Query().Get("token") != tok {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+		}
+		writeJSON(w, a.eng.Status())
+	})
+
+	// Startziel für den Geräte-Kiosk (kiosk-browser.sh) — NUR localhost, nicht sensibel: nur der
+	// Pfad der gewünschten Startansicht (Pilot/Seekarte). So braucht das Startskript den Token nicht.
+	mux.HandleFunc("/api/kiosk-target", func(w http.ResponseWriter, r *http.Request) {
+		if !isLoopback(r) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		writeJSON(w, a.eng.Status())
+		path := "/anzeige"
+		if a.getCfg().DisplayView == "seekarte" {
+			path = "/seekarte"
+		}
+		writeJSON(w, map[string]any{"path": path})
 	})
 
 	// Kamera-Snapshot für die Anzeige: holt das Bild von der konfigurierten Kamera-Snapshot-URL
@@ -289,7 +319,7 @@ func (a *App) routes() *http.ServeMux {
 	// Token wie bei /api/display (die Anzeige ist ohne Login, aber mit Token in der Adresse).
 	mux.HandleFunc("/api/snapshot", func(w http.ResponseWriter, r *http.Request) {
 		cfg := a.getCfg()
-		if cfg.DisplayToken == "" || r.URL.Query().Get("token") != cfg.DisplayToken {
+		if !isLoopback(r) && (cfg.DisplayToken == "" || r.URL.Query().Get("token") != cfg.DisplayToken) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
@@ -322,7 +352,7 @@ func (a *App) routes() *http.ServeMux {
 	// endet, wenn der Browser die Verbindung schließt (r.Context()).
 	mux.HandleFunc("/api/stream", func(w http.ResponseWriter, r *http.Request) {
 		cfg := a.getCfg()
-		if cfg.DisplayToken == "" || r.URL.Query().Get("token") != cfg.DisplayToken {
+		if !isLoopback(r) && (cfg.DisplayToken == "" || r.URL.Query().Get("token") != cfg.DisplayToken) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}

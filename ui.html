@@ -184,6 +184,7 @@
     <fieldset><legend>Anzeige (Kiosk-Seite)</legend>
       <div class="row">
         <div><label>Display-Token (leer = Anzeige aus)</label><input id="c_disptok"></div>
+        <div><label>Kiosk-Startansicht (Monitor am Gerät)</label><select id="c_dispview"><option value="pilot">Pilot</option><option value="seekarte">Seekarte</option></select></div>
       </div>
       <div class="btns" style="margin-top:8px"><button class="ghost" onclick="genDispTok()">Neu erzeugen</button><a id="dispOpen" class="ghost" style="display:inline-block;text-decoration:none" href="#" target="_blank" rel="noopener">Anzeige öffnen</a></div>
       <p class="muted" style="margin-top:6px">Vollbild-Anzeige für einen Monitor an Bord — ohne Login, der Token steckt in der Adresse. Diese Adresse am Monitor hinterlegen:<br><code id="dispUrl" style="word-break:break-all"></code></p>
@@ -275,7 +276,7 @@ async function loadCfg(){
   g('ver').textContent='Konfiguration · Schiff-ID '+(c.ship_id||0)
   g('c_base').value=c.kai_base_url||''; g('c_token').value=c.edge_token||''; g('c_ship').value=c.ship_id||0
   g('c_sendpos').value=String(!!c.send_position); g('c_uipw').value=c.ui_password||''; g('c_hapw').value=c.ha_password||''
-  g('c_disptok').value=c.display_token||''; updateDispUrl()
+  g('c_disptok').value=c.display_token||''; g('c_dispview').value=c.display_view||'pilot'; updateDispUrl()
   g('g_src').value=c.gps.source; g('g_host').value=c.gps.host||''; g('g_port').value=c.gps.port; g('g_unit').value=c.gps.unit
   g('g_lat').value=c.gps.lat_reg; g('g_lng').value=c.gps.lng_reg; g('g_speed').value=c.gps.speed_reg; g('g_head').value=c.gps.heading_reg; g('g_fmt').value=c.gps.format; g('g_poll').value=c.gps.poll_sec
   g('sf_combo').value=c.sifa.trigger_combo; g('sf_re').value=c.sifa.realarm_sec; g('sf_dm').value=String(!!c.sifa.deadman_on)
@@ -291,7 +292,7 @@ async function loadCfg(){
 async function saveCfg(){
   const num=(id)=>parseInt(g(id).value||'0',10)
   const c={ kai_base_url:g('c_base').value, edge_token:g('c_token').value, ship_id:num('c_ship'),
-    send_position:g('c_sendpos').value==='true', listen:':8090', ui_password:g('c_uipw').value, ha_password:g('c_hapw').value, display_token:g('c_disptok').value, bundle_refresh_sec:300,
+    send_position:g('c_sendpos').value==='true', listen:':8090', ui_password:g('c_uipw').value, ha_password:g('c_hapw').value, display_token:g('c_disptok').value, display_view:g('c_dispview').value, bundle_refresh_sec:300,
     gps:{source:g('g_src').value,host:g('g_host').value,port:num('g_port'),unit:num('g_unit'),lat_reg:num('g_lat'),lng_reg:num('g_lng'),speed_reg:num('g_speed'),heading_reg:num('g_head'),format:g('g_fmt').value,poll_sec:num('g_poll')},
     sifa:{trigger_combo:g('sf_combo').value,realarm_sec:num('sf_re'),deadman_on:g('sf_dm').value==='true',deadman_sec:num('sf_dms'),deadman_prewarn_sec:num('sf_pre')},
     gpio:{backend:g('io_be').value,horn_pin:num('io_horn'),lamp_pin:num('io_lamp'),ack_pin:num('io_ack'),sifa_key_pin:num('io_key'),active_low:g('io_al').value==='true'},

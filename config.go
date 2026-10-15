@@ -18,6 +18,7 @@ type Config struct {
 	UIPassword   string `json:"ui_password"`   // Schutz der lokalen Oberfläche (leer = offen im Bordnetz)
 	HAPassword   string `json:"ha_password"`   // eigenes Passwort für Home Assistant (leer = HA nutzt UIPassword)
 	DisplayToken string `json:"display_token"` // Token für die Kiosk-Anzeige (/anzeige?token=…), leer = Anzeige aus
+	DisplayView  string `json:"display_view"`  // Startansicht des Geräte-Kiosks: "pilot" | "seekarte"
 
 	GPS struct {
 		Source     string `json:"source"` // "teltonika" | "manual"
@@ -100,6 +101,7 @@ func defaultConfig() *Config {
 	c.GPIO.HornPin, c.GPIO.LampPin = 17, 27
 	c.GPIO.AckPin, c.GPIO.SifaKeyPin = 22, -1
 	c.Camera.HoldSec = 20
+	c.DisplayView = "pilot"
 	c.Detect.FrigateURL = "http://127.0.0.1:5000"
 	c.Detect.Labels = "person,boat"
 	c.Detect.MinScore = 0.6
