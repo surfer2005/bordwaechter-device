@@ -193,6 +193,7 @@
     </fieldset>
     <fieldset><legend>Netzwerk (IP-Adresse)</legend>
       <div class="row">
+        <div><label>Gerätename (Hostname)</label><input id="c_host" placeholder="bordwaechter"></div>
         <div><label>Modus</label><select id="n_mode"><option value="dhcp">DHCP (automatisch)</option><option value="static">Feste IP</option></select></div>
         <div><label>Schnittstelle</label><input id="n_if" placeholder="eth0"></div>
         <div><label>IP-Adresse (CIDR)</label><input id="n_addr" placeholder="192.168.1.50/24"></div>
@@ -200,7 +201,18 @@
         <div><label>DNS (Komma)</label><input id="n_dns" placeholder="192.168.1.1,1.1.1.1"></div>
       </div>
       <div class="btns" style="margin-top:8px"><button onclick="applyNet()">IP übernehmen</button><button class="ghost" onclick="rebootPi()">Gerät neu starten (Pi)</button><span id="netMsg" class="muted"></span></div>
-      <p class="muted" style="margin-top:6px">Feste IP/DHCP wird erst nach einem <b>Neustart des Geräts</b> wirksam. Vorsicht: eine falsche IP/Gateway kann das Gerät im Netz unerreichbar machen — dann hilft nur Bildschirm+Tastatur am Raspberry.</p>
+      <p class="muted" style="margin-top:6px">Der <b>Gerätename</b> wird mit „Speichern" übernommen und nach einem Neustart wirksam — das Gerät ist dann als <code id="hostHint">bordwaechter.local</code> erreichbar (kein Merken der IP nötig). Feste IP/DHCP wird ebenfalls erst nach einem <b>Neustart des Geräts</b> wirksam. Vorsicht: eine falsche IP/Gateway kann das Gerät im Netz unerreichbar machen — dann hilft nur Bildschirm+Tastatur am Raspberry.</p>
+    </fieldset>
+    <fieldset><legend>Fernzugriff (SSH)</legend>
+      <p class="muted" style="margin:0 0 8px">So verbindet man sich vom PC mit dem Gerät (Terminal/PuTTY):</p>
+      <div style="font:600 15px/1.5 monospace;background:var(--card2,#f3f3f3);border-radius:8px;padding:12px 14px">
+        <div>Befehl: <code id="sshCmd">ssh pi@bordwaechter.local</code></div>
+        <div style="margin-top:4px">Benutzer: <b>pi</b> &nbsp;·&nbsp; Passwort: <b id="sshPw">kai-terminal</b></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div><label>SSH-Passwort ändern (leer = unverändert)</label><input id="c_sshpw" type="text" autocomplete="off" placeholder="leer = unverändert"></div>
+      </div>
+      <p class="muted" style="margin-top:6px">Benutzer ist immer <b>pi</b>. Ein neues Passwort wird mit „Speichern" sofort übernommen. VNC-Passwort s. oben unter „Zugang".</p>
     </fieldset>
     <fieldset><legend>Anzeige (Kiosk-Seite)</legend>
       <div class="row">
@@ -348,6 +360,13 @@ async function refresh(){
     else if(s.off_state==='warn'){ b.className='banner b-warn'; b.textContent='Kurs prüfen · '+s.off_course_m+' m neben der Fahrrinne' }
   }catch(e){}
 }
+async function loadNetinfo(){
+  try{ const r=await fetch('/api/netinfo'); if(!r.ok)return; const n=await r.json()
+    if(g('sshCmd')) g('sshCmd').textContent=n.command||('ssh '+(n.user||'pi')+'@'+(n.host||''))
+    if(g('sshPw')) g('sshPw').textContent=n.password||''
+    if(g('hostHint')) g('hostHint').textContent=(n.hostname||'bordwaechter')+'.local'
+  }catch(e){}
+}
 async function loadCfg(){
   const rc=await fetch('/api/config')
   if(rc.status===401){ showLogin(); return }
@@ -367,13 +386,15 @@ async function loadCfg(){
   { const d=c.detect||{}; g('det_en').value=String(!!d.enabled); g('det_url').value=d.frigate_url||''; g('det_labels').value=d.labels||''; g('det_min').value=(d.min_score!=null?d.min_score:0.6); g('det_poll').value=(d.poll_sec||3) }
   { const i=c.info||{}; g('inf_w').value=String(i.weather!==false); g('inf_p').value=String(i.pegel!==false); g('inf_lat').value=i.lat||''; g('inf_lng').value=i.lng||''; g('inf_uuid').value=i.pegel_uuid||''; g('inf_label').value=i.pegel_label||''; g('inf_poll').value=(i.poll_sec||600) }
   const n=c.network||{}; g('n_mode').value=n.mode||'dhcp'; g('n_if').value=n.interface||'eth0'; g('n_addr').value=n.address||''; g('n_gw').value=n.gateway||''; g('n_dns').value=n.dns||''
+  g('c_host').value=c.hostname||''; g('c_sshpw').value=''
+  loadNetinfo()
   g('manualCard').style.display = c.gps.source==='manual' ? 'block':'none'
   g('cam_hint').textContent='Ereignis-Webhook (in die Kamera eintragen — Mobotix MxMessage bzw. AXIS „Benachrichtigung senden über HTTP"): '+location.origin+'/api/camera/event?secret='+(c.camera.webhook_secret||'<secret>')
 }
 async function saveCfg(){
   const num=(id)=>parseInt(g(id).value||'0',10)
   const c={ kai_base_url:g('c_base').value, edge_token:g('c_token').value, ship_id:num('c_ship'),
-    send_position:g('c_sendpos').value==='true', standalone:g('c_standalone').value==='true', listen:':8090', ui_password:g('c_uipw').value, ha_password:g('c_hapw').value, display_token:g('c_disptok').value, display_view:g('c_dispview').value, display_rotate:g('c_disprot').value, bundle_refresh_sec:300,
+    send_position:g('c_sendpos').value==='true', standalone:g('c_standalone').value==='true', listen:':8090', ui_password:g('c_uipw').value, ha_password:g('c_hapw').value, hostname:g('c_host').value.trim(), display_token:g('c_disptok').value, display_view:g('c_dispview').value, display_rotate:g('c_disprot').value, bundle_refresh_sec:300,
     gps:{source:g('g_src').value,device:g('g_dev').value,baud:num('g_baud'),host:g('g_host').value,port:num('g_port'),unit:num('g_unit'),lat_reg:num('g_lat'),lng_reg:num('g_lng'),speed_reg:num('g_speed'),heading_reg:num('g_head'),format:g('g_fmt').value,poll_sec:num('g_poll')},
     sifa:{trigger_combo:g('sf_combo').value,realarm_sec:num('sf_re'),deadman_on:g('sf_dm').value==='true',deadman_sec:num('sf_dms'),deadman_prewarn_sec:num('sf_pre')},
     gpio:{backend:g('io_be').value,horn_pin:num('io_horn'),lamp_pin:num('io_lamp'),ack_pin:num('io_ack'),ack_active_low:g('io_ackal').value==='true',sifa_key_pin:num('io_key'),active_low:g('io_al').value==='true',input_bias:g('io_inbias').value},
@@ -381,6 +402,7 @@ async function saveCfg(){
     detect:{enabled:g('det_en').value==='true',frigate_url:g('det_url').value,labels:g('det_labels').value,min_score:Number(g('det_min').value)||0,poll_sec:num('det_poll')},
     info:{weather:g('inf_w').value==='true',pegel:g('inf_p').value==='true',lat:g('inf_lat').value,lng:g('inf_lng').value,pegel_uuid:g('inf_uuid').value,pegel_label:g('inf_label').value,poll_sec:num('inf_poll')},
     network:{mode:g('n_mode').value,interface:g('n_if').value,address:g('n_addr').value,gateway:g('n_gw').value,dns:g('n_dns').value} }
+  if(g('c_sshpw').value.trim()!=='') c.ssh_password=g('c_sshpw').value.trim()
   const r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)})
   g('saveMsg').textContent = r.ok ? 'Gespeichert.' : 'Fehler.'
   setTimeout(()=>g('saveMsg').textContent='',2500); loadCfg()

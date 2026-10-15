@@ -64,7 +64,7 @@ jobs:
 
           # --- boot-Partition (zur Laufzeit /boot/firmware): SSH, Nutzer, Erst-Start ---
           sudo touch /mnt/bw-boot/ssh
-          HASH=$(echo 'bordwaechter' | openssl passwd -6 -stdin)
+          HASH=$(echo 'kai-terminal' | openssl passwd -6 -stdin)
           echo "pi:${HASH}" | sudo tee /mnt/bw-boot/userconf.txt >/dev/null
 
           # Erst-Start-Skript: Hostname, SSH+VNC an, Zeitzone, Dienst aktivieren, dann sich selbst

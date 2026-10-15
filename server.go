@@ -501,6 +501,11 @@ func (a *App) routes() *http.ServeMux {
 		writeJSON(w, a.getCfg())
 	}))
 
+	// Fernzugriff-Infos für die Konfig-Seite: SSH-Benutzer/Passwort/Adresse + fertiger ssh-Befehl.
+	mux.HandleFunc("/api/netinfo", a.guard(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, sshInfo(a.getCfg()))
+	}))
+
 	// Neustart aus der Oberfläche: Prozess per Re-Exec frisch starten (liest die Config neu ein,
 	// setzt GPIO-Backend/alle Loops neu auf). systemd-unabhängig — ersetzt das laufende Programm.
 	mux.HandleFunc("/api/restart", a.guard(func(w http.ResponseWriter, r *http.Request) {

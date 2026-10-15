@@ -3,11 +3,12 @@ package main
 import (
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
 
-const version = "0.1.72"
+const version = "0.1.73"
 
 type App struct {
 	mu     sync.Mutex
@@ -60,6 +61,11 @@ func (a *App) getSys() *SystemData {
 }
 
 func (a *App) applyConfig(n *Config) error {
+	// SSH-Passwort wird in der Oberfläche nie zurückgespielt (leer = unverändert) → bestehenden Wert
+	// bewahren, damit ein Speichern ohne Eingabe ihn nicht verwirft.
+	if strings.TrimSpace(n.SSHPassword) == "" {
+		n.SSHPassword = a.getCfg().SSHPassword
+	}
 	if err := saveConfig(n); err != nil {
 		return err
 	}
@@ -69,6 +75,8 @@ func (a *App) applyConfig(n *Config) error {
 	a.src = buildGPS(n, a.manual) // Hinweis: GPIO-Backend-Wechsel greift erst nach Neustart
 	a.mu.Unlock()
 	a.eng.SetConfig(n, a.getKai())
+	applyHostname(n)    // Hostname beim Speichern anwenden (voll wirksam nach Neustart)
+	applySSHPassword(n) // SSH-Passwort beim Speichern anwenden
 	return nil
 }
 
@@ -150,6 +158,8 @@ func (a *App) kmLoop() {
 func main() {
 	cfg := loadConfig()
 	refreshKioskOnStartup() // Kiosk-Skript + Keyring beim Start auf den Programmstand bringen
+	applyHostname(cfg)      // Gerätename (hostnamectl + /etc/hosts) → erreichbar als <hostname>.local
+	applySSHPassword(cfg)   // einheitliches SSH-Passwort für Benutzer "pi"
 	manual := &ManualGPS{}
 	kai := newKaiClient(cfg.KaiBaseURL, cfg.EdgeToken)
 	gpio := buildGPIO(cfg)
