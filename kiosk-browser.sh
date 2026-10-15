@@ -42,6 +42,17 @@ if [ "$ROT" != "normal" ] && [ -n "$ROT" ]; then
   fi
 fi
 
+# gnome-keyring vorab LEER anlegen (als der Sitzungsnutzer), falls keiner da ist → der Dialog
+# „Choose password for new keyring" erscheint dann gar nicht. Selbstheilend bei jedem Start.
+KR="${HOME:-/home/pi}/.local/share/keyrings"
+if [ ! -f "$KR/default" ]; then
+  mkdir -p "$KR"
+  printf '[keyring]\ndisplay-name=Default keyring\nctime=0\nmtime=0\nlock-on-idle=false\nlock-after=false\n' > "$KR/Default_keyring.keyring"
+  printf 'Default_keyring\n' > "$KR/default"
+  chmod 600 "$KR/Default_keyring.keyring" "$KR/default" 2>/dev/null
+  echo "leerer Default-Keyring angelegt"
+fi
+
 PROFILE="${HOME:-/home/pi}/.config/bordwaechter-kiosk"
 mkdir -p "$PROFILE"
 echo "starte $BIN $BASE$STARTPATH"
