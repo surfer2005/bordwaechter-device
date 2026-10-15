@@ -88,10 +88,10 @@
  .karte-mittel .seekarte-base{filter:brightness(.62) contrast(.96) saturate(.88)}
  .karte-dunkel .seekarte-base{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.85)}
  /* Fadenkreuz: Hell=schwarz, Mittel+Dunkel=rot (sonst auf dunkler Karte unsichtbar). */
- .karte-mittel .xhair svg,.karte-dunkel .xhair svg{color:#E8322A}
- .xh-ring{fill:none;stroke:currentColor;stroke-width:1.5;opacity:.6}
- .xh-faint{opacity:.38}
- .xh-line{stroke:currentColor;stroke-width:1.3;opacity:.72}
+ .karte-mittel .xhair svg,.karte-dunkel .xhair svg{color:#FF2A1E}
+ .xh-ring{fill:none;stroke:currentColor;stroke-width:2.6;opacity:.92}
+ .xh-faint{opacity:.55}
+ .xh-line{stroke:currentColor;stroke-width:2.4;opacity:.95}
  /* Kurslinien-Overlay (leaflet-rotate zeichnet Vektor-Layer gedreht falsch) — z-index MUSS ueber 400
     liegen, da Leaflets .leaflet-map-pane selbst z-index:400 hat. */
  .courseov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:401}

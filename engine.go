@@ -523,7 +523,12 @@ func (e *Engine) Tick(now time.Time) {
 	if !e.bundleAt.IsZero() {
 		st.BundleAgeSec = int(now.Sub(e.bundleAt).Seconds())
 	}
-	camHazard := now.Before(e.camHazardUntil)
+	// Kamera-Hinweis gilt nur als aktiv, wenn die Kamera auch zum Auslöser gehört (camera/beide/either).
+	// In „manuell"/„gps"/„aus" ist die Kamera kein Auslöser → kein Auto-Umschalten aufs Bild, Tacho bleibt
+	// (das „Live-Bild"/„Livestream"-Knopf bleibt davon unberührt, das ist Nutzer-gesteuert).
+	tc := cfg.SIFA.TriggerCombo
+	camUsed := tc == "camera" || tc == "both" || tc == "either" || tc == ""
+	camHazard := camUsed && now.Before(e.camHazardUntil)
 	st.CameraHazard = camHazard
 	st.CamConfigured = cfg.Camera.SnapshotURL != ""
 	st.StreamConfigured = cfg.Camera.StreamURL != ""
