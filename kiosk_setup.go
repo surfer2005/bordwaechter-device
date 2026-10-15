@@ -9,12 +9,38 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 )
+
+// refreshKioskOnStartup hält das installierte Kiosk-Skript + die Keyring-Vorsorge beim Dienststart
+// auf dem Stand des Programms — damit „Aktualisieren" allein reicht (das Autostart-Skript wird
+// sonst beim Update NICHT miterneuert, s. Keyring-Problem). Nur aktiv, wenn der Kiosk eingerichtet ist.
+func refreshKioskOnStartup() {
+	u := desktopUser()
+	_, aErr := os.Stat(filepath.Join(u.home, ".config/autostart/bordwaechter-kiosk.desktop"))
+	_, sErr := os.Stat("/usr/local/bin/kiosk-browser.sh")
+	if aErr != nil && sErr != nil {
+		return // kein Kiosk eingerichtet → nichts tun
+	}
+	if err := os.WriteFile("/usr/local/bin/kiosk-browser.sh", []byte(kioskBrowserSh), 0o755); err != nil {
+		log.Printf("kiosk-refresh: %v", err)
+		return
+	}
+	for _, n := range []string{"gnome-keyring-secrets", "gnome-keyring-pkcs11", "gnome-keyring-ssh"} {
+		body := "[Desktop Entry]\nType=Application\nName=" + n + " (deaktiviert)\nExec=/bin/true\nHidden=true\nX-GNOME-Autostart-enabled=false\nNoDisplay=true\n"
+		_ = writeUserFile(u, ".config/autostart/"+n+".desktop", body, 0o644)
+	}
+	if _, err := os.Stat(filepath.Join(u.home, ".local/share/keyrings/default")); os.IsNotExist(err) {
+		_ = writeUserFile(u, ".local/share/keyrings/Default_keyring.keyring", "[keyring]\ndisplay-name=Default keyring\nctime=0\nmtime=0\nlock-on-idle=false\nlock-after=false\n", 0o600)
+		_ = writeUserFile(u, ".local/share/keyrings/default", "Default_keyring\n", 0o600)
+	}
+	log.Printf("kiosk: Autostart-Skript + Keyring beim Start aufgefrischt (Version %s)", version)
+}
 
 //go:embed kiosk-browser.sh
 var kioskBrowserSh string

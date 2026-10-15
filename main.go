@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const version = "0.1.66"
+const version = "0.1.67"
 
 type App struct {
 	mu     sync.Mutex
@@ -129,6 +129,7 @@ func (a *App) kmLoop() {
 
 func main() {
 	cfg := loadConfig()
+	refreshKioskOnStartup() // Kiosk-Skript + Keyring beim Start auf den Programmstand bringen
 	manual := &ManualGPS{}
 	kai := newKaiClient(cfg.KaiBaseURL, cfg.EdgeToken)
 	gpio := buildGPIO(cfg)
