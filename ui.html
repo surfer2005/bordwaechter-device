@@ -135,13 +135,13 @@
     </fieldset>
     <fieldset><legend>SIFA / Alarm</legend>
       <div class="row">
-        <div><label>Auslöser</label><select id="sf_combo" onchange="updateSifaFields()"><option value="either">GPS oder Kamera</option><option value="gps">nur GPS</option><option value="camera">nur Kamera</option><option value="both">GPS und Kamera</option><option value="manuell">manuell (nur Totmann/Zeit)</option></select></div>
+        <div><label>Auslöser</label><select id="sf_combo" onchange="updateSifaFields()"><option value="either">GPS oder Kamera</option><option value="gps">nur GPS</option><option value="camera">nur Kamera</option><option value="both">GPS und Kamera</option><option value="manuell">manuell (nur Totmann/Zeit)</option><option value="aus">aus (kein Alarm)</option></select></div>
         <div id="f_re"><label>Wiederhol-Alarm (s)</label><input id="sf_re" type="number"></div>
         <div id="f_dm"><label>Totmann-SIFA</label><select id="sf_dm" onchange="updateSifaFields()"><option value="false">aus</option><option value="true">an</option></select></div>
         <div id="f_dms"><label>Totmann-Intervall (s)</label><input id="sf_dms" type="number"></div>
         <div id="f_pre"><label>Lampe→Hupe (s)</label><input id="sf_pre" type="number"></div>
       </div>
-      <p class="muted" style="margin-top:6px"><b>Ereignis-Alarm</b> (GPS/Kamera): Lampe + Hupe gehen zusammen an; Quittieren schaltet <b>beides</b> aus. Besteht die Ursache weiter, kommt der Alarm nach <b>Wiederholung</b> Sekunden erneut — bis der Kurs wieder stimmt.<br><b>Totmann:</b> nach jedem <b>Totmann-Intervall</b> kommt zuerst die grüne <b>Lampe</b> (Frist zum Quittieren), <b>Lampe→Hupe</b> Sekunden später die <b>Hupe</b>. Quittieren schaltet beides aus und startet das Intervall neu. Auslöser „manuell": nur dieser Totmann, auch wenn „Totmann-SIFA" auf „aus" steht.</p>
+      <p class="muted" style="margin-top:6px"><b>Ereignis-Alarm</b> (GPS/Kamera): Lampe + Hupe gehen zusammen an; Quittieren schaltet <b>beides</b> aus. Besteht die Ursache weiter, kommt der Alarm nach <b>Wiederholung</b> Sekunden erneut — bis der Kurs wieder stimmt.<br><b>Totmann:</b> nach jedem <b>Totmann-Intervall</b> kommt zuerst die grüne <b>Lampe</b> (Frist zum Quittieren), <b>Lampe→Hupe</b> Sekunden später die <b>Hupe</b>. Quittieren schaltet beides aus und startet das Intervall neu. Auslöser „manuell": nur dieser Totmann, auch wenn „Totmann-SIFA" auf „aus" steht. Auslöser <b>„aus"</b>: alles stillgelegt — kein Ereignis-Alarm, kein Totmann (nur die Test-Knöpfe schalten die Ausgänge). Zum Einrichten/Vorführen.</p>
     </fieldset>
     <fieldset><legend>GPIO / Relais</legend>
       <div class="row">
@@ -220,11 +220,11 @@ async function setPos(){ await post('/api/position?lat='+g('m_lat').value+'&lng=
 function setField(id, active){ var e=g(id); if(!e)return; e.style.opacity=active?'':'.4'; var c=e.querySelector('input,select'); if(c) c.disabled=!active }
 function updateSifaFields(){
   // Felder passend zum gewählten Auslöser aktiv/ausgegraut schalten.
-  var manuell=g('sf_combo').value==='manuell'
-  var dmAktiv=manuell||g('sf_dm').value==='true'
-  setField('f_re', !manuell)   // Wiederhol-Alarm nur beim Ereignis-Alarm (GPS/Kamera)
-  setField('f_dm', !manuell)   // im manuell-Modus ist der Totmann erzwungen → Schalter egal
-  setField('f_dms', dmAktiv)   // Totmann-Zeiten nur wenn der Totmann läuft
+  var combo=g('sf_combo').value, aus=combo==='aus', manuell=combo==='manuell'
+  var dmAktiv=!aus && (manuell||g('sf_dm').value==='true')
+  setField('f_re', !aus && !manuell) // Wiederhol-Alarm nur beim Ereignis-Alarm (GPS/Kamera)
+  setField('f_dm', !aus && !manuell) // manuell → Totmann erzwungen; aus → nichts läuft
+  setField('f_dms', dmAktiv)         // Totmann-Zeiten nur wenn der Totmann läuft
   setField('f_pre', dmAktiv)
 }
 async function gpioSelftest(){

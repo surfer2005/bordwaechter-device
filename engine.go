@@ -533,6 +533,8 @@ func (e *Engine) Tick(now time.Time) {
 		cause = offAlarm && camHazard
 	case "manuell":
 		cause = false // kein automatischer Auslöser — nur die Totmann-/Zeit-Aufforderung (s. u.)
+	case "aus":
+		cause = false // alles stillgelegt (konfigurierbar, aber kein Alarm — z. B. für Präsentationen)
 	default: // either
 		cause = offAlarm || camHazard
 	}
@@ -563,7 +565,7 @@ func (e *Engine) Tick(now time.Time) {
 
 	// Totmann-SIFA (auch erzwungen im Auslöser-Modus "manuell" — dann IST der Totmann die SIFA)
 	deadmanHorn, deadmanLamp := false, false
-	if cfg.SIFA.DeadmanOn || cfg.SIFA.TriggerCombo == "manuell" {
+	if cfg.SIFA.TriggerCombo != "aus" && (cfg.SIFA.DeadmanOn || cfg.SIFA.TriggerCombo == "manuell") {
 		sec := cfg.SIFA.DeadmanSec
 		if sec <= 0 {
 			sec = 30

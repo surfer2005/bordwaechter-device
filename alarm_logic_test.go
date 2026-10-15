@@ -31,6 +31,24 @@ func TestEreignisAlarmQuittierenBeidesAus(t *testing.T) {
 	}
 }
 
+// Auslöser "aus": alles stillgelegt — weder Ereignis-Alarm noch Totmann, auch wenn beide
+// konfiguriert/aktiv wären (für Präsentationen).
+func TestAuslöserAusKeinAlarm(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.GPIO.Backend = "none"
+	cfg.SIFA.TriggerCombo = "aus"
+	cfg.SIFA.DeadmanOn = true // würde sonst laufen
+	cfg.SIFA.DeadmanSec = 30
+	e := NewEngine(cfg, nil, noopGPIO{})
+	base := time.Now()
+	e.lastDeadmanAck = base
+	e.camHazardUntil = base.Add(100 * time.Second) // Ursache da, darf aber nichts auslösen
+	e.Tick(base.Add(120 * time.Second))            // lange nach Totmann-Intervall
+	if s := e.Status(); s.Horn || s.Lamp || s.Alarm {
+		t.Fatalf("Auslöser aus: nichts darf kommen, got horn=%v lamp=%v alarm=%v", s.Horn, s.Lamp, s.Alarm)
+	}
+}
+
 // Totmann: nach dem Intervall zuerst die Lampe, „Vorlauf" Sekunden später die Hupe; Quittieren
 // schaltet beides aus und startet das Intervall neu.
 func TestTotmannZyklus(t *testing.T) {
