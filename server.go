@@ -321,11 +321,16 @@ func (a *App) routes() *http.ServeMux {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
+		cfg := a.getCfg()
 		path := "/anzeige"
-		if a.getCfg().DisplayView == "seekarte" {
+		if cfg.DisplayView == "seekarte" {
 			path = "/seekarte"
 		}
-		writeJSON(w, map[string]any{"path": path})
+		rot := cfg.DisplayRotate
+		if rot == "" {
+			rot = "normal"
+		}
+		writeJSON(w, map[string]any{"path": path, "rotate": rot})
 	})
 
 	// Kamera-Snapshot für die Anzeige: holt das Bild von der konfigurierten Kamera-Snapshot-URL
@@ -519,6 +524,16 @@ func (a *App) routes() *http.ServeMux {
 	mux.HandleFunc("/api/ack", a.guard(func(w http.ResponseWriter, r *http.Request) {
 		a.eng.Ack()
 		writeJSON(w, map[string]any{"ok": true})
+	}))
+
+	// Anzeige am Monitor einrichten (Kiosk-Autostart + Drehung) — ohne SSH, Dienst läuft als root.
+	mux.HandleFunc("/api/kiosk-setup", a.guardUI(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, runKioskSetup())
+	}))
+	// Fernzugriff (SSH/VNC) einschalten — über die Weboberfläche, da man sonst nicht hineinkommt.
+	mux.HandleFunc("/api/remote-access", a.guardUI(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		writeJSON(w, runRemoteAccess(q.Get("ssh") == "1", q.Get("vnc") == "1"))
 	}))
 
 	// Test: Hupe/Lampe kurz schalten

@@ -205,9 +205,13 @@
       <div class="row">
         <div><label>Display-Token (leer = Anzeige aus)</label><input id="c_disptok"></div>
         <div><label>Kiosk-Startansicht (Monitor am Gerät)</label><select id="c_dispview"><option value="pilot">Pilot</option><option value="seekarte">Seekarte</option></select></div>
+        <div><label>Bildschirmdrehung (Monitor)</label><select id="c_disprot"><option value="normal">normal</option><option value="left">links (90°)</option><option value="right">rechts (270°)</option><option value="inverted">kopfüber (180°)</option></select></div>
       </div>
       <div class="btns" style="margin-top:8px"><button class="ghost" onclick="genDispTok()">Neu erzeugen</button><a id="dispOpen" class="ghost" style="display:inline-block;text-decoration:none" href="#" target="_blank" rel="noopener">Anzeige öffnen</a></div>
       <p class="muted" style="margin-top:6px">Vollbild-Anzeige für einen Monitor an Bord — ohne Login, der Token steckt in der Adresse. Diese Adresse am Monitor hinterlegen:<br><code id="dispUrl" style="word-break:break-all"></code></p>
+      <div class="btns" style="margin-top:10px"><button onclick="kioskSetup()">Anzeige am Monitor einrichten</button><button class="ghost" onclick="remoteAccess(1,0)">SSH einschalten</button><button class="ghost" onclick="remoteAccess(0,1)">VNC einschalten</button><button class="ghost" onclick="remoteAccess(1,1)">SSH + VNC</button></div>
+      <p class="muted" style="margin-top:6px">„Anzeige am Monitor einrichten" legt den <b>Kiosk-Autostart</b> an (Bookworm/Wayland: labwc/wayfire, sonst X) — beim nächsten Neustart öffnet der Monitor automatisch die Anzeige (mit obiger Drehung). Erst <b>Speichern</b> (für Startansicht/Drehung), dann einrichten, dann <b>Gerät (Pi) neu starten</b>.</p>
+      <pre id="kioskLog" style="display:none;white-space:pre-wrap;font-size:.8rem;background:var(--card2,#f3f3f3);padding:10px;border-radius:6px;margin-top:8px;max-height:300px;overflow:auto"></pre>
     </fieldset>
     <div class="btns"><button onclick="saveCfg()">Speichern</button><button class="ghost" onclick="updateDev()">Aktualisieren</button><span id="updBadge" style="display:none;align-self:center;padding:2px 8px;border-radius:10px;background:#f3e2c0;color:#8a5a00;font-weight:600;font-size:13px"></span><button class="ghost" onclick="restartDev()">Neustart Dienst</button><button class="ghost" onclick="rebootPi()">Gerät (Pi) neu starten</button><span id="saveMsg" class="muted"></span></div>
     <p class="muted" style="margin-top:6px">Hinweis: Änderung von GPS-Quelle oder GPIO-Backend wird nach einem Neustart des <b>Dienstes</b> wirksam. „Gerät (Pi) neu starten" bootet den ganzen Raspberry — danach kommt (bei aktivem Kiosk) die Anzeige automatisch wieder hoch.</p>
@@ -271,6 +275,18 @@ function updateDispUrl(){
   const a=g('dispOpen'); if(u){ a.href=u; a.style.pointerEvents=''; a.style.opacity='' } else { a.href='#'; a.style.pointerEvents='none'; a.style.opacity='.5' }
 }
 function genDispTok(){ const b=new Uint8Array(16); crypto.getRandomValues(b); g('c_disptok').value=Array.from(b,x=>x.toString(16).padStart(2,'0')).join(''); updateDispUrl() }
+async function kioskSetup(){
+  var pre=g('kioskLog'); pre.style.display='block'; pre.textContent='Richte Anzeige am Monitor ein …'
+  try{ var r=await fetch('/api/kiosk-setup',{method:'POST'}); var d=await r.json()
+    var out=(d.log||[]).join('\n'); pre.textContent=out+'\n\nZum Aktivieren: „Gerät (Pi) neu starten".'
+  }catch(e){ pre.textContent='Fehler: '+e }
+}
+async function remoteAccess(ssh,vnc){
+  var pre=g('kioskLog'); pre.style.display='block'; pre.textContent='Schalte Fernzugriff ein …'
+  try{ var r=await fetch('/api/remote-access?ssh='+ssh+'&vnc='+vnc,{method:'POST'}); var d=await r.json()
+    pre.textContent=(d.log||[]).join('\n')
+  }catch(e){ pre.textContent='Fehler: '+e }
+}
 async function updateDev(){ if(!(await ask('Neueste Version aus dem Internet laden und installieren?')))return; g('saveMsg').textContent='Lade neue Version …'; try{ const r=await fetch('/api/update',{method:'POST'}); const j=await r.json(); if(!j.ok){ g('saveMsg').textContent='Fehler: '+(j.error||'Update'); return } g('saveMsg').textContent='Aktualisiert, Neustart läuft …'; setTimeout(()=>{g('saveMsg').textContent='';location.reload()},6000) }catch(e){ g('saveMsg').textContent='Aktualisiert, Neustart läuft …'; setTimeout(()=>location.reload(),6000) } }
 let updChecked=false
 async function checkUpdate(){
@@ -330,7 +346,7 @@ async function loadCfg(){
   g('ver').textContent='Konfiguration · Schiff-ID '+(c.ship_id||0)
   g('c_base').value=c.kai_base_url||''; g('c_token').value=c.edge_token||''; g('c_ship').value=c.ship_id||0
   g('c_sendpos').value=String(!!c.send_position); g('c_uipw').value=c.ui_password||''; g('c_hapw').value=c.ha_password||''
-  g('c_disptok').value=c.display_token||''; g('c_dispview').value=c.display_view||'pilot'; updateDispUrl()
+  g('c_disptok').value=c.display_token||''; g('c_dispview').value=c.display_view||'pilot'; g('c_disprot').value=c.display_rotate||'normal'; updateDispUrl()
   g('g_src').value=c.gps.source; g('g_dev').value=c.gps.device||''; g('g_baud').value=c.gps.baud||9600; g('g_host').value=c.gps.host||''; g('g_port').value=c.gps.port; g('g_unit').value=c.gps.unit
   g('g_lat').value=c.gps.lat_reg; g('g_lng').value=c.gps.lng_reg; g('g_speed').value=c.gps.speed_reg; g('g_head').value=c.gps.heading_reg; g('g_fmt').value=c.gps.format; g('g_poll').value=c.gps.poll_sec
   g('sf_combo').value=c.sifa.trigger_combo; g('sf_re').value=c.sifa.realarm_sec; g('sf_dm').value=String(!!c.sifa.deadman_on)
@@ -348,7 +364,7 @@ async function loadCfg(){
 async function saveCfg(){
   const num=(id)=>parseInt(g(id).value||'0',10)
   const c={ kai_base_url:g('c_base').value, edge_token:g('c_token').value, ship_id:num('c_ship'),
-    send_position:g('c_sendpos').value==='true', listen:':8090', ui_password:g('c_uipw').value, ha_password:g('c_hapw').value, display_token:g('c_disptok').value, display_view:g('c_dispview').value, bundle_refresh_sec:300,
+    send_position:g('c_sendpos').value==='true', listen:':8090', ui_password:g('c_uipw').value, ha_password:g('c_hapw').value, display_token:g('c_disptok').value, display_view:g('c_dispview').value, display_rotate:g('c_disprot').value, bundle_refresh_sec:300,
     gps:{source:g('g_src').value,device:g('g_dev').value,baud:num('g_baud'),host:g('g_host').value,port:num('g_port'),unit:num('g_unit'),lat_reg:num('g_lat'),lng_reg:num('g_lng'),speed_reg:num('g_speed'),heading_reg:num('g_head'),format:g('g_fmt').value,poll_sec:num('g_poll')},
     sifa:{trigger_combo:g('sf_combo').value,realarm_sec:num('sf_re'),deadman_on:g('sf_dm').value==='true',deadman_sec:num('sf_dms'),deadman_prewarn_sec:num('sf_pre')},
     gpio:{backend:g('io_be').value,horn_pin:num('io_horn'),lamp_pin:num('io_lamp'),ack_pin:num('io_ack'),ack_active_low:g('io_ackal').value==='true',sifa_key_pin:num('io_key'),active_low:g('io_al').value==='true',input_bias:g('io_inbias').value},
