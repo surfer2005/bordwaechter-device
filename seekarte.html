@@ -397,10 +397,10 @@ function render(s){
 
 // Karte wie im Kiosk (Route + Start/Ziel + Position). Lädt Leaflet/OSM vom Netz; ohne Verbindung
 // (reiner Offline-Bordmonitor) wird die Karten-Kachel ausgeblendet statt grau zu bleiben.
-var kmap=null,klayer=null,seamark=null,mapFitted=false,mapPts=[],shipLL=null,lastInteract=0,userMoved=false,recentering=false,lastDrawData=null
+var kmap=null,klayer=null,seamark=null,mapFitted=false,mapPts=[],shipLL=null,lastInteract=0,userMoved=false,recentering=false,lastDrawData=null,userZoom=false
 // Maßstab (Zoomstufe) — vom Nutzer wählbar, bleibt über Neustarts erhalten.
 var INITZOOM=(function(){try{var z=parseInt(localStorage.getItem('bw_seekarte_zoom'),10);return (z>=10&&z<=17)?z:13}catch(e){return 13}})()
-function setMassstab(z){ INITZOOM=z; try{localStorage.setItem('bw_seekarte_zoom',String(z))}catch(e){}
+function setMassstab(z){ INITZOOM=z; userZoom=false; try{localStorage.setItem('bw_seekarte_zoom',String(z))}catch(e){}
   if(kmap){ recentering=true; if(kmap.setBearing)kmap.setBearing(-curBearing); kmap.setView(shipLL||kmap.getCenter(), z, {animate:false}); recentering=false } }
 var curBearing=0
 var IDLE_MS=30000 // nach 30 s ohne Nutzer-Aktion automatisch wieder einpassen
@@ -408,7 +408,13 @@ function cardinal(d){ return ['N','NO','O','SO','S','SW','W','NW'][Math.round(((
 // Schiff mittig halten (unter dem Fadenkreuz). Ohne Position Rückfall auf Route-Einpassen.
 function recenterMap(initZoom){ if(!kmap)return; recentering=true
   if(kmap.setBearing)kmap.setBearing(-curBearing) // course-up: Kurs nach oben
-  if(shipLL){ kmap.setView(shipLL, initZoom?INITZOOM:kmap.getZoom(), {animate:false}) }
+  // Zoom: beim ◎/Maßstab-Wechsel auf die gewählte Stufe (INITZOOM); sonst folgen und den Nutzer-Zoom
+  // nur so lange behalten, wie er frisch ist — nach 30 s (IDLE_MS) zurück auf die gewählte Stufe.
+  if(initZoom) userZoom=false
+  var frisch = userZoom && (Date.now()-lastInteract) < IDLE_MS
+  var z = (initZoom||!frisch) ? INITZOOM : kmap.getZoom()
+  if(!frisch) userZoom=false
+  if(shipLL){ kmap.setView(shipLL, z, {animate:false}) }
   else if(mapPts.length){ kmap.fitBounds(L.latLngBounds(mapPts).pad(0.25),{animate:false}) }
   recentering=false; userMoved=false } // synchron geklammert — kein setTimeout (sonst userMoved-Hänger)
 function drawMap(s){
@@ -422,8 +428,10 @@ function drawMap(s){
     // Kurslinien-Overlay bei jeder Karten-Bewegung/Drehung neu zeichnen.
     kmap.on('move zoom moveend zoomend rotate viewreset',function(){ drawCourseOverlay() })
     // Nutzer-Interaktion über Leaflet-Events (fängt AUCH die +/- Zoom-Knöpfe, anders als reine DOM-Events)
-    kmap.on('zoomstart movestart',function(){ if(!recentering){ lastInteract=Date.now(); userMoved=true } })
+    kmap.on('zoomstart movestart',function(){ if(!recentering){ lastInteract=Date.now(); userMoved=true; userZoom=true } })
     kmap.on('zoomend',function(){ if(!recentering) recenterMap(false) }) // sofort aufs Schiff, Zoom behalten
+    // Nach 30 s ohne Nutzer-Aktion zurück auf die gewählte Maßstab-Stufe (INITZOOM).
+    setInterval(function(){ if(kmap&&userZoom&&(Date.now()-lastInteract)>=IDLE_MS) recenterMap(true) },2000)
     // Zentrieren-Knopf (zurück auf das Schiff, Ausgangszoom)
     var Z=L.Control.extend({options:{position:'topleft'},onAdd:function(){var d=L.DomUtil.create('div','leaflet-bar leaflet-control');var a=L.DomUtil.create('a','',d);a.href='#';a.title='Auf Schiff zentrieren';a.innerHTML='&#9678;';a.style.fontSize='18px';a.style.lineHeight='26px';a.style.textAlign='center';L.DomEvent.on(a,'click',function(e){L.DomEvent.stop(e);recenterMap(true);});return d;}})
     kmap.addControl(new Z())
@@ -451,7 +459,7 @@ function drawMap(s){
     pts.push([s.lat,s.lng])
   } else { shipLL=null }
   mapPts=pts
-  // Große Seekarte: IMMER folgen (zentriert, course-up), Nutzer-Zoom behalten; kein 30-s-Reset, nur ◎ = INITZOOM.
+  // Große Seekarte: IMMER folgen (zentriert, course-up); Nutzer-Zoom 30 s behalten, dann zurück auf die gewählte Stufe (◎ = sofort INITZOOM).
   if(!mapFitted&&(shipLL||pts.length)){ recenterMap(true); mapFitted=true }
   else if(shipLL||pts.length){ recenterMap(false) }
   lastDrawData=s; drawCourseOverlay()

@@ -171,6 +171,7 @@ func runKioskSetup() map[string]any {
 	add := func(f string, a ...any) { log = append(log, fmt.Sprintf(f, a...)) }
 	env := detectKioskEnv()
 	u := desktopUser()
+	add("Bordwächter-Version: %s", version)
 	add("Desktop-Nutzer: %s (%s)", u.name, u.home)
 	add("OS: %v · Chromium: %v · wlr-randr: %v · xrandr: %v · labwc: %v · wayfire: %v",
 		env["os"], env["chromium"], env["wlr_randr"], env["xrandr"], env["labwc"], env["wayfire"])
@@ -244,6 +245,17 @@ func runKioskSetup() map[string]any {
 	} else {
 		add("Keyring existiert bereits (unverändert)")
 	}
+
+	// 7) gnome-keyring-Dienst beim Sitzungsstart abschalten → GAR keine App kann mehr den
+	//    „Choose password for new keyring"-Dialog auslösen (chromium braucht ihn mit --password-store=basic
+	//    nicht; WLAN-Passwörter liegen bei raspios in NetworkManager, nicht im User-Keyring).
+	for _, n := range []string{"gnome-keyring-secrets", "gnome-keyring-pkcs11", "gnome-keyring-ssh"} {
+		body := "[Desktop Entry]\nType=Application\nName=" + n + " (deaktiviert)\nExec=/bin/true\nHidden=true\nX-GNOME-Autostart-enabled=false\nNoDisplay=true\n"
+		if err := writeUserFile(u, ".config/autostart/"+n+".desktop", body, 0o644); err != nil {
+			add("FEHLER keyring-autostart %s: %v", n, err)
+		}
+	}
+	add("gnome-keyring-Autostart deaktiviert (kein Passwort-Dialog mehr)")
 
 	if env["chromium"] == "" {
 		add("⚠️ Chromium nicht gefunden — auf einem Lite-Image fehlt es (Desktop-Image hat es). Dann: sudo apt install chromium-browser")
