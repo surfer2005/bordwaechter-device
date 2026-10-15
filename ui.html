@@ -83,6 +83,8 @@
       <div class="kv"><div class="k">Kursabweichung</div><div class="v" id="s_off">—</div></div>
       <div class="kv"><div class="k">Position (Alter)</div><div class="v" id="s_pos">—</div></div>
       <div class="kv"><div class="k">Ausgänge</div><div class="v" id="s_out" style="font-size:.95rem">—</div></div>
+      <div class="kv"><div class="k">Alarm-Zustand</div><div class="v" id="s_alarm" style="font-size:.95rem">—</div></div>
+      <div class="kv"><div class="k">Quittier-Eingang</div><div class="v" id="s_ack" style="font-size:.95rem">—</div></div>
     </div>
     <div class="btns">
       <button onclick="post('/api/ack')">Quittieren</button>
@@ -301,6 +303,9 @@ async function refresh(){
     g('s_off').textContent=(s.off_state&&s.off_state!=='unknown')?(s.off_course_m+' m ('+s.off_state+')'):'—'
     g('s_pos').textContent=s.pos_valid?(s.pos_age_sec+' s'):'keine'
     g('s_out').innerHTML='<span class="dot '+(s.horn?'on':'')+'"></span>Hupe <span class="dot '+(s.lamp?'on':'')+'"></span>Lampe'
+    g('s_alarm').textContent={normal:'normal',alarm:'ALARM',acked:'quittiert'}[s.alarm_state]||(s.alarm_state||'—')
+    if(s.ack_level_high===undefined) g('s_ack').textContent='—'
+    else g('s_ack').innerHTML='<span class="dot '+(s.ack_pressed?'on':'')+'"></span>'+(s.ack_level_high?'HIGH':'LOW')+' · '+(s.ack_pressed?'GEDRÜCKT':'offen')
     const b=g('banner'); b.className='banner'
     if(s.phase==='vor_abfahrt'){ b.className='banner b-warn'; b.textContent='Abfahrt '+(s.abfahrt||'')+(s.warten_min>=0?(' · in '+s.warten_min+' min'):'') }
     else if(s.off_state==='alarm'){ b.className='banner b-alarm'; b.textContent='KURS VERLASSEN! '+s.off_course_m+' m neben der Fahrrinne' }

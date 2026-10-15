@@ -34,6 +34,8 @@ type Status struct {
 	Alarm        bool    `json:"alarm"`
 	AlarmState   string  `json:"alarm_state"` // normal | alarm | acked
 	SifaDeadman  bool    `json:"sifa_deadman_active"`
+	AckLevelHigh bool    `json:"ack_level_high"` // aktueller Pegel des Quittier-Eingangs (Diagnose)
+	AckPressed   bool    `json:"ack_pressed"`    // interpretiert (ack_active_low beachtet)
 	Lat          float64 `json:"lat"`
 	Lng          float64 `json:"lng"`
 	Heading      float64 `json:"heading"` // Kurs über Grund (°), aus der Bewegung abgeleitet
@@ -613,6 +615,11 @@ func (e *Engine) Tick(now time.Time) {
 			e.Ack()
 		}
 		e.prevAck = pressed
+		// Live-Diagnose: aktuellen Eingangspegel in den Status spiegeln (zum Mitlesen in der Oberfläche).
+		e.mu.Lock()
+		e.status.AckLevelHigh = raw
+		e.status.AckPressed = pressed
+		e.mu.Unlock()
 	}
 
 	// Ereignisse an KAI (best effort, asynchron)
