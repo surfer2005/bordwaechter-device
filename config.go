@@ -51,6 +51,10 @@ type Config struct {
 		AckActiveLow bool `json:"ack_active_low"` // Taster schaltet gegen GND → gedrückt = LOW (statt gegen 3,3V)
 		SifaKeyPin  int  `json:"sifa_key_pin"`  // Schlüsselschalter "SIFA an" (Eingang), -1 = keiner
 		ActiveLow   bool `json:"active_low"`    // Relais schaltet bei LOW
+		// Eingangs-Vorspannung (Bias) für Taster/Schalter. Leer = alt (sysfs, Chip-Default = Pull-Down).
+		// "pullup" = interner Pull-up übers character device (Taster gegen GND: Ruhe HIGH, gedrückt LOW).
+		// "pulldown"/"disabled" analog. Pull-up ist der richtige Wert für einen Taster gegen GND.
+		InputBias string `json:"input_bias"`
 	} `json:"gpio"`
 
 	Camera struct {

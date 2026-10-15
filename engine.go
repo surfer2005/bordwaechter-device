@@ -111,7 +111,12 @@ func (e *Engine) SetConfig(cfg *Config, kai *KaiClient) {
 	e.mu.Lock()
 	e.cfg = cfg
 	e.kai = kai
+	gpio := e.gpio
 	e.mu.Unlock()
+	// Polung/Eingangs-Bias ohne Neustart übernehmen (Backend-Wechsel selbst bleibt neustartpflichtig).
+	if sg, ok := gpio.(*sysfsGPIO); ok {
+		sg.update(cfg.GPIO.ActiveLow, cfg.GPIO.InputBias)
+	}
 }
 
 func (e *Engine) SetBundle(b *Bundle) {

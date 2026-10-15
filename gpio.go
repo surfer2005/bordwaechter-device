@@ -20,18 +20,30 @@ type GPIO interface {
 // ---- sysfs ----
 type sysfsGPIO struct {
 	activeLow bool
-	base      int // Basis des Header-Chips; sysfs-Leitung = base + BCM-Pin (0 auf alten Kerneln)
+	inputBias string // "" = sysfs; "pullup"/"pulldown"/"disabled" = Eingang übers character device
+	base      int    // Basis des Header-Chips; sysfs-Leitung = base + BCM-Pin (0 auf alten Kerneln)
 	mu        sync.Mutex
-	exported  map[int]string // pin -> direction ("out"/"in")
+	exported  map[int]string    // pin -> direction ("out"/"in")
 	lastErr   map[string]string // "pin:stage" -> zuletzt geloggter Fehlertext (gegen Journal-Spam)
 }
 
-func newSysfsGPIO(activeLow bool) *sysfsGPIO {
+func newSysfsGPIO(activeLow bool, inputBias string) *sysfsGPIO {
 	b := gpioHeaderBase()
 	if b != 0 {
 		log.Printf("gpio: sysfs-Chip-Basis %d erkannt — BCM-Pins werden um %d verschoben", b, b)
 	}
-	return &sysfsGPIO{activeLow: activeLow, base: b, exported: map[int]string{}, lastErr: map[string]string{}}
+	if inputBias != "" {
+		log.Printf("gpio: Eingänge über character device mit Bias %q", inputBias)
+	}
+	return &sysfsGPIO{activeLow: activeLow, inputBias: inputBias, base: b, exported: map[int]string{}, lastErr: map[string]string{}}
+}
+
+// update: Polung/Eingangs-Bias zur Laufzeit übernehmen (bei Config-Änderung, ohne Neustart).
+func (g *sysfsGPIO) update(activeLow bool, inputBias string) {
+	g.mu.Lock()
+	g.activeLow = activeLow
+	g.inputBias = inputBias
+	g.mu.Unlock()
 }
 
 // line übersetzt einen BCM-Pin in die globale sysfs-Leitungsnummer (Basis + Pin).
@@ -81,8 +93,11 @@ func (g *sysfsGPIO) SetOutput(pin int, on bool) {
 		g.logErr(fmt.Sprintf("%d:ensure", pin), err)
 		return
 	}
+	g.mu.Lock()
+	activeLow := g.activeLow
+	g.mu.Unlock()
 	v := on
-	if g.activeLow {
+	if activeLow {
 		v = !on
 	}
 	val := "0"
@@ -96,6 +111,15 @@ func (g *sysfsGPIO) SetOutput(pin int, on bool) {
 func (g *sysfsGPIO) ReadInput(pin int) (bool, error) {
 	if pin < 0 {
 		return false, nil
+	}
+	g.mu.Lock()
+	bias := g.inputBias
+	g.mu.Unlock()
+	if bias != "" {
+		// character device mit interner Vorspannung (Pull-up für Taster gegen GND)
+		v, err := gpiodReadLine(pin, bias)
+		g.logErr(fmt.Sprintf("%d:in-gpiod", pin), err)
+		return v, err
 	}
 	if err := g.ensure(pin, "in"); err != nil {
 		return false, err
@@ -115,7 +139,7 @@ func (noopGPIO) ReadInput(pin int) (bool, error)   { return false, nil }
 
 func buildGPIO(cfg *Config) GPIO {
 	if cfg.GPIO.Backend == "sysfs" {
-		return newSysfsGPIO(cfg.GPIO.ActiveLow)
+		return newSysfsGPIO(cfg.GPIO.ActiveLow, cfg.GPIO.InputBias)
 	}
 	return noopGPIO{}
 }

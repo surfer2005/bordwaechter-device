@@ -59,10 +59,30 @@ type gpioSelftestResult struct {
 	Hinweis      string          `json:"hinweis,omitempty"`
 }
 
-// selftestInput liest den aktuellen Pegel eines Eingangs-Pins (export → direction=in → value).
-func selftestInput(pin int, name string, activeLow bool, headerBase int) gpioInputResult {
+// selftestInput liest den aktuellen Pegel eines Eingangs-Pins. Mit gesetztem Bias über das character
+// device (interner Pull-up/-down), sonst über sysfs (export → direction=in → value).
+func selftestInput(pin int, name string, activeLow bool, headerBase int, bias string) gpioInputResult {
 	ln := pin + headerBase
 	r := gpioInputResult{Pin: pin, Name: name, Line: ln}
+	if bias != "" {
+		high, err := gpiodReadLine(pin, bias)
+		if err != nil {
+			r.Detail = "character device (" + bias + "): " + err.Error()
+			return r
+		}
+		r.OK = true
+		if high {
+			r.Level = "HIGH"
+		} else {
+			r.Level = "LOW"
+		}
+		r.Pressed = high
+		if activeLow {
+			r.Pressed = !high
+		}
+		r.Detail = "Bias " + bias + " (character device)"
+		return r
+	}
 	base := fmt.Sprintf("/sys/class/gpio/gpio%d", ln)
 	if _, err := os.Stat(base); err != nil {
 		if err := os.WriteFile("/sys/class/gpio/export", []byte(strconv.Itoa(ln)), 0o644); err != nil {
@@ -205,10 +225,10 @@ func runGpioSelftest(cfg *Config) gpioSelftestResult {
 		r.Pins = append(r.Pins, selftestPin(p.pin, p.name, cfg.GPIO.ActiveLow, hb))
 	}
 	if cfg.GPIO.AckPin >= 0 {
-		r.Inputs = append(r.Inputs, selftestInput(cfg.GPIO.AckPin, "Quittier-Taster", cfg.GPIO.AckActiveLow, hb))
+		r.Inputs = append(r.Inputs, selftestInput(cfg.GPIO.AckPin, "Quittier-Taster", cfg.GPIO.AckActiveLow, hb, cfg.GPIO.InputBias))
 	}
 	if cfg.GPIO.SifaKeyPin >= 0 {
-		r.Inputs = append(r.Inputs, selftestInput(cfg.GPIO.SifaKeyPin, "SIFA-Schlüssel", false, hb))
+		r.Inputs = append(r.Inputs, selftestInput(cfg.GPIO.SifaKeyPin, "SIFA-Schlüssel", false, hb, cfg.GPIO.InputBias))
 	}
 	if !sysfs {
 		r.Hinweis = "Das alte /sys/class/gpio fehlt (neuer Kernel). GPIO liefe hier nur über das character device (/dev/gpiochip*) — dafür bräuchte es ein gpiod-Backend."
