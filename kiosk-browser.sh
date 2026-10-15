@@ -61,5 +61,5 @@ exec "$BIN" \
   --user-data-dir="$PROFILE" \
   --password-store=basic \
   --noerrdialogs --disable-infobars --disable-session-crashed-bubble \
-  --disable-features=TranslateUI --no-first-run --no-default-browser-check \
+  --disable-features=TranslateUI,Translate --disable-translate --no-first-run --no-default-browser-check \
   --fast --fast-start --overscroll-history-navigation=0 --disable-pinch

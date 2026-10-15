@@ -209,7 +209,7 @@
       </div>
       <div class="btns" style="margin-top:8px"><button class="ghost" onclick="genDispTok()">Neu erzeugen</button><a id="dispOpen" class="ghost" style="display:inline-block;text-decoration:none" href="#" target="_blank" rel="noopener">Anzeige öffnen</a></div>
       <p class="muted" style="margin-top:6px">Vollbild-Anzeige für einen Monitor an Bord — ohne Login, der Token steckt in der Adresse. Diese Adresse am Monitor hinterlegen:<br><code id="dispUrl" style="word-break:break-all"></code></p>
-      <div class="btns" style="margin-top:10px"><button onclick="kioskSetup()">Anzeige am Monitor einrichten</button><button class="ghost" onclick="remoteAccess(1,0)">SSH einschalten</button><button class="ghost" onclick="remoteAccess(0,1)">VNC einschalten</button><button class="ghost" onclick="remoteAccess(1,1)">SSH + VNC</button></div>
+      <div class="btns" style="margin-top:10px"><button onclick="kioskSetup()">Anzeige am Monitor einrichten</button><button class="ghost" onclick="remoteAccess(1,0)">SSH einschalten</button><button class="ghost" onclick="remoteAccess(0,1)">VNC einschalten</button><button class="ghost" onclick="remoteAccess(1,1)">SSH + VNC</button><button class="ghost" onclick="kioskDiag()">Kiosk-Diagnose</button></div>
       <p class="muted" style="margin-top:6px">„Anzeige am Monitor einrichten" legt den <b>Kiosk-Autostart</b> an (Bookworm/Wayland: labwc/wayfire, sonst X) — beim nächsten Neustart öffnet der Monitor automatisch die Anzeige (mit obiger Drehung). Erst <b>Speichern</b> (für Startansicht/Drehung), dann einrichten, dann <b>Gerät (Pi) neu starten</b>.</p>
       <pre id="kioskLog" style="display:none;white-space:pre-wrap;font-size:.8rem;background:var(--card2,#f3f3f3);padding:10px;border-radius:6px;margin-top:8px;max-height:300px;overflow:auto"></pre>
     </fieldset>
@@ -284,6 +284,12 @@ async function kioskSetup(){
 async function remoteAccess(ssh,vnc){
   var pre=g('kioskLog'); pre.style.display='block'; pre.textContent='Schalte Fernzugriff ein …'
   try{ var r=await fetch('/api/remote-access?ssh='+ssh+'&vnc='+vnc,{method:'POST'}); var d=await r.json()
+    pre.textContent=(d.log||[]).join('\n')
+  }catch(e){ pre.textContent='Fehler: '+e }
+}
+async function kioskDiag(){
+  var pre=g('kioskLog'); pre.style.display='block'; pre.textContent='Diagnose läuft …'
+  try{ var r=await fetch('/api/kiosk-diag',{method:'POST'}); var d=await r.json()
     pre.textContent=(d.log||[]).join('\n')
   }catch(e){ pre.textContent='Fehler: '+e }
 }

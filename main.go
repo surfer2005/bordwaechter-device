@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const version = "0.1.63"
+const version = "0.1.64"
 
 type App struct {
 	mu     sync.Mutex

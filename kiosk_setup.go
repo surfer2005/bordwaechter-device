@@ -62,6 +62,27 @@ func runCmd(name string, args ...string) string {
 	return fmt.Sprintf("%s %s → %s", name, strings.Join(args, " "), o)
 }
 
+// runKioskDiag liest (nur lesend) den Ist-Zustand aus, um die Keyring-/Kiosk-Ursache ohne SSH zu sehen.
+func runKioskDiag() map[string]any {
+	u := desktopUser()
+	log := []string{}
+	add := func(f string, a ...any) { log = append(log, fmt.Sprintf(f, a...)) }
+	add("Bordwächter-Version (läuft): %s", version)
+	add("--- Wie wurde Chromium gestartet? (sucht --password-store) ---")
+	add(runCmd("bash", "-lc", "ps -eo args 2>/dev/null | grep -i chromi | grep -v grep | head -3 | tr -s ' '"))
+	add("--- Laufende Compositor/Keyring-Prozesse ---")
+	add(runCmd("bash", "-lc", "pgrep -a -f 'labwc|wayfire|cage|gnome-keyring|chromi' 2>/dev/null | head -8"))
+	add("--- /usr/local/bin/kiosk-browser.sh enthält password-store? ---")
+	add(runCmd("bash", "-lc", "grep -c password-store /usr/local/bin/kiosk-browser.sh 2>/dev/null; grep -c 'keyrings' /usr/local/bin/kiosk-browser.sh 2>/dev/null"))
+	add("--- Keyring-Verzeichnis ---")
+	add(runCmd("bash", "-lc", "ls -la "+u.home+"/.local/share/keyrings 2>&1 | head"))
+	add("--- Autostart-Einträge (die Chromium starten könnten) ---")
+	add(runCmd("bash", "-lc", "grep -rl -i 'chromi\\|kiosk-browser' "+u.home+"/.config 2>/dev/null"))
+	add("--- labwc/autostart ---")
+	add(runCmd("bash", "-lc", "cat "+u.home+"/.config/labwc/autostart 2>&1 | head"))
+	return map[string]any{"ok": true, "log": log}
+}
+
 // runRemoteAccess schaltet SSH und/oder VNC ein (als root, kein SSH nötig — über die Weboberfläche).
 func runRemoteAccess(ssh, vnc bool) map[string]any {
 	log := []string{}

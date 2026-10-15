@@ -535,6 +535,10 @@ func (a *App) routes() *http.ServeMux {
 		q := r.URL.Query()
 		writeJSON(w, runRemoteAccess(q.Get("ssh") == "1", q.Get("vnc") == "1"))
 	}))
+	// Kiosk-Diagnose (nur lesend): zeigt, wie Chromium wirklich gestartet wurde + Autostart-Lage.
+	mux.HandleFunc("/api/kiosk-diag", a.guardUI(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, runKioskDiag())
+	}))
 
 	// Test: Hupe/Lampe kurz schalten
 	mux.HandleFunc("/api/test", a.guard(func(w http.ResponseWriter, r *http.Request) {

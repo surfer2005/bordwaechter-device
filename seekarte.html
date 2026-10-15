@@ -41,8 +41,8 @@
     Hochformat ist der Default (gestapelt). Umschaltbar über den Button, je Gerät gemerkt. */
  html[data-orient="landscape"] main{grid-template-columns:minmax(300px,.8fr) 2fr;grid-template-rows:auto 1fr;grid-template-areas:'advice map' 'facts map'}
  html[data-orient="landscape"] .advice{padding:6px 10px;gap:3px}
- html[data-orient="landscape"] .gauge{width:176px}
- html[data-orient="landscape"] .gauge .big .val{font-size:1.9rem}
+ html[data-orient="landscape"] .gauge{width:240px}
+ html[data-orient="landscape"] .gauge .big .val{font-size:2.3rem}
  html[data-orient="landscape"] .verdict{margin-top:2px}
  html[data-orient="landscape"] .verdict .ar{font-size:1.5rem}
  html[data-orient="landscape"] .verdict .w{font-size:1.15rem}
@@ -53,10 +53,11 @@
  .advice.s-faster{background:linear-gradient(180deg,rgba(240,169,60,.15),transparent 55%)}
  .advice.s-slower{background:linear-gradient(180deg,rgba(79,167,214,.15),transparent 55%)}
  .advice.s-ok{background:linear-gradient(180deg,rgba(63,194,140,.15),transparent 55%)}
- .gauge{width:224px;max-width:68vw;position:relative}.gauge svg{display:block;width:100%;height:auto;overflow:visible}
+ .gauge{width:340px;max-width:82vw;position:relative}.gauge svg{display:block;width:100%;height:auto;overflow:visible}
  #arcBg{stroke:var(--arc)}#ticks line{stroke:var(--tick)}#needle line{stroke:var(--ink)}#needle circle{fill:var(--ink)}#tgtMark{stroke:var(--ink)}
  .gauge .big{position:absolute;inset:0;top:15%;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
- .gauge .big .val{font-family:var(--mono);font-weight:700;font-size:2.5rem;line-height:1}.gauge .big .u{color:var(--muted);letter-spacing:.14em;font-size:.64rem;margin-top:2px}
+ .gauge .big .val{font-family:var(--mono);font-weight:700;font-size:3.3rem;line-height:1}.gauge .big .u{color:var(--muted);letter-spacing:.16em;font-size:.72rem;margin-top:8px}
+ .todaykm{text-align:center;color:var(--muted);font-size:.95rem;margin:2px 0 4px}.todaykm b{font-family:var(--mono);color:var(--fg);font-weight:700}
  .sifabox{text-align:center;font-size:.95rem;margin:4px auto 6px;padding:5px 12px;border-radius:8px}
  .sifabox b{font-family:var(--mono)}
  .sifabox.ok{background:var(--tone-green-bg,#1f3b30);color:var(--tone-green-fg,#9fe3c4)}
@@ -174,6 +175,7 @@
         </svg>
         <div class="big"><span class="val" id="curVal">0</span><span class="u">KM/H · IST</span></div>
       </div>
+      <div class="todaykm" id="todaykm" style="display:none"></div>
       <div class="sifabox" id="sifabox" style="display:none"></div>
       <div class="verdict" id="verdict"><span class="ar" id="arrow">•</span><span class="w" id="word">—</span><span class="de" id="delta"></span></div>
       <div class="tl" id="tl"></div>
@@ -338,6 +340,8 @@ function render(s){
   var adv=$('advice');adv.className='card advice'
   var gauge=$('gaugebox'),vd=$('verdict'),tl=$('tl'),ab=$('abfahrtblock'),hint=$('hint')
   var hasAdvisory=(s.phase==='unterwegs'&&s.verdict&&s.verdict!=='none')
+  var tk=$('todaykm')
+  if(tk){ if(s.today_km>0&&hasAdvisory){ tk.style.display=''; tk.innerHTML='Heute <b>'+fmt1(s.today_km)+'</b> km' } else tk.style.display='none' }
   var sb=$('sifabox')
   if(sb){
     if(s.sifa_active){
