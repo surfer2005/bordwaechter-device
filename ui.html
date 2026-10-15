@@ -114,7 +114,9 @@
     </div>
     <fieldset><legend>GPS-Quelle</legend>
       <div class="row">
-        <div><label>Quelle</label><select id="g_src"><option value="manual">manual (Test)</option><option value="teltonika">Teltonika (Modbus)</option></select></div>
+        <div><label>Quelle</label><select id="g_src"><option value="manual">manual (Test)</option><option value="nmea">USB-GPS-Maus (NMEA)</option><option value="teltonika">Teltonika (Modbus)</option></select></div>
+        <div><label>Gerät (USB-GPS-Maus)</label><input id="g_dev" placeholder="/dev/ttyACM0"></div>
+        <div><label>Baud (USB-GPS-Maus)</label><input id="g_baud" type="number" placeholder="9600"></div>
         <div><label>Host</label><input id="g_host"></div>
         <div><label>Port</label><input id="g_port" type="number"></div>
         <div><label>Unit</label><input id="g_unit" type="number"></div>
@@ -289,7 +291,7 @@ async function loadCfg(){
   g('c_base').value=c.kai_base_url||''; g('c_token').value=c.edge_token||''; g('c_ship').value=c.ship_id||0
   g('c_sendpos').value=String(!!c.send_position); g('c_uipw').value=c.ui_password||''; g('c_hapw').value=c.ha_password||''
   g('c_disptok').value=c.display_token||''; g('c_dispview').value=c.display_view||'pilot'; updateDispUrl()
-  g('g_src').value=c.gps.source; g('g_host').value=c.gps.host||''; g('g_port').value=c.gps.port; g('g_unit').value=c.gps.unit
+  g('g_src').value=c.gps.source; g('g_dev').value=c.gps.device||''; g('g_baud').value=c.gps.baud||9600; g('g_host').value=c.gps.host||''; g('g_port').value=c.gps.port; g('g_unit').value=c.gps.unit
   g('g_lat').value=c.gps.lat_reg; g('g_lng').value=c.gps.lng_reg; g('g_speed').value=c.gps.speed_reg; g('g_head').value=c.gps.heading_reg; g('g_fmt').value=c.gps.format; g('g_poll').value=c.gps.poll_sec
   g('sf_combo').value=c.sifa.trigger_combo; g('sf_re').value=c.sifa.realarm_sec; g('sf_dm').value=String(!!c.sifa.deadman_on)
   g('sf_dms').value=c.sifa.deadman_sec; g('sf_pre').value=c.sifa.deadman_prewarn_sec
@@ -306,7 +308,7 @@ async function saveCfg(){
   const num=(id)=>parseInt(g(id).value||'0',10)
   const c={ kai_base_url:g('c_base').value, edge_token:g('c_token').value, ship_id:num('c_ship'),
     send_position:g('c_sendpos').value==='true', listen:':8090', ui_password:g('c_uipw').value, ha_password:g('c_hapw').value, display_token:g('c_disptok').value, display_view:g('c_dispview').value, bundle_refresh_sec:300,
-    gps:{source:g('g_src').value,host:g('g_host').value,port:num('g_port'),unit:num('g_unit'),lat_reg:num('g_lat'),lng_reg:num('g_lng'),speed_reg:num('g_speed'),heading_reg:num('g_head'),format:g('g_fmt').value,poll_sec:num('g_poll')},
+    gps:{source:g('g_src').value,device:g('g_dev').value,baud:num('g_baud'),host:g('g_host').value,port:num('g_port'),unit:num('g_unit'),lat_reg:num('g_lat'),lng_reg:num('g_lng'),speed_reg:num('g_speed'),heading_reg:num('g_head'),format:g('g_fmt').value,poll_sec:num('g_poll')},
     sifa:{trigger_combo:g('sf_combo').value,realarm_sec:num('sf_re'),deadman_on:g('sf_dm').value==='true',deadman_sec:num('sf_dms'),deadman_prewarn_sec:num('sf_pre')},
     gpio:{backend:g('io_be').value,horn_pin:num('io_horn'),lamp_pin:num('io_lamp'),ack_pin:num('io_ack'),sifa_key_pin:num('io_key'),active_low:g('io_al').value==='true'},
     camera:{enabled:g('cam_en').value==='true',webhook_secret:g('cam_sec').value,snapshot_url:g('cam_url').value,stream_url:g('cam_stream').value,hold_sec:num('cam_hold')},

@@ -21,7 +21,9 @@ type Config struct {
 	DisplayView  string `json:"display_view"`  // Startansicht des Geräte-Kiosks: "pilot" | "seekarte"
 
 	GPS struct {
-		Source     string `json:"source"` // "teltonika" | "manual"
+		Source     string `json:"source"` // "teltonika" | "nmea" (USB-GPS-Maus) | "manual"
+		Device     string `json:"device"` // nur "nmea": serielles Gerät, z. B. /dev/ttyACM0 oder /dev/ttyUSB0
+		Baud       int    `json:"baud"`   // nur "nmea": Baudrate (Vorgabe 9600)
 		Host       string `json:"host"`
 		Port       int    `json:"port"`
 		Unit       int    `json:"unit"`        // Modbus-Unit-ID
@@ -100,6 +102,8 @@ func defaultConfig() *Config {
 		BundleRefreshSec: 300,
 	}
 	c.GPS.Source = "manual"
+	c.GPS.Device = "/dev/ttyACM0"
+	c.GPS.Baud = 9600
 	c.GPS.Port = 502
 	c.GPS.Unit = 1
 	c.GPS.LatReg, c.GPS.LngReg = 0, 2

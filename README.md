@@ -1,7 +1,7 @@
 # Bordwächter — On-Board-Dienst (Raspberry Pi)
 
-Autonomes Sicherheits-/Assistenzgerät an Bord. Liest die GPS-Position (Teltonika per Modbus
-oder Testquelle), holt aus **KAI** die Fahrrinne + das heutige Bordbuch + Schwellen, rechnet
+Autonomes Sicherheits-/Assistenzgerät an Bord. Liest die GPS-Position (Teltonika per Modbus,
+einfache USB-GPS-Maus per NMEA oder Testquelle), holt aus **KAI** die Fahrrinne + das heutige Bordbuch + Schwellen, rechnet
 **lokal in Echtzeit** die Kursabweichung + Pünktlichkeit, schlägt bei Bedarf **Alarm**
 (Relais/Hupe/Lampe) mit **SIFA-Quittierung**, meldet Ereignisse/Position an KAI und zeigt alles
 über eine kleine **lokale Web-Oberfläche**. Kein Framework, **nur Go-Standardbibliothek** →
@@ -95,12 +95,36 @@ Gerät-seitig editierbar in der **lokalen Oberfläche** (`http://<pi>:8090`, Zah
 - `bundle_refresh_sec` — wie oft das Bundle (Schiff, Soll-Zeiten, Kurs-Grenzen) von KAI geholt wird.
 
 **GPS** (`gps`)
-- `source` — `teltonika` (Modbus) oder `manual` (`manual`).
-- `host` / `port` (`502`) / `unit` (`1`) — Modbus-Verbindung.
-- `lat_reg` (`0`) / `lng_reg` (`2`) / `speed_reg` (`-1` = keins) / `heading_reg` (`-1` = keins) —
-  Holding-Register; **an der echten Teltonika verifizieren** (Defaults sind Platzhalter).
-- `format` — `float32` (Vorgabe) / `int32_1e7` / `int32_1e6`.
+- `source` — `teltonika` (Modbus), `nmea` (USB-GPS-Maus) oder `manual` (`manual`).
+- **Modbus** (`teltonika`): `host` / `port` (`502`) / `unit` (`1`) — Verbindung;
+  `lat_reg` (`0`) / `lng_reg` (`2`) / `speed_reg` (`-1` = keins) / `heading_reg` (`-1` = keins) —
+  Holding-Register; **an der echten Teltonika verifizieren** (Defaults sind Platzhalter);
+  `format` — `float32` (Vorgabe) / `int32_1e7` / `int32_1e6`.
+- **USB-GPS-Maus** (`nmea`): `device` (`/dev/ttyACM0`) / `baud` (`9600`) — s. eigener Abschnitt unten.
 - `poll_sec` (`5`) — Abfrageintervall. Ohne Speed-Register wird die Geschwindigkeit aus der Bewegung abgeleitet.
+
+## GPS per USB-Maus (günstige Alternative für kleine Boote)
+
+Statt eines Teltonika-Routers reicht eine einfache **USB-GPS-Maus**. Diese Empfänger melden sich
+unter Linux als serielles Gerät (`/dev/ttyACM0`, bei manchen `/dev/ttyUSB0`) und senden laufend
+NMEA-0183-Sätze (RMC/GGA). Der Bordwächter liest sie direkt — kein Router, kein Bordnetz-Modbus,
+kein Zusatzpaket. Ideal für Hobby-/Kleinschiffer: einstecken, in der Konfiguration GPS-Quelle
+**„USB-GPS-Maus (NMEA)"** wählen, fertig.
+
+**Empfohlene Hardware** (alle am Pi erprobt, ~15–25 €):
+- **VK-162 (u-blox 7, „G-Mouse")** — robuster Standard, Magnetfuß, langes USB-Kabel, meldet sich als
+  `/dev/ttyACM0`, 9600 Baud. Amazon.de: <https://www.amazon.de/s?k=VK-162+GPS+Maus> —
+  weltweit (`.com`): <https://www.amazon.com/s?k=VK-162+GPS>
+- **Diymore / „GPS Maus USB u-blox" (UBX-G7020)** — baugleiche Alternative, oft etwas günstiger.
+  Amazon.de: <https://www.amazon.de/s?k=GPS+Maus+USB+u-blox>
+- **Budget (NEO-6M USB)** — tut es auch, ältere Chips brauchen länger bis zum ersten Fix und können
+  als `/dev/ttyUSB0` erscheinen. Amazon.de: <https://www.amazon.de/s?k=NEO-6M+USB+GPS>
+
+**Einrichten:** Maus einstecken, `ls /dev/ttyACM* /dev/ttyUSB*` zeigt das Gerät. In der Konfiguration
+Quelle `nmea`, `device` auf den gefundenen Pfad, `baud` meist `9600` (manche u-blox 38400). Draußen /
+am Fenster betreiben — der erste Fix kann 30–60 s dauern; bis dahin meldet der Bordwächter „keine
+NMEA-Position". Baudrate wird per `stty` gesetzt, das Gerät als Datei gelesen (CGO aus, kein
+serielles Paket nötig).
 
 **SIFA / Alarm** (`sifa`)
 - `trigger_combo` — Auslöser: `gps` | `camera` | `both` | `either` (`either`).

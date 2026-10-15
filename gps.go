@@ -90,8 +90,11 @@ func (t *TeltonikaGPS) Read() (Position, error) {
 }
 
 func buildGPS(cfg *Config, manual *ManualGPS) GPSSource {
-	if cfg.GPS.Source == "teltonika" {
+	switch cfg.GPS.Source {
+	case "teltonika":
 		return &TeltonikaGPS{cfg: cfg}
+	case "nmea":
+		return newNmeaGPS(cfg)
 	}
 	return manual
 }

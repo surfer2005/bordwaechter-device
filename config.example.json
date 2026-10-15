@@ -10,6 +10,8 @@
   "display_view": "pilot",
   "gps": {
     "source": "manual",
+    "device": "/dev/ttyACM0",
+    "baud": 9600,
     "host": "192.168.1.1",
     "port": 502,
     "unit": 1,
