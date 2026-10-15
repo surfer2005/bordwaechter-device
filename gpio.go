@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // GPIO: Ausgänge (Hupe/Lampe/Relais) + Eingänge (Quittier-Taster/Schlüsselschalter).
@@ -19,14 +20,22 @@ type GPIO interface {
 // ---- sysfs ----
 type sysfsGPIO struct {
 	activeLow bool
+	base      int // Basis des Header-Chips; sysfs-Leitung = base + BCM-Pin (0 auf alten Kerneln)
 	mu        sync.Mutex
 	exported  map[int]string // pin -> direction ("out"/"in")
 	lastErr   map[string]string // "pin:stage" -> zuletzt geloggter Fehlertext (gegen Journal-Spam)
 }
 
 func newSysfsGPIO(activeLow bool) *sysfsGPIO {
-	return &sysfsGPIO{activeLow: activeLow, exported: map[int]string{}, lastErr: map[string]string{}}
+	b := gpioHeaderBase()
+	if b != 0 {
+		log.Printf("gpio: sysfs-Chip-Basis %d erkannt — BCM-Pins werden um %d verschoben", b, b)
+	}
+	return &sysfsGPIO{activeLow: activeLow, base: b, exported: map[int]string{}, lastErr: map[string]string{}}
 }
+
+// line übersetzt einen BCM-Pin in die globale sysfs-Leitungsnummer (Basis + Pin).
+func (g *sysfsGPIO) line(pin int) int { return pin + g.base }
 
 // logErr: einen GPIO-Fehler nur beim ERSTEN Auftreten (bzw. bei geändertem Text) loggen — Tick ruft
 // SetOutput jede Sekunde, sonst liefe das Journal über. Erfolg löscht die Merkung wieder.
@@ -49,13 +58,15 @@ func (g *sysfsGPIO) ensure(pin int, dir string) error {
 	if g.exported[pin] == dir {
 		return nil
 	}
-	base := fmt.Sprintf("/sys/class/gpio/gpio%d", pin)
-	if _, err := os.Stat(base); err != nil {
-		if err := os.WriteFile("/sys/class/gpio/export", []byte(strconv.Itoa(pin)), 0o644); err != nil {
+	ln := g.line(pin)
+	dirPath := fmt.Sprintf("/sys/class/gpio/gpio%d", ln)
+	if _, err := os.Stat(dirPath); err != nil {
+		if err := os.WriteFile("/sys/class/gpio/export", []byte(strconv.Itoa(ln)), 0o644); err != nil {
 			return err
 		}
+		time.Sleep(120 * time.Millisecond) // udev braucht einen Moment, bis direction/value da sind
 	}
-	if err := os.WriteFile(base+"/direction", []byte(dir), 0o644); err != nil {
+	if err := os.WriteFile(dirPath+"/direction", []byte(dir), 0o644); err != nil {
 		return err
 	}
 	g.exported[pin] = dir
@@ -78,7 +89,7 @@ func (g *sysfsGPIO) SetOutput(pin int, on bool) {
 	if v {
 		val = "1"
 	}
-	err := os.WriteFile(fmt.Sprintf("/sys/class/gpio/gpio%d/value", pin), []byte(val), 0o644)
+	err := os.WriteFile(fmt.Sprintf("/sys/class/gpio/gpio%d/value", g.line(pin)), []byte(val), 0o644)
 	g.logErr(fmt.Sprintf("%d:value", pin), err)
 }
 
@@ -89,7 +100,7 @@ func (g *sysfsGPIO) ReadInput(pin int) (bool, error) {
 	if err := g.ensure(pin, "in"); err != nil {
 		return false, err
 	}
-	b, err := os.ReadFile(fmt.Sprintf("/sys/class/gpio/gpio%d/value", pin))
+	b, err := os.ReadFile(fmt.Sprintf("/sys/class/gpio/gpio%d/value", g.line(pin)))
 	if err != nil {
 		return false, err
 	}

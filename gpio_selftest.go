@@ -48,6 +48,22 @@ type gpioSelftestResult struct {
 	Hinweis      string         `json:"hinweis,omitempty"`
 }
 
+// gpioHeaderBase findet die Basis-Nummer des 40-poligen Header-Controllers (pinctrl-bcm2711 auf
+// Pi 4, pinctrl-rp1 auf Pi 5). Auf neueren Kerneln ist sie nicht mehr 0 (z. B. 512) — die sysfs-
+// Leitungsnummer ist dann Basis + BCM-Pin. Alte Kernel: 0 (unverändert). Nicht gefunden: 0.
+func gpioHeaderBase() int {
+	dirs, _ := filepath.Glob("/sys/class/gpio/gpiochip*")
+	for _, d := range dirs {
+		label := strings.ToLower(readTrim(d + "/label"))
+		if strings.Contains(label, "pinctrl-bcm") || strings.Contains(label, "pinctrl-rp1") {
+			if b, err := strconv.Atoi(readTrim(d + "/base")); err == nil {
+				return b
+			}
+		}
+	}
+	return 0
+}
+
 func readTrim(p string) string {
 	b, err := os.ReadFile(p)
 	if err != nil {
@@ -79,7 +95,9 @@ func gpioEnv() (model, kernel string, sysfs bool, chardevs []string, chips []gpi
 }
 
 // selftestPin fährt die sysfs-Sequenz für einen Ausgangs-Pin und pulst ihn kurz.
-func selftestPin(pin int, name string, activeLow bool) gpioPinResult {
+// headerBase ist die Chip-Basis (0 auf alten Kerneln); die echte sysfs-Leitung = Basis + BCM-Pin.
+func selftestPin(pin int, name string, activeLow bool, headerBase int) gpioPinResult {
+	ln := pin + headerBase
 	res := gpioPinResult{Pin: pin, Name: name}
 	add := func(step string, err error) bool {
 		s := gpioStep{Step: step, OK: err == nil}
@@ -89,9 +107,12 @@ func selftestPin(pin int, name string, activeLow bool) gpioPinResult {
 		res.Steps = append(res.Steps, s)
 		return err == nil
 	}
-	base := fmt.Sprintf("/sys/class/gpio/gpio%d", pin)
+	if headerBase != 0 {
+		res.Steps = append(res.Steps, gpioStep{Step: fmt.Sprintf("Leitung = BCM %d + Basis %d = %d", pin, headerBase, ln), OK: true})
+	}
+	base := fmt.Sprintf("/sys/class/gpio/gpio%d", ln)
 	if _, err := os.Stat(base); err != nil {
-		if !add("export", os.WriteFile("/sys/class/gpio/export", []byte(strconv.Itoa(pin)), 0o644)) {
+		if !add("export", os.WriteFile("/sys/class/gpio/export", []byte(strconv.Itoa(ln)), 0o644)) {
 			return res
 		}
 		time.Sleep(150 * time.Millisecond) // udev braucht einen Moment, bis die value/direction-Datei da ist
@@ -130,21 +151,17 @@ func runGpioSelftest(cfg *Config) gpioSelftestResult {
 		pin  int
 		name string
 	}{{cfg.GPIO.HornPin, "Hupe"}, {cfg.GPIO.LampPin, "Lampe"}}
+	hb := gpioHeaderBase()
 	for _, p := range pins {
 		if p.pin < 0 {
 			continue
 		}
-		r.Pins = append(r.Pins, selftestPin(p.pin, p.name, cfg.GPIO.ActiveLow))
+		r.Pins = append(r.Pins, selftestPin(p.pin, p.name, cfg.GPIO.ActiveLow, hb))
 	}
-	// Hinweis auf die typische Pi-5-Falle, wenn sysfs fehlt oder der RP1-Chip nicht bei Basis 0 sitzt.
 	if !sysfs {
-		r.Hinweis = "Das alte /sys/class/gpio fehlt (neuer Kernel/Pi 5). GPIO läuft hier nur über das character device (/dev/gpiochip*). Ein gpiod-Backend ist nötig."
-	} else {
-		for _, c := range chips {
-			if strings.Contains(strings.ToLower(c.Label), "rp1") && c.Base != "0" {
-				r.Hinweis = "Pi 5 (RP1): die sysfs-Pin-Nummern sind um die Chip-Basis " + c.Base + " verschoben — export " + strconv.Itoa(cfg.GPIO.HornPin) + " trifft NICHT GPIO" + strconv.Itoa(cfg.GPIO.HornPin) + ". Entweder Basis aufaddieren oder ein gpiod-Backend nutzen."
-			}
-		}
+		r.Hinweis = "Das alte /sys/class/gpio fehlt (neuer Kernel). GPIO liefe hier nur über das character device (/dev/gpiochip*) — dafür bräuchte es ein gpiod-Backend."
+	} else if hb != 0 {
+		r.Hinweis = fmt.Sprintf("Neuerer Kernel: Chip-Basis %d. Die sysfs-Leitung ist Basis + BCM-Pin (z. B. BCM %d → %d) — das rechnet der Bordwächter ab v0.1.50 automatisch.", hb, cfg.GPIO.HornPin, cfg.GPIO.HornPin+hb)
 	}
 	return r
 }
