@@ -229,6 +229,22 @@ func runKioskSetup() map[string]any {
 		}
 	}
 
+	// 6) gnome-keyring vorab mit LEEREM Passwort anlegen → der „Choose password for new keyring"-Dialog
+	//    erscheint dann gar nicht (blockiert sonst den Kiosk). Nur anlegen, wenn noch keiner da ist.
+	krDefault := filepath.Join(u.home, ".local/share/keyrings/default")
+	if _, err := os.Stat(krDefault); os.IsNotExist(err) {
+		kr := "[keyring]\ndisplay-name=Default keyring\nctime=0\nmtime=0\nlock-on-idle=false\nlock-after=false\n"
+		if err := writeUserFile(u, ".local/share/keyrings/Default_keyring.keyring", kr, 0o600); err != nil {
+			add("FEHLER Keyring: %v", err)
+		} else if err := writeUserFile(u, ".local/share/keyrings/default", "Default_keyring\n", 0o600); err != nil {
+			add("FEHLER Keyring-default: %v", err)
+		} else {
+			add("leerer Default-Keyring angelegt (kein Passwort-Dialog mehr)")
+		}
+	} else {
+		add("Keyring existiert bereits (unverändert)")
+	}
+
 	if env["chromium"] == "" {
 		add("⚠️ Chromium nicht gefunden — auf einem Lite-Image fehlt es (Desktop-Image hat es). Dann: sudo apt install chromium-browser")
 	}
