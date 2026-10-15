@@ -527,6 +527,11 @@ func (a *App) routes() *http.ServeMux {
 		writeJSON(w, map[string]any{"ok": true})
 	}))
 
+	// GPIO-Selbsttest: zeigt den ECHTEN Grund, warum ein Ausgang nicht schaltet (sonst still verschluckt).
+	mux.HandleFunc("/api/gpio-selftest", a.guard(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, runGpioSelftest(a.getCfg()))
+	}))
+
 	// Manuelle Position (Test, nur bei GPS-Quelle "manual")
 	mux.HandleFunc("/api/position", a.guard(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()

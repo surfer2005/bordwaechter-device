@@ -88,7 +88,9 @@
       <button onclick="post('/api/ack')">Quittieren</button>
       <button class="ghost" onclick="post('/api/test?out=horn')">Hupe testen</button>
       <button class="ghost" onclick="post('/api/test?out=lamp')">Lampe testen</button>
+      <button class="ghost" onclick="gpioSelftest()">GPIO-Selbsttest</button>
     </div>
+    <pre id="gpioResult" style="display:none;white-space:pre-wrap;font-size:.8rem;background:var(--card2,#f3f3f3);padding:10px;border-radius:6px;margin-top:8px;max-height:340px;overflow:auto"></pre>
   </div>
 
   <div class="card" id="manualCard" style="display:none">
@@ -211,6 +213,24 @@
 function g(id){return document.getElementById(id)}
 async function post(u){ try{ await fetch(u,{method:'POST'}) }catch(e){} }
 async function setPos(){ await post('/api/position?lat='+g('m_lat').value+'&lng='+g('m_lng').value+'&speed_kmh='+g('m_sp').value) }
+async function gpioSelftest(){
+  var pre=g('gpioResult'); pre.style.display='block'; pre.textContent='Teste GPIO … (Relais sollte kurz klicken)'
+  try{
+    var r=await fetch('/api/gpio-selftest'); var d=await r.json()
+    var out=[]
+    out.push('Modell: '+(d.model||'?')+'   Kernel: '+(d.kernel||'?'))
+    out.push('Backend: '+d.backend+'   Aktiv-Low: '+(d.active_low?'ja':'nein')+'   sysfs vorhanden: '+(d.sysfs_present?'ja':'NEIN'))
+    out.push('character devices: '+((d.chardevs||[]).join(', ')||'keine'))
+    ;(d.chips||[]).forEach(function(c){ out.push('  Chip '+c.dir+'  label='+c.label+'  base='+c.base+'  ngpio='+c.ngpio) })
+    out.push('')
+    ;(d.pins||[]).forEach(function(p){
+      out.push((p.ok?'✓':'✗')+' Pin '+p.pin+' ('+p.name+'):')
+      ;(p.steps||[]).forEach(function(s){ out.push('    '+(s.ok?'ok ':'FEHLER ')+s.step+(s.detail?'  → '+s.detail:'')) })
+    })
+    if(d.hinweis){ out.push(''); out.push('HINWEIS: '+d.hinweis) }
+    pre.textContent=out.join('\n')
+  }catch(e){ pre.textContent='Selbsttest fehlgeschlagen: '+e }
+}
 function ask(msg){ return new Promise(function(res){
   g('askmsg').textContent=msg; g('ask').style.display='grid'
   function done(v){ g('ask').style.display='none'; g('askyes').onclick=null; g('askno').onclick=null; document.onkeydown=null; res(v) }
