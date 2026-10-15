@@ -48,6 +48,7 @@ echo "starte $BIN $BASE$STARTPATH"
 exec "$BIN" \
   --kiosk --app="$BASE$STARTPATH" \
   --user-data-dir="$PROFILE" \
+  --password-store=basic \
   --noerrdialogs --disable-infobars --disable-session-crashed-bubble \
-  --disable-features=TranslateUI --no-first-run --fast --fast-start \
-  --overscroll-history-navigation=0 --disable-pinch
+  --disable-features=TranslateUI --no-first-run --no-default-browser-check \
+  --fast --fast-start --overscroll-history-navigation=0 --disable-pinch
