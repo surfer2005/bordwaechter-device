@@ -36,16 +36,62 @@ type gpioChipInfo struct {
 	Ngpio string `json:"ngpio,omitempty"`
 }
 
+type gpioInputResult struct {
+	Pin     int    `json:"pin"`
+	Name    string `json:"name"`
+	Line    int    `json:"line"`
+	OK      bool   `json:"ok"`
+	Level   string `json:"level,omitempty"`   // "HIGH"/"LOW"
+	Pressed bool   `json:"pressed"`           // interpretiert (ack_active_low beachtet)
+	Detail  string `json:"detail,omitempty"`
+}
+
 type gpioSelftestResult struct {
-	Backend      string         `json:"backend"`
-	ActiveLow    bool           `json:"active_low"`
-	Model        string         `json:"model"`
-	Kernel       string         `json:"kernel"`
-	SysfsPresent bool           `json:"sysfs_present"`
-	Chardevs     []string       `json:"chardevs"`
-	Chips        []gpioChipInfo `json:"chips"`
+	Backend      string          `json:"backend"`
+	ActiveLow    bool            `json:"active_low"`
+	Model        string          `json:"model"`
+	Kernel       string          `json:"kernel"`
+	SysfsPresent bool            `json:"sysfs_present"`
+	Chardevs     []string        `json:"chardevs"`
+	Chips        []gpioChipInfo  `json:"chips"`
 	Pins         []gpioPinResult `json:"pins"`
-	Hinweis      string         `json:"hinweis,omitempty"`
+	Inputs       []gpioInputResult `json:"inputs,omitempty"`
+	Hinweis      string          `json:"hinweis,omitempty"`
+}
+
+// selftestInput liest den aktuellen Pegel eines Eingangs-Pins (export → direction=in → value).
+func selftestInput(pin int, name string, activeLow bool, headerBase int) gpioInputResult {
+	ln := pin + headerBase
+	r := gpioInputResult{Pin: pin, Name: name, Line: ln}
+	base := fmt.Sprintf("/sys/class/gpio/gpio%d", ln)
+	if _, err := os.Stat(base); err != nil {
+		if err := os.WriteFile("/sys/class/gpio/export", []byte(strconv.Itoa(ln)), 0o644); err != nil {
+			r.Detail = "export: " + err.Error()
+			return r
+		}
+		time.Sleep(120 * time.Millisecond)
+	}
+	if err := os.WriteFile(base+"/direction", []byte("in"), 0o644); err != nil {
+		r.Detail = "direction=in: " + err.Error()
+		return r
+	}
+	b, err := os.ReadFile(base + "/value")
+	if err != nil {
+		r.Detail = "value: " + err.Error()
+		return r
+	}
+	high := strings.TrimSpace(string(b)) == "1"
+	r.OK = true
+	if high {
+		r.Level = "HIGH"
+	} else {
+		r.Level = "LOW"
+	}
+	r.Pressed = high
+	if activeLow {
+		r.Pressed = !high
+	}
+	return r
 }
 
 // gpioHeaderBase findet die Basis-Nummer des 40-poligen Header-Controllers (pinctrl-bcm2711 auf
@@ -157,6 +203,12 @@ func runGpioSelftest(cfg *Config) gpioSelftestResult {
 			continue
 		}
 		r.Pins = append(r.Pins, selftestPin(p.pin, p.name, cfg.GPIO.ActiveLow, hb))
+	}
+	if cfg.GPIO.AckPin >= 0 {
+		r.Inputs = append(r.Inputs, selftestInput(cfg.GPIO.AckPin, "Quittier-Taster", cfg.GPIO.AckActiveLow, hb))
+	}
+	if cfg.GPIO.SifaKeyPin >= 0 {
+		r.Inputs = append(r.Inputs, selftestInput(cfg.GPIO.SifaKeyPin, "SIFA-Schlüssel", false, hb))
 	}
 	if !sysfs {
 		r.Hinweis = "Das alte /sys/class/gpio fehlt (neuer Kernel). GPIO liefe hier nur über das character device (/dev/gpiochip*) — dafür bräuchte es ein gpiod-Backend."

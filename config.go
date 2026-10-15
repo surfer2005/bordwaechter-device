@@ -40,16 +40,17 @@ type Config struct {
 		ReAlarmSec        int    `json:"realarm_sec"`   // Ereignis-SIFA: Wiederholung nach Quittieren, solange Ursache besteht
 		DeadmanOn         bool   `json:"deadman_on"`    // allgemeine SIFA (Totmann)
 		DeadmanSec        int    `json:"deadman_sec"`
-		DeadmanPrewarnSec int    `json:"deadman_prewarn_sec"`
+		DeadmanPrewarnSec int    `json:"deadman_prewarn_sec"` // Sek. NACH der grünen Lampe bis zur Hupe (Frist zum Quittieren)
 	} `json:"sifa"`
 
 	GPIO struct {
 		Backend    string `json:"backend"` // "sysfs" | "none"
 		HornPin    int    `json:"horn_pin"`
 		LampPin    int    `json:"lamp_pin"`
-		AckPin     int    `json:"ack_pin"`      // Quittier-Taster (Eingang), -1 = keiner
-		SifaKeyPin int    `json:"sifa_key_pin"` // Schlüsselschalter "SIFA an" (Eingang), -1 = keiner
-		ActiveLow  bool   `json:"active_low"`   // Relais schaltet bei LOW
+		AckPin      int  `json:"ack_pin"`       // Quittier-Taster (Eingang), -1 = keiner
+		AckActiveLow bool `json:"ack_active_low"` // Taster schaltet gegen GND → gedrückt = LOW (statt gegen 3,3V)
+		SifaKeyPin  int  `json:"sifa_key_pin"`  // Schlüsselschalter "SIFA an" (Eingang), -1 = keiner
+		ActiveLow   bool `json:"active_low"`    // Relais schaltet bei LOW
 	} `json:"gpio"`
 
 	Camera struct {
@@ -113,7 +114,7 @@ func defaultConfig() *Config {
 	c.SIFA.TriggerCombo = "either"
 	c.SIFA.ReAlarmSec = 15
 	c.SIFA.DeadmanSec = 30
-	c.SIFA.DeadmanPrewarnSec = 5
+	c.SIFA.DeadmanPrewarnSec = 3
 	c.GPIO.Backend = "none"
 	c.GPIO.HornPin, c.GPIO.LampPin = 17, 27
 	c.GPIO.AckPin, c.GPIO.SifaKeyPin = 22, -1

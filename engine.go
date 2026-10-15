@@ -549,8 +549,10 @@ func (e *Engine) Tick(now time.Time) {
 		e.alarmState = "normal"
 		eventCleared = true
 	}
+	// Ereignis-Alarm: Lampe UND Hupe zusammen bei "alarm". Quittieren → "acked" → BEIDES aus
+	// (Nutzervorgabe). Besteht die Ursache weiter, kommt nach ReAlarmSec wieder "alarm" → erneut beides.
 	eventHorn := e.alarmState == "alarm"
-	eventLamp := e.alarmState == "alarm" || e.alarmState == "acked"
+	eventLamp := e.alarmState == "alarm"
 
 	// Totmann-SIFA (auch erzwungen im Auslöser-Modus "manuell" — dann IST der Totmann die SIFA)
 	deadmanHorn, deadmanLamp := false, false
@@ -560,11 +562,18 @@ func (e *Engine) Tick(now time.Time) {
 			sec = 30
 		}
 		pre := cfg.SIFA.DeadmanPrewarnSec
+		if pre <= 0 {
+			pre = 3
+		}
 		elapsed := now.Sub(e.lastDeadmanAck).Seconds()
+		// Nutzervorgabe: nach Ablauf der Gesamtzeit zuerst die grüne Lampe (Frist zum Quittieren),
+		// erst „Vorlauf" Sekunden SPÄTER die Hupe. Quittieren setzt die Gesamtzeit zurück → Zyklus
+		// beginnt von vorn (Lampe … Hupe … quittieren …).
 		if elapsed >= float64(sec) {
-			deadmanHorn, deadmanLamp = true, true
-		} else if elapsed >= float64(sec-pre) {
 			deadmanLamp = true
+		}
+		if elapsed >= float64(sec+pre) {
+			deadmanHorn = true
 		}
 		st.SifaDeadman = deadmanHorn
 	}
@@ -582,6 +591,7 @@ func (e *Engine) Tick(now time.Time) {
 	gpio := e.gpio
 	hornPin, lampPin := cfg.GPIO.HornPin, cfg.GPIO.LampPin
 	ackPin := cfg.GPIO.AckPin
+	ackActiveLow := cfg.GPIO.AckActiveLow
 	// Snapshot-Bedarf (nur beim Aufsteigen + Kamera)
 	wantSnapshot := eventRising && cfg.Camera.Enabled && cfg.Camera.SnapshotURL != ""
 	snapURL := cfg.Camera.SnapshotURL
@@ -592,9 +602,13 @@ func (e *Engine) Tick(now time.Time) {
 	gpio.SetOutput(hornPin, horn)
 	gpio.SetOutput(lampPin, lamp)
 
-	// Quittier-Taster (steigende Flanke)
+	// Quittier-Taster (Flanke in den „gedrückt"-Zustand)
 	if ackPin >= 0 {
-		pressed, _ := gpio.ReadInput(ackPin)
+		raw, _ := gpio.ReadInput(ackPin) // true = HIGH
+		pressed := raw
+		if ackActiveLow {
+			pressed = !raw // Taster gegen GND: gedrückt = LOW
+		}
 		if pressed && !e.prevAck {
 			e.Ack()
 		}
