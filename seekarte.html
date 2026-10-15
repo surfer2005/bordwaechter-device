@@ -37,13 +37,17 @@
  .side{display:contents}
  .advice{grid-area:advice}.facts{grid-area:facts}.map{grid-area:map;min-height:0}
  @media(max-width:620px){main{grid-template-columns:1fr;grid-template-areas:'advice' 'facts' 'map'}}
- /* Querformat: Infos LINKS (kompakt), Karte RECHTS über die volle Höhe (breit, kein Streifen). */
- @media(orientation:landscape){
-   main{grid-template-columns:minmax(300px,.8fr) 2fr;grid-template-rows:auto 1fr;grid-template-areas:'advice map' 'facts map'}
-   .advice{padding:6px 10px;gap:3px}.gauge{width:176px}.gauge .big .val{font-size:1.9rem}
-   .verdict{margin-top:2px}.verdict .ar{font-size:1.5rem}.verdict .w{font-size:1.15rem}
-   .facts{padding:7px;gap:6px}.fact{padding:6px 9px}
- }
+ /* Querformat (nur im Modus „Querformat"): Infos LINKS (kompakt), Karte RECHTS über die volle Höhe.
+    Hochformat ist der Default (gestapelt). Umschaltbar über den Button, je Gerät gemerkt. */
+ html[data-orient="landscape"] main{grid-template-columns:minmax(300px,.8fr) 2fr;grid-template-rows:auto 1fr;grid-template-areas:'advice map' 'facts map'}
+ html[data-orient="landscape"] .advice{padding:6px 10px;gap:3px}
+ html[data-orient="landscape"] .gauge{width:176px}
+ html[data-orient="landscape"] .gauge .big .val{font-size:1.9rem}
+ html[data-orient="landscape"] .verdict{margin-top:2px}
+ html[data-orient="landscape"] .verdict .ar{font-size:1.5rem}
+ html[data-orient="landscape"] .verdict .w{font-size:1.15rem}
+ html[data-orient="landscape"] .facts{padding:7px;gap:6px}
+ html[data-orient="landscape"] .fact{padding:6px 9px}
  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px}
  .advice{padding:10px 12px 12px;display:flex;flex-direction:column;align-items:center;gap:6px}
  .advice.s-faster{background:linear-gradient(180deg,rgba(240,169,60,.15),transparent 55%)}
@@ -53,6 +57,11 @@
  #arcBg{stroke:var(--arc)}#ticks line{stroke:var(--tick)}#needle line{stroke:var(--ink)}#needle circle{fill:var(--ink)}#tgtMark{stroke:var(--ink)}
  .gauge .big{position:absolute;inset:0;top:15%;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
  .gauge .big .val{font-family:var(--mono);font-weight:700;font-size:2.5rem;line-height:1}.gauge .big .u{color:var(--muted);letter-spacing:.14em;font-size:.64rem;margin-top:2px}
+ .sifabox{text-align:center;font-size:.95rem;margin:4px auto 6px;padding:5px 12px;border-radius:8px}
+ .sifabox b{font-family:var(--mono)}
+ .sifabox.ok{background:var(--tone-green-bg,#1f3b30);color:var(--tone-green-fg,#9fe3c4)}
+ .sifabox.warn{background:#5a3a12;color:#ffcf8f}
+ .sifabox.due{background:#5a1f17;color:#ffb3a8;font-weight:700}
  .verdict{display:flex;align-items:center;gap:11px;font-weight:800;margin-top:6px}.verdict .ar{font-size:2.1rem;line-height:1}.verdict .w{font-size:1.5rem}
  .verdict .de{font-family:var(--mono);font-weight:700;font-size:1.05rem;padding:3px 10px;border-radius:999px;border:1px solid currentColor}
  .s-faster .verdict{color:var(--amber)}.s-slower .verdict{color:var(--blue)}.s-ok .verdict{color:var(--green)}.s-late .verdict{color:var(--red)}
@@ -126,6 +135,7 @@
     <div><div class="shipname" id="shipname">—</div><div class="reg" id="reg"></div></div>
     <span class="kurs" id="kurs"></span>
     <a class="themebtn switchbtn" id="switchview" title="Zur Pilot-Ansicht">Pilot</a>
+    <button class="themebtn" id="orientBtn" title="Hoch-/Querformat umschalten" onclick="cycleOrient()">Hochformat</button>
     <select class="themebtn" id="scalesel" title="Maßstab der Seekarte">
       <option value="11">Übersicht</option>
       <option value="12">Weit</option>
@@ -164,6 +174,7 @@
         </svg>
         <div class="big"><span class="val" id="curVal">0</span><span class="u">KM/H · IST</span></div>
       </div>
+      <div class="sifabox" id="sifabox" style="display:none"></div>
       <div class="verdict" id="verdict"><span class="ar" id="arrow">•</span><span class="w" id="word">—</span><span class="de" id="delta"></span></div>
       <div class="tl" id="tl"></div>
       <div class="abfahrtblock" id="abfahrtblock" style="display:none">
@@ -206,6 +217,21 @@
 function $(id){return document.getElementById(id)}
 var token=new URLSearchParams(location.search).get('token')||''
 ;(function(){var s=document.getElementById('switchview');if(s)s.href='/anzeige?token='+encodeURIComponent(token)})()
+// Ausrichtung: Hochformat (Default) / Querformat / Auto — je Gerät gemerkt.
+function applyOrient(){
+  var o='portrait';try{o=localStorage.getItem('bw_orient')||'portrait'}catch(e){}
+  var eff=o==='auto'?(window.matchMedia('(orientation:landscape)').matches?'landscape':'portrait'):o;
+  document.documentElement.setAttribute('data-orient',eff);
+  var b=document.getElementById('orientBtn');if(b)b.textContent=(o==='auto'?'Auto':(o==='portrait'?'Hochformat':'Querformat'));
+}
+function cycleOrient(){
+  var o='portrait';try{o=localStorage.getItem('bw_orient')||'portrait'}catch(e){}
+  var n={portrait:'landscape',landscape:'auto',auto:'portrait'}[o]||'portrait';
+  try{localStorage.setItem('bw_orient',n)}catch(e){}
+  applyOrient();
+}
+try{window.matchMedia('(orientation:landscape)').addEventListener('change',applyOrient)}catch(e){}
+applyOrient();
 var CX=110,CY=120,R=86,A0=150,A1=390,VMAX=40,fails=0,liveMode='off',camMode='',camBig=false;
 function snapUrl(){ return '/api/snapshot?token='+encodeURIComponent(token)+'&_='+Date.now() }
 function streamUrl(){ return '/api/stream?token='+encodeURIComponent(token) }
@@ -312,6 +338,15 @@ function render(s){
   var adv=$('advice');adv.className='card advice'
   var gauge=$('gaugebox'),vd=$('verdict'),tl=$('tl'),ab=$('abfahrtblock'),hint=$('hint')
   var hasAdvisory=(s.phase==='unterwegs'&&s.verdict&&s.verdict!=='none')
+  var sb=$('sifabox')
+  if(sb){
+    if(s.sifa_active){
+      sb.style.display=''
+      if(s.sifa_deadman_active){ sb.className='sifabox due'; sb.innerHTML='TOTMANN — JETZT DRÜCKEN!' }
+      else if((s.sifa_countdown_sec||0)<=0){ sb.className='sifabox warn'; sb.innerHTML='Totmann: <b>bitte drücken</b>' }
+      else { sb.className='sifabox ok'; sb.innerHTML='Totmann OK · noch <b>'+s.sifa_countdown_sec+' s</b>' }
+    } else sb.style.display='none'
+  }
 
   if(hasAdvisory){
     gauge.style.display='';vd.style.display='flex';tl.style.display='block';ab.style.display='none';hint.style.display='none'

@@ -34,6 +34,8 @@ type Status struct {
 	Alarm        bool    `json:"alarm"`
 	AlarmState   string  `json:"alarm_state"` // normal | alarm | acked
 	SifaDeadman  bool    `json:"sifa_deadman_active"`
+	SifaActive   bool    `json:"sifa_active"`         // Totmann läuft in diesem Modus
+	SifaCountdownSec int `json:"sifa_countdown_sec"`  // Sekunden bis zur nächsten Aufforderung (Lampe), 0 = jetzt
 	AckLevelHigh bool    `json:"ack_level_high"` // aktueller Pegel des Quittier-Eingangs (Diagnose)
 	AckPressed   bool    `json:"ack_pressed"`    // interpretiert (ack_active_low beachtet)
 	Lat          float64 `json:"lat"`
@@ -79,6 +81,7 @@ type Engine struct {
 	lastAck    time.Time
 	// Totmann-SIFA
 	lastDeadmanAck time.Time
+	ackBlinkUntil  time.Time // kurze Lampen-Bestätigung bei vorbeugendem Quittieren
 	// Kamera
 	camHazardUntil time.Time
 	prevAck        bool
@@ -211,10 +214,14 @@ func (e *Engine) CameraHazard() {
 // Ack: quittiert einen laufenden Ereignis-Alarm UND bestätigt Anwesenheit (Totmann).
 func (e *Engine) Ack() {
 	e.mu.Lock()
-	e.lastDeadmanAck = time.Now()
+	now := time.Now()
+	e.lastDeadmanAck = now
 	if e.alarmState == "alarm" || e.alarmState == "acked" {
 		e.alarmState = "acked"
-		e.lastAck = time.Now()
+		e.lastAck = now
+	} else {
+		// Vorbeugendes Quittieren (kein aktiver Ereignis-Alarm): kurze Lampen-Bestätigung „registriert".
+		e.ackBlinkUntil = now.Add(400 * time.Millisecond)
 	}
 	e.mu.Unlock()
 }
@@ -585,10 +592,16 @@ func (e *Engine) Tick(now time.Time) {
 			deadmanHorn = true
 		}
 		st.SifaDeadman = deadmanHorn
+		st.SifaActive = true
+		rem := float64(sec) - elapsed // Zeit bis zur Lampe/Aufforderung
+		if rem < 0 {
+			rem = 0
+		}
+		st.SifaCountdownSec = int(rem + 0.999) // aufrunden, damit „noch 1 s" nicht zu früh 0 wird
 	}
 
 	horn := eventHorn || deadmanHorn || now.Before(e.testHornUntil)
-	lamp := eventLamp || deadmanLamp || now.Before(e.testLampUntil)
+	lamp := eventLamp || deadmanLamp || now.Before(e.testLampUntil) || now.Before(e.ackBlinkUntil)
 	st.Alarm = eventHorn
 	st.AlarmState = e.alarmState
 	st.Horn, st.Lamp = horn, lamp
