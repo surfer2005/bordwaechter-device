@@ -43,6 +43,7 @@
  #arcBg{stroke:var(--arc)}#ticks line{stroke:var(--tick)}#needle line{stroke:var(--ink)}#needle circle{fill:var(--ink)}#tgtMark{stroke:var(--ink)}
  .gauge .big{position:absolute;inset:0;top:16%;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
  .gauge .big .val{font-family:var(--mono);font-weight:700;font-size:3.3rem;line-height:1}.gauge .big .u{color:var(--muted);letter-spacing:.14em;font-size:.68rem;margin-top:3px}
+ .todaykm{text-align:center;color:var(--muted);font-size:.85rem;margin-top:-4px;margin-bottom:6px}.todaykm b{font-family:var(--mono);color:var(--fg);font-weight:700}
  .verdict{display:flex;align-items:center;gap:13px;font-weight:800;margin-top:16px}.verdict .ar{font-size:3rem;line-height:1}.verdict .w{font-size:2rem}
  .verdict .de{font-family:var(--mono);font-weight:700;font-size:1.05rem;padding:3px 10px;border-radius:999px;border:1px solid currentColor}
  .s-faster .verdict{color:var(--amber)}.s-slower .verdict{color:var(--blue)}.s-ok .verdict{color:var(--green)}.s-late .verdict{color:var(--red)}
@@ -124,6 +125,7 @@
         </svg>
         <div class="big"><span class="val" id="curVal">0</span><span class="u">KM/H · IST</span></div>
       </div>
+      <div class="todaykm" id="todaykm" style="display:none"></div>
       <div class="verdict" id="verdict"><span class="ar" id="arrow">•</span><span class="w" id="word">—</span><span class="de" id="delta"></span></div>
       <div class="tl" id="tl"></div>
       <div class="abfahrtblock" id="abfahrtblock" style="display:none">
@@ -244,11 +246,13 @@ function render(s){
   else{bf.classList.add('up');bf.textContent=(-buf)+' min zu spät'}
 
   var adv=$('advice');adv.className='card advice'
-  var gauge=$('gaugebox'),vd=$('verdict'),tl=$('tl'),ab=$('abfahrtblock'),hint=$('hint')
+  var gauge=$('gaugebox'),vd=$('verdict'),tl=$('tl'),ab=$('abfahrtblock'),hint=$('hint'),tk=$('todaykm')
   var hasAdvisory=(s.phase==='unterwegs'&&s.verdict&&s.verdict!=='none')
+  if(s.today_km>0){ tk.innerHTML='Heute <b>'+fmt1(s.today_km)+'</b> km' }
 
   if(hasAdvisory){
     gauge.style.display='';vd.style.display='flex';tl.style.display='block';ab.style.display='none';hint.style.display='none'
+    tk.style.display=(s.today_km>0?'':'none')
     var ist=s.ist_kmh||0,tgt=s.soll_kmh,diff=s.diff_kmh
     $('curVal').textContent=fmt1(ist)
     setNeedle(ist);$('arcFill').setAttribute('d',arc(A0,angOf(ist),R));setTarget(tgt)
@@ -268,12 +272,12 @@ function render(s){
     else if(s.verdict==='late'){tl.innerHTML='Auch bei Vollgas (<b>'+fmt1(s.max_kmh||40)+' km/h</b>) rund <b>'+(s.delay_min||0)+' min</b> zu spät'}
     else{tl.innerHTML='Sollgeschwindigkeit <b>'+(tgt>0?fmt1(tgt)+' km/h':'—')+'</b>, um <b>'+(s.soll||'—')+'</b> am Ziel zu sein'}
   } else if(s.phase==='vor_abfahrt'){
-    gauge.style.display='none';vd.style.display='none';tl.style.display='none';hint.style.display='none';ab.style.display='flex'
+    gauge.style.display='none';vd.style.display='none';tl.style.display='none';hint.style.display='none';ab.style.display='flex';tk.style.display='none'
     $('abfzeit').textContent=s.abfahrt||'—:—'
     $('abfin').textContent=(s.warten_min>=0?('in '+s.warten_min+' min'):'')
     $('abfziel').textContent=(s.from&&s.to)?(s.from+' → '+s.to):''
   } else {
-    gauge.style.display='none';vd.style.display='none';tl.style.display='none';ab.style.display='none';hint.style.display='block'
+    gauge.style.display='none';vd.style.display='none';tl.style.display='none';ab.style.display='none';hint.style.display='block';tk.style.display='none'
     hint.textContent=s.hint||'Keine Fahrplandaten für die Empfehlung.'
   }
 
@@ -282,7 +286,7 @@ function render(s){
   $('streambtn').style.display = s.stream_configured ? '' : 'none'
   var cam=$('camwrap')
   if(s.cam_configured && (liveMode!=='off' || s.camera_hazard)){
-    gauge.style.display='none';vd.style.display='none';tl.style.display='none';ab.style.display='none';hint.style.display='none'
+    gauge.style.display='none';vd.style.display='none';tl.style.display='none';ab.style.display='none';hint.style.display='none';tk.style.display='none'
     cam.style.display='grid'
     // Bei Alarm immer Standbild (ein Hinweis-Snapshot), sonst der gewählte Modus.
     var mode = s.camera_hazard ? 'snapshot' : (liveMode==='off' ? 'snapshot' : liveMode)

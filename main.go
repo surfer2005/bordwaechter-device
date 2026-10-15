@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const version = "0.1.47"
+const version = "0.1.48"
 
 type App struct {
 	mu     sync.Mutex
@@ -111,6 +111,22 @@ func (a *App) tickLoop() {
 	}
 }
 
+// kmLoop: den Tageskilometer-Stand beim Start von der Platte übernehmen und danach periodisch sichern,
+// damit ein Neustart mitten am Tag den Zähler nicht verliert.
+func (a *App) kmLoop() {
+	if d, km := loadTodayKm(); d != "" {
+		a.eng.SeedTodayKm(d, km)
+	}
+	t := time.NewTicker(30 * time.Second)
+	defer t.Stop()
+	for range t.C {
+		d, km := a.eng.TodayKm()
+		if d != "" {
+			saveTodayKm(d, km)
+		}
+	}
+}
+
 func main() {
 	cfg := loadConfig()
 	manual := &ManualGPS{}
@@ -125,6 +141,7 @@ func main() {
 	go app.detectLoop() // Objekterkennung (nur aktiv, wenn cfg.Detect.Enabled)
 	go app.infoLoop()   // Wetter + Pegel für die Anzeige (nur aktiv, wenn cfg.Info.Weather/Pegel)
 	go app.sysLoop()    // Pi-Zustand (CPU-Temp/Last/RAM/Platte) für die HA-Integration
+	go app.kmLoop()     // Tageskilometer vom/auf die Platte (reboot-fest)
 
 	log.Printf("Bordwächter %s — lokale Oberfläche auf %s (GPS-Quelle: %s, GPIO: %s)",
 		version, cfg.Listen, cfg.GPS.Source, cfg.GPIO.Backend)

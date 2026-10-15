@@ -22,6 +22,7 @@ type Status struct {
 	RestMin      int     `json:"rest_min"`
 	RemainKm     float64 `json:"remain_km"`
 	IstKmh       float64 `json:"ist_kmh"`
+	TodayKm      float64 `json:"today_km"` // heute gefahrene Strecke (aus GPS-Bewegung, Reset um Mitternacht)
 	SollKmh      float64 `json:"soll_kmh"`
 	Verdict      string  `json:"verdict"` // ok | faster | slower | ankunft | late | none
 	DiffKmh      float64 `json:"diff_kmh"`
@@ -68,6 +69,8 @@ type Engine struct {
 	pos         Position
 	lastPos     Position
 	lastHeading float64 // zuletzt abgeleiteter Kurs (wird bei Stillstand gehalten)
+	todayKm     float64 // heute aufsummierte Fahrstrecke
+	todayDate   string  // Ortstag (YYYY-MM-DD), zu dem todayKm zählt
 
 	// Ereignis-SIFA
 	alarmState string // normal | alarm | acked
@@ -116,9 +119,46 @@ func (e *Engine) SetBundle(b *Bundle) {
 	e.mu.Unlock()
 }
 
+// rolloverTodayLocked setzt den Tageszähler zurück, wenn ein neuer Ortstag begonnen hat.
+func (e *Engine) rolloverTodayLocked(now time.Time) {
+	d := now.Local().Format("2006-01-02")
+	if e.todayDate != d {
+		e.todayDate = d
+		e.todayKm = 0
+	}
+}
+
+// TodayKm liefert Tag + Stand für die Persistenz (App schreibt sie auf Platte).
+func (e *Engine) TodayKm() (string, float64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.todayDate, e.todayKm
+}
+
+// SeedTodayKm übernimmt einen gespeicherten Stand beim Start — nur wenn er zum heutigen Ortstag gehört.
+func (e *Engine) SeedTodayKm(date string, km float64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if date == time.Now().Local().Format("2006-01-02") && km > 0 {
+		e.todayDate = date
+		e.todayKm = km
+	}
+}
+
 func (e *Engine) SetPosition(p Position) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	// Tageskilometer: plausiblen Weg zwischen zwei gültigen Fixes aufsummieren (vor der Speed-Ableitung,
+	// da e.lastPos gleich überschrieben wird). GPS-Zittern im Stand (<4 m) und Teleport-Sprünge
+	// (abgeleitete Geschwindigkeit > 120 km/h) werden ausgelassen.
+	if p.Valid && e.lastPos.Valid {
+		e.rolloverTodayLocked(p.TS)
+		d := haversineKm(e.lastPos.Lat, e.lastPos.Lng, p.Lat, p.Lng)
+		dt := p.TS.Sub(e.lastPos.TS).Hours()
+		if d > 0.004 && dt > 0 && d/dt < 120 {
+			e.todayKm += d
+		}
+	}
 	// Fehlt eine Geschwindigkeit, aus der Bewegung ableiten (robuster als unsicheres Speed-Register).
 	if p.SpeedKmh == 0 && e.lastPos.Valid && p.Valid {
 		dt := p.TS.Sub(e.lastPos.TS).Hours()
@@ -536,6 +576,8 @@ func (e *Engine) Tick(now time.Time) {
 	st.Horn, st.Lamp = horn, lamp
 	st.Version = version
 	st.UpdatedAt = now.Format(time.RFC3339)
+	e.rolloverTodayLocked(now)
+	st.TodayKm = round1(e.todayKm)
 	e.status = st
 	gpio := e.gpio
 	hornPin, lampPin := cfg.GPIO.HornPin, cfg.GPIO.LampPin

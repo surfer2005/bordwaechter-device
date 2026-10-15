@@ -211,3 +211,45 @@ func loadBundle() *Bundle {
 	}
 	return &b
 }
+
+// Tageskilometer-Persistenz: Tag + Stand auf die Platte, damit ein Neustart mitten am Tag den
+// Zähler nicht verliert. Gilt nur, wenn der gespeicherte Tag dem heutigen Ortstag entspricht.
+type todayKmFile struct {
+	Date string  `json:"date"`
+	Km   float64 `json:"km"`
+}
+
+func kmPath() string {
+	if p := os.Getenv("BORDWAECHTER_KM"); p != "" {
+		return p
+	}
+	if _, err := os.Stat("/etc/bordwaechter"); err == nil {
+		return "/etc/bordwaechter/today_km.json"
+	}
+	return "today_km.json"
+}
+
+func saveTodayKm(date string, km float64) {
+	data, err := json.Marshal(todayKmFile{Date: date, Km: km})
+	if err != nil {
+		return
+	}
+	p := kmPath()
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	tmp := p + ".tmp"
+	if os.WriteFile(tmp, data, 0o600) == nil {
+		_ = os.Rename(tmp, p)
+	}
+}
+
+func loadTodayKm() (string, float64) {
+	data, err := os.ReadFile(kmPath())
+	if err != nil {
+		return "", 0
+	}
+	var f todayKmFile
+	if json.Unmarshal(data, &f) != nil {
+		return "", 0
+	}
+	return f.Date, f.Km
+}

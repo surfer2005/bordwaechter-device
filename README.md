@@ -200,3 +200,10 @@ Pilot- und Seekarten-Ansicht zeigen oben eine Leiste mit **Wetter** (Temperatur,
 KAI** — Wetter von **Open-Meteo**, Pegel von **PEGELONLINE** —, also identische Zahlen, **ohne Eingriff
 ins Pilot-Bundle**; es läuft mit UND ohne KAI-Verbindung. Konfig: *Wetter & Pegel (Anzeige)* (an/aus,
 Koordinaten, Pegel-Station/-Name, Intervall). Vorgabe: beides an, Bodensee/Konstanz.
+
+## Tageskilometer
+
+Unter dem Tacho steht **„Heute X,X km"** — die heute gefahrene Strecke des Schiffs, aus der
+GPS-Bewegung aufsummiert (GPS-Zittern im Stand und Teleport-Sprünge werden ausgelassen). **Reset um
+Mitternacht** (Ortszeit); der Stand wird auf die Platte gesichert (`today_km.json`) und übersteht
+einen Neustart mitten am Tag. Auch als Wert `today_km` im Status (→ HA-Sensor „Tageskilometer").
