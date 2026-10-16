@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.78"
+const version = "0.1.79"
 
 type App struct {
 	mu     sync.Mutex
@@ -139,7 +139,7 @@ func (a *App) bundleLoop() {
 	}
 	if k := a.getKai(); k != nil && a.getCfg().EdgeToken != "" {
 		gh, gp := a.gpsHostForHello()
-		if hr, err := k.Hello(version, a.getSys(), gh, gp); err == nil && hr != nil {
+		if hr, err := k.Hello(version, a.getSys(), gh, gp, a.sifaBlock()); err == nil && hr != nil {
 			kaiReachable = true
 			a.setReportScan(hr.ReportScan)
 			a.setReportTeltonika(hr.ReportTeltonika)
@@ -161,6 +161,31 @@ func (a *App) bundleLoop() {
 	}
 }
 
+// sifaBlock baut den SIFA-/Totmann-Zustand für den Heartbeat aus dem Engine-Status + der SIFA-Konfig:
+// Hupe/Leuchttaster/Quittier-Taster an/aus, Zustand (ok|vorwarnung|alarm), Zeit bis zur nächsten
+// Auslösung (Deadman-Countdown) sowie die konfigurierten Intervalle. KAI zeigt ihn je Bordwächter.
+func (a *App) sifaBlock() map[string]any {
+	st := a.eng.Status()
+	cfg := a.getCfg()
+	state := "ok"
+	if st.AlarmState == "alarm" {
+		state = "alarm"
+	} else if st.SifaActive && cfg.SIFA.DeadmanPrewarnSec > 0 && st.SifaCountdownSec > 0 && st.SifaCountdownSec <= cfg.SIFA.DeadmanPrewarnSec {
+		state = "vorwarnung"
+	}
+	return map[string]any{
+		"active":      st.SifaActive || st.AlarmState != "normal",
+		"horn":        st.Horn,
+		"lamp":        st.Lamp,
+		"ack":         st.AckPressed,
+		"state":       state,
+		"next_sec":    st.SifaCountdownSec,
+		"deadman_sec": cfg.SIFA.DeadmanSec,
+		"prewarn_sec": cfg.SIFA.DeadmanPrewarnSec,
+		"rearm_sec":   cfg.SIFA.ReAlarmSec,
+	}
+}
+
 // heartbeatLoop meldet KAI minütlich Version + Gesundheits-Block (CPU-Temp/Last/RAM/Platte/Laufzeit),
 // damit das Monitoring in KAI online/offline und den Zustand sieht, ohne an Bord zu gehen. Nur
 // ausgehend (wie alles hier) und best effort — ein Fehlschlag wird geloggt, nicht weitergereicht.
@@ -169,7 +194,7 @@ func (a *App) heartbeatLoop() {
 		cfg := a.getCfg()
 		if k := a.getKai(); k != nil && cfg.EdgeToken != "" {
 			gh, gp := a.gpsHostForHello()
-			if hr, err := k.Hello(version, a.getSys(), gh, gp); err != nil {
+			if hr, err := k.Hello(version, a.getSys(), gh, gp, a.sifaBlock()); err != nil {
 				kaiReachable = false
 				log.Printf("heartbeat: %v", err)
 			} else if hr != nil {

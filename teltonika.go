@@ -22,6 +22,13 @@ type tRegDef struct {
 	unit        string
 }
 
+// teltonikaCfg bündelt die zentral in KAI gepflegte Teltonika-Modbus-Konfig (Registerkarte + Adresse).
+type teltonikaCfg struct {
+	Regs []tRegDef
+	Host string
+	Port int
+}
+
 // Registerkarte aus der Teltonika-Modbus-Konfig des Nutzers (slave 1). GPS lat/lng/speed bewusst weg
 // (holt gps.go), ebenso die reinen Zeit-Strings (KAI hat seine eigene Uhr).
 var teltonikaRegs = []tRegDef{
@@ -62,16 +69,27 @@ func (a *App) routerLoop() {
 	for {
 		cfg := a.getCfg()
 		k := a.getKai()
-		if k != nil && cfg.EdgeToken != "" && cfg.GPS.Source == "teltonika" && strings.TrimSpace(cfg.GPS.Host) != "" && a.getReportTeltonika() {
-			// Registerliste zentral aus KAI; eingebaute Liste nur als Rückfall (autark, falls KAI weg).
+		if k != nil && cfg.EdgeToken != "" && a.getReportTeltonika() {
+			// Registerliste UND Modbus-Adresse zentral aus KAI; eingebaute Liste + lokale GPS-Konfig als
+			// Rückfall (autark, falls KAI weg). So lässt sich der Router rein in KAI einrichten.
 			regs := teltonikaRegs
-			if kr, err := k.GetTeltonikaConfig(); err == nil && len(kr) > 0 {
-				regs = kr
+			host := strings.TrimSpace(cfg.GPS.Host)
+			port := cfg.GPS.Port
+			if kc, err := k.GetTeltonikaConfig(); err == nil {
+				if len(kc.Regs) > 0 {
+					regs = kc.Regs
+				}
+				if strings.TrimSpace(kc.Host) != "" {
+					host = strings.TrimSpace(kc.Host)
+					port = kc.Port
+				}
 			}
-			if rr := readRouter(cfg, regs); len(rr) > 0 {
-				if err := k.PostRouterTelemetry(rr); err != nil {
-					log.Printf("router: %v", err)
-					logEvent("warn", "Router-Telemetrie konnte nicht gesendet werden: "+err.Error())
+			if host != "" {
+				if rr := readRouter(cfg, regs, host, port); len(rr) > 0 {
+					if err := k.PostRouterTelemetry(rr); err != nil {
+						log.Printf("router: %v", err)
+						logEvent("warn", "Router-Telemetrie konnte nicht gesendet werden: "+err.Error())
+					}
 				}
 			}
 		}
@@ -79,13 +97,14 @@ func (a *App) routerLoop() {
 	}
 }
 
-func readRouter(cfg *Config, regs []tRegDef) []routerReading {
-	host := cfg.GPS.Host
-	port := cfg.GPS.Port
+func readRouter(cfg *Config, regs []tRegDef, host string, port int) []routerReading {
 	if port == 0 {
 		port = 502
 	}
 	unit := cfg.GPS.Unit
+	if unit == 0 {
+		unit = 1 // Teltonika-Router: Slave 1
+	}
 	to := 5 * time.Second
 	var out []routerReading
 	for _, r := range regs {

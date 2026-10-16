@@ -158,8 +158,9 @@ type HelloResp struct {
 	ReportTeltonika bool `json:"report_teltonika"` // Teltonika-Router-Diagnose an/aus (zentral)
 }
 
-// Hello: Herzschlag an KAI. gpsHost/gpsPort werden mitgemeldet (für die Teltonika-Übersicht / Router-IP).
-func (k *KaiClient) Hello(version string, sys *SystemData, gpsHost string, gpsPort int) (*HelloResp, error) {
+// Hello: Herzschlag an KAI. gpsHost/gpsPort werden mitgemeldet (für die Teltonika-Übersicht / Router-IP),
+// sifa (optional) trägt den SIFA-/Totmann-Zustand (Hupe/Leuchttaster/Quittier-Taster + Deadman-Countdown).
+func (k *KaiClient) Hello(version string, sys *SystemData, gpsHost string, gpsPort int, sifa map[string]any) (*HelloResp, error) {
 	body := map[string]any{"version": version, "kind": "bordwaechter"}
 	if sys != nil {
 		body["system"] = sys
@@ -167,6 +168,9 @@ func (k *KaiClient) Hello(version string, sys *SystemData, gpsHost string, gpsPo
 	if gpsHost != "" {
 		body["gps_host"] = gpsHost
 		body["gps_port"] = gpsPort
+	}
+	if sifa != nil {
+		body["sifa"] = sifa
 	}
 	data, _, err := k.do("POST", "/api/edge/hello", body)
 	if err != nil {
@@ -191,15 +195,17 @@ func (k *KaiClient) PostLog(entries []logEntry) error {
 
 // GetTeltonikaConfig holt die Teltonika-Registerkarte aus KAI (zentral gepflegt). Leere/Fehler-Antwort
 // → der Aufrufer nimmt die eingebaute Liste als Rückfall (autark).
-func (k *KaiClient) GetTeltonikaConfig() ([]tRegDef, error) {
+func (k *KaiClient) GetTeltonikaConfig() (teltonikaCfg, error) {
 	data, code, err := k.do("GET", "/api/edge/teltonika-config", nil)
 	if err != nil {
-		return nil, err
+		return teltonikaCfg{}, err
 	}
 	if code != 200 {
-		return nil, fmt.Errorf("teltonika-config http %d", code)
+		return teltonikaCfg{}, fmt.Errorf("teltonika-config http %d", code)
 	}
 	var resp struct {
+		Host      string `json:"host"`
+		Port      int    `json:"port"`
 		Registers []struct {
 			Measure string  `json:"measure"`
 			Label   string  `json:"label"`
@@ -211,7 +217,7 @@ func (k *KaiClient) GetTeltonikaConfig() ([]tRegDef, error) {
 		} `json:"registers"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, err
+		return teltonikaCfg{}, err
 	}
 	out := make([]tRegDef, 0, len(resp.Registers))
 	for _, r := range resp.Registers {
@@ -225,7 +231,7 @@ func (k *KaiClient) GetTeltonikaConfig() ([]tRegDef, error) {
 		}
 		out = append(out, tRegDef{addr: r.Address, count: cnt, typ: r.Type, scale: r.Scale, measure: r.Measure, label: r.Label, unit: r.Unit})
 	}
-	return out, nil
+	return teltonikaCfg{Regs: out, Host: resp.Host, Port: resp.Port}, nil
 }
 
 func (k *KaiClient) PostPosition(p Position) error {
