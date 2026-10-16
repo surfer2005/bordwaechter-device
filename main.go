@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.77"
+const version = "0.1.78"
 
 type App struct {
 	mu     sync.Mutex
@@ -23,6 +23,7 @@ type App struct {
 	sysAt  time.Time
 	net    *NetworkData
 	scan   *bool // Netz-Scan-Schalter aus KAI (hello-Antwort); nil = noch nicht gemeldet → cfg.ReportScan
+	telt   *bool // Teltonika-Router-Diagnose an/aus aus KAI; nil = noch nicht gemeldet → an (bei GPS=teltonika)
 }
 
 // getReportScan: maßgeblich ist der KAI-Schalter (hello-Antwort); solange KAI noch nichts gemeldet hat,
@@ -36,6 +37,26 @@ func (a *App) getReportScan() bool {
 	return a.cfg.ReportScan
 }
 func (a *App) setReportScan(v bool) { a.mu.Lock(); a.scan = &v; a.mu.Unlock() }
+
+// getReportTeltonika: KAI-Schalter; bis KAI etwas meldet, ist die Router-Diagnose an (Rückfall).
+func (a *App) getReportTeltonika() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.telt != nil {
+		return *a.telt
+	}
+	return true
+}
+func (a *App) setReportTeltonika(v bool) { a.mu.Lock(); a.telt = &v; a.mu.Unlock() }
+
+// gpsHostForHello: die Router-/Modbus-Adresse, wenn GPS per Teltonika läuft (für die Teltonika-Übersicht).
+func (a *App) gpsHostForHello() (string, int) {
+	c := a.getCfg()
+	if c.GPS.Source == "teltonika" {
+		return c.GPS.Host, c.GPS.Port
+	}
+	return "", 0
+}
 
 func (a *App) getCfg() *Config     { a.mu.Lock(); defer a.mu.Unlock(); return a.cfg }
 func (a *App) getKai() *KaiClient  { a.mu.Lock(); defer a.mu.Unlock(); return a.kai }
@@ -117,8 +138,13 @@ func (a *App) bundleLoop() {
 		log.Printf("bundle: aus Platten-Cache geladen (%s)", b.Date)
 	}
 	if k := a.getKai(); k != nil && a.getCfg().EdgeToken != "" {
-		if hr, err := k.Hello(version, a.getSys()); err == nil && hr != nil {
+		gh, gp := a.gpsHostForHello()
+		if hr, err := k.Hello(version, a.getSys(), gh, gp); err == nil && hr != nil {
+			kaiReachable = true
 			a.setReportScan(hr.ReportScan)
+			a.setReportTeltonika(hr.ReportTeltonika)
+		} else {
+			kaiReachable = false
 		}
 	}
 	for {
@@ -142,10 +168,14 @@ func (a *App) heartbeatLoop() {
 	for {
 		cfg := a.getCfg()
 		if k := a.getKai(); k != nil && cfg.EdgeToken != "" {
-			if hr, err := k.Hello(version, a.getSys()); err != nil {
+			gh, gp := a.gpsHostForHello()
+			if hr, err := k.Hello(version, a.getSys(), gh, gp); err != nil {
+				kaiReachable = false
 				log.Printf("heartbeat: %v", err)
 			} else if hr != nil {
-				a.setReportScan(hr.ReportScan) // Netz-Scan-Schalter aus KAI übernehmen
+				kaiReachable = true
+				a.setReportScan(hr.ReportScan)           // Netz-Scan-Schalter aus KAI
+				a.setReportTeltonika(hr.ReportTeltonika)  // Teltonika-Schalter aus KAI
 			}
 		}
 		time.Sleep(60 * time.Second)
@@ -214,6 +244,7 @@ func main() {
 	go app.infoLoop()   // Wetter + Pegel für die Anzeige (nur aktiv, wenn cfg.Info.Weather/Pegel)
 	go app.sysLoop()    // Pi-Zustand (CPU-Temp/Last/RAM/Platte) für die HA-Integration
 	go app.heartbeatLoop()  // minütlicher Herzschlag an KAI (Version + Gesundheit fürs Monitoring)
+	go app.devlogLoop()     // Geräte-Protokoll (Ereignisse/Fehler, offline gepuffert) → KAI
 	go app.smartmeterLoop() // Smartmeter-Bridge: Zähler per Modbus lesen (Konfig aus KAI) → an KAI pushen
 	go app.netScanLoop()    // Netz-Lebenszeichen: Scan-Ziele aus KAI, Ping+ARP, Status zurück (Asset Manager)
 	go app.routerLoop()     // Teltonika-Router-Diagnose per Modbus → KAI (Asset Manager/Monitoring)

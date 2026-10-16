@@ -522,9 +522,11 @@ func (a *App) routes() *http.ServeMux {
 			return
 		}
 		if err := selfUpdate(); err != nil {
+			logEvent("error", "Aktualisierung fehlgeschlagen: "+err.Error())
 			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 			return
 		}
+		logEvent("info", "Aktualisierung geladen, Neustart (bisher Version "+version+")")
 		writeJSON(w, map[string]any{"ok": true})
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()

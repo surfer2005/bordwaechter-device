@@ -153,14 +153,20 @@ func (k *KaiClient) GetNetwork() (*NetworkData, error) {
 // (CPU-Temp/Last/RAM/Platte/Laufzeit), damit KAI die Gerätegesundheit zentral anzeigen kann. Der
 // Block wird ohnehin für die HA-Integration gemessen (system.go), hier reist er nur mit.
 type HelloResp struct {
-	OK         bool `json:"ok"`
-	ReportScan bool `json:"report_scan"` // Netz-Scan-Schalter aus KAI (zentral umlegbar)
+	OK              bool `json:"ok"`
+	ReportScan      bool `json:"report_scan"`      // Netz-Scan-Schalter aus KAI (zentral umlegbar)
+	ReportTeltonika bool `json:"report_teltonika"` // Teltonika-Router-Diagnose an/aus (zentral)
 }
 
-func (k *KaiClient) Hello(version string, sys *SystemData) (*HelloResp, error) {
+// Hello: Herzschlag an KAI. gpsHost/gpsPort werden mitgemeldet (für die Teltonika-Übersicht / Router-IP).
+func (k *KaiClient) Hello(version string, sys *SystemData, gpsHost string, gpsPort int) (*HelloResp, error) {
 	body := map[string]any{"version": version, "kind": "bordwaechter"}
 	if sys != nil {
 		body["system"] = sys
+	}
+	if gpsHost != "" {
+		body["gps_host"] = gpsHost
+		body["gps_port"] = gpsPort
 	}
 	data, _, err := k.do("POST", "/api/edge/hello", body)
 	if err != nil {
@@ -169,6 +175,18 @@ func (k *KaiClient) Hello(version string, sys *SystemData) (*HelloResp, error) {
 	var hr HelloResp
 	_ = json.Unmarshal(data, &hr)
 	return &hr, nil
+}
+
+// PostLog meldet gepufferte Geräte-Protokoll-Einträge an KAI.
+func (k *KaiClient) PostLog(entries []logEntry) error {
+	_, code, err := k.do("POST", "/api/edge/log", map[string]any{"entries": entries})
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("log http %d", code)
+	}
+	return nil
 }
 
 // GetTeltonikaConfig holt die Teltonika-Registerkarte aus KAI (zentral gepflegt). Leere/Fehler-Antwort

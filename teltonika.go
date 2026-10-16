@@ -62,7 +62,7 @@ func (a *App) routerLoop() {
 	for {
 		cfg := a.getCfg()
 		k := a.getKai()
-		if k != nil && cfg.EdgeToken != "" && cfg.GPS.Source == "teltonika" && strings.TrimSpace(cfg.GPS.Host) != "" {
+		if k != nil && cfg.EdgeToken != "" && cfg.GPS.Source == "teltonika" && strings.TrimSpace(cfg.GPS.Host) != "" && a.getReportTeltonika() {
 			// Registerliste zentral aus KAI; eingebaute Liste nur als Rückfall (autark, falls KAI weg).
 			regs := teltonikaRegs
 			if kr, err := k.GetTeltonikaConfig(); err == nil && len(kr) > 0 {
@@ -71,6 +71,7 @@ func (a *App) routerLoop() {
 			if rr := readRouter(cfg, regs); len(rr) > 0 {
 				if err := k.PostRouterTelemetry(rr); err != nil {
 					log.Printf("router: %v", err)
+					logEvent("warn", "Router-Telemetrie konnte nicht gesendet werden: "+err.Error())
 				}
 			}
 		}
