@@ -152,13 +152,62 @@ func (k *KaiClient) GetNetwork() (*NetworkData, error) {
 // Hello ist der Herzschlag an KAI: meldet die Version und — sofern vorhanden — den system-Block
 // (CPU-Temp/Last/RAM/Platte/Laufzeit), damit KAI die Gerätegesundheit zentral anzeigen kann. Der
 // Block wird ohnehin für die HA-Integration gemessen (system.go), hier reist er nur mit.
-func (k *KaiClient) Hello(version string, sys *SystemData) error {
+type HelloResp struct {
+	OK         bool `json:"ok"`
+	ReportScan bool `json:"report_scan"` // Netz-Scan-Schalter aus KAI (zentral umlegbar)
+}
+
+func (k *KaiClient) Hello(version string, sys *SystemData) (*HelloResp, error) {
 	body := map[string]any{"version": version, "kind": "bordwaechter"}
 	if sys != nil {
 		body["system"] = sys
 	}
-	_, _, err := k.do("POST", "/api/edge/hello", body)
-	return err
+	data, _, err := k.do("POST", "/api/edge/hello", body)
+	if err != nil {
+		return nil, err
+	}
+	var hr HelloResp
+	_ = json.Unmarshal(data, &hr)
+	return &hr, nil
+}
+
+// GetTeltonikaConfig holt die Teltonika-Registerkarte aus KAI (zentral gepflegt). Leere/Fehler-Antwort
+// → der Aufrufer nimmt die eingebaute Liste als Rückfall (autark).
+func (k *KaiClient) GetTeltonikaConfig() ([]tRegDef, error) {
+	data, code, err := k.do("GET", "/api/edge/teltonika-config", nil)
+	if err != nil {
+		return nil, err
+	}
+	if code != 200 {
+		return nil, fmt.Errorf("teltonika-config http %d", code)
+	}
+	var resp struct {
+		Registers []struct {
+			Measure string  `json:"measure"`
+			Label   string  `json:"label"`
+			Address int     `json:"address"`
+			Count   int     `json:"count"`
+			Type    string  `json:"type"`
+			Unit    string  `json:"unit"`
+			Scale   float64 `json:"scale"`
+		} `json:"registers"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, err
+	}
+	out := make([]tRegDef, 0, len(resp.Registers))
+	for _, r := range resp.Registers {
+		cnt := r.Count
+		if cnt <= 0 {
+			if r.Type == "uint16" {
+				cnt = 1
+			} else {
+				cnt = 2
+			}
+		}
+		out = append(out, tRegDef{addr: r.Address, count: cnt, typ: r.Type, scale: r.Scale, measure: r.Measure, label: r.Label, unit: r.Unit})
+	}
+	return out, nil
 }
 
 func (k *KaiClient) PostPosition(p Position) error {

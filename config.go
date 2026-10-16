@@ -12,7 +12,7 @@ import (
 type Config struct {
 	KaiBaseURL   string `json:"kai_base_url"` // z. B. https://kai-bsb.de  (Gerät ruft <base>/api/edge/… )
 	EdgeToken    string `json:"edge_token"`   // je Gerät, aus KAI-Verwaltung
-	AMKey        string `json:"am_key"`       // Asset-Manager-/HA-Schlüssel für den Netz-Scan (X-API-Key); leer = Scan aus
+	ReportScan   bool   `json:"report_scan"`  // Netz-Scan (Geräte-Lebenszeichen → Asset Manager): ja/nein; nutzt den Edge-Token
 	ShipID       int    `json:"ship_id"`      // optional; 0 = aus dem Bundle übernehmen
 	SendPosition bool   `json:"send_position"` // GPS direkt an KAI melden (aus, falls HA das liefert)
 	Listen       string `json:"listen"`        // lokale UI/API, z. B. ":8090"
@@ -114,6 +114,11 @@ func defaultConfig() *Config {
 		Listen:           ":8090",
 		SendPosition:     true,
 		BundleRefreshSec: 300,
+		// Einheitliches SSH-Passwort für die Erstinstallation (Benutzer "pi"). Wird beim Start
+		// angewandt (remote.go applySSHPassword), damit man auf JEDES Gerät zuverlässig per SSH kommt —
+		// auch ohne/vor dem Flashen mit dem Image (das es ebenfalls setzt). Über die Konfig-Seite
+		// änderbar; der geänderte Wert wird gespeichert und bleibt dann erhalten.
+		SSHPassword: "kai-terminal",
 	}
 	c.GPS.Source = "manual"
 	c.GPS.Device = "/dev/ttyACM0"

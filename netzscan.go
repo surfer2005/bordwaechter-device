@@ -3,14 +3,14 @@ package main
 // Netz-Lebenszeichen: der Bordwächter sitzt im Schiffsnetz und prüft, welche Geräte leben — statt der
 // Home-Assistant-Netzwerk-Integration. Er holt die Scan-Ziele aus KAI (GET /api/asset-manager/
 // scan-targets), pingt sie (+ ARP-Tabelle für DHCP-Geräte) und meldet online/offline zurück
-// (POST /api/asset-manager/ha-connectivity). Beide Endpunkte mit dem Asset-Manager-/HA-Schlüssel
-// (X-API-Key, cfg.AMKey). Nur lesend/ausgehend, best effort; leerer Schlüssel = Scan aus.
+// (POST /api/asset-manager/ha-connectivity). Beide Aufrufe über den Edge-Token (KaiClient.do; die
+// Asset-Manager-Endpunkte akzeptieren ihn). AN/AUS steuert der zentrale Schalter in KAI
+// (hello-Antwort report_scan, s. main.go) — ohne lokalen Schlüssel. Nur lesend/ausgehend, best effort.
 
 import (
-	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -30,22 +30,14 @@ type connEntry struct {
 	Mac      string `json:"mac,omitempty"`
 }
 
-// amBase schneidet ein evtl. mitkonfiguriertes /api(/edge)-Suffix ab (wie kai.go), damit die
-// Asset-Manager-Pfade korrekt an die KAI-Wurzel gehängt werden.
-func amBase(cfg *Config) string {
-	b := strings.TrimRight(strings.TrimSpace(cfg.KaiBaseURL), "/")
-	for _, suf := range []string{"/api/edge", "/api"} {
-		b = strings.TrimSuffix(b, suf)
-	}
-	return b
-}
-
 func (a *App) netScanLoop() {
 	time.Sleep(40 * time.Second) // Netz erst hochkommen lassen
 	for {
 		cfg := a.getCfg()
-		if strings.TrimSpace(cfg.AMKey) != "" && strings.TrimSpace(cfg.KaiBaseURL) != "" {
-			if err := runNetScan(cfg); err != nil {
+		k := a.getKai()
+		// AN/AUS kommt aus KAI (report_scan via hello); kein lokaler Schlüssel mehr nötig.
+		if a.getReportScan() && k != nil && strings.TrimSpace(cfg.EdgeToken) != "" {
+			if err := runNetScan(k); err != nil {
 				log.Printf("netzscan: %v", err)
 			}
 		}
@@ -53,24 +45,19 @@ func (a *App) netScanLoop() {
 	}
 }
 
-func runNetScan(cfg *Config) error {
-	base := amBase(cfg)
-	key := strings.TrimSpace(cfg.AMKey)
-	cl := &http.Client{Timeout: 25 * time.Second}
-
-	req, _ := http.NewRequest("GET", base+"/api/asset-manager/scan-targets", nil)
-	req.Header.Set("X-API-Key", key)
-	resp, err := cl.Do(req)
+func runNetScan(k *KaiClient) error {
+	data, code, err := k.do("GET", "/api/asset-manager/scan-targets", nil)
 	if err != nil {
 		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("scan-targets http %d", code)
 	}
 	var tr struct {
 		Items []scanTarget `json:"items"`
 	}
-	derr := json.NewDecoder(resp.Body).Decode(&tr)
-	resp.Body.Close()
-	if derr != nil {
-		return derr
+	if err := json.Unmarshal(data, &tr); err != nil {
+		return err
 	}
 	if len(tr.Items) == 0 {
 		return nil
@@ -102,15 +89,13 @@ func runNetScan(cfg *Config) error {
 		entries = append(entries, connEntry{Name: tgt.Name, EntityID: "ping", Status: st, IP: tgt.IP, Mac: mac})
 	}
 
-	body, _ := json.Marshal(map[string]any{"readings": entries})
-	req2, _ := http.NewRequest("POST", base+"/api/asset-manager/ha-connectivity", bytes.NewReader(body))
-	req2.Header.Set("Content-Type", "application/json")
-	req2.Header.Set("X-API-Key", key)
-	resp2, err := cl.Do(req2)
+	_, code2, err := k.do("POST", "/api/asset-manager/ha-connectivity", map[string]any{"readings": entries})
 	if err != nil {
 		return err
 	}
-	resp2.Body.Close()
+	if code2 != 200 {
+		return fmt.Errorf("ha-connectivity http %d", code2)
+	}
 	return nil
 }
 

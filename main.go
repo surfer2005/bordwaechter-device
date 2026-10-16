@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.76"
+const version = "0.1.77"
 
 type App struct {
 	mu     sync.Mutex
@@ -22,7 +22,20 @@ type App struct {
 	sys    *SystemData
 	sysAt  time.Time
 	net    *NetworkData
+	scan   *bool // Netz-Scan-Schalter aus KAI (hello-Antwort); nil = noch nicht gemeldet → cfg.ReportScan
 }
+
+// getReportScan: maßgeblich ist der KAI-Schalter (hello-Antwort); solange KAI noch nichts gemeldet hat,
+// gilt der lokale Wert als Rückfall (autark).
+func (a *App) getReportScan() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.scan != nil {
+		return *a.scan
+	}
+	return a.cfg.ReportScan
+}
+func (a *App) setReportScan(v bool) { a.mu.Lock(); a.scan = &v; a.mu.Unlock() }
 
 func (a *App) getCfg() *Config     { a.mu.Lock(); defer a.mu.Unlock(); return a.cfg }
 func (a *App) getKai() *KaiClient  { a.mu.Lock(); defer a.mu.Unlock(); return a.kai }
@@ -104,7 +117,9 @@ func (a *App) bundleLoop() {
 		log.Printf("bundle: aus Platten-Cache geladen (%s)", b.Date)
 	}
 	if k := a.getKai(); k != nil && a.getCfg().EdgeToken != "" {
-		_ = k.Hello(version, a.getSys())
+		if hr, err := k.Hello(version, a.getSys()); err == nil && hr != nil {
+			a.setReportScan(hr.ReportScan)
+		}
 	}
 	for {
 		cfg := a.getCfg()
@@ -127,8 +142,10 @@ func (a *App) heartbeatLoop() {
 	for {
 		cfg := a.getCfg()
 		if k := a.getKai(); k != nil && cfg.EdgeToken != "" {
-			if err := k.Hello(version, a.getSys()); err != nil {
+			if hr, err := k.Hello(version, a.getSys()); err != nil {
 				log.Printf("heartbeat: %v", err)
+			} else if hr != nil {
+				a.setReportScan(hr.ReportScan) // Netz-Scan-Schalter aus KAI übernehmen
 			}
 		}
 		time.Sleep(60 * time.Second)
