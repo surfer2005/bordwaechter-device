@@ -82,16 +82,16 @@
  .map h3{margin:0 0 7px;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
  .mapwrap{position:relative;flex:1;min-height:0;width:100%;border-radius:10px;overflow:hidden}
  .kmap{position:absolute;inset:0;width:100%;height:100%}
- .xhair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(58%,300px);aspect-ratio:1;pointer-events:none;z-index:410}
+ .xhair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(40%,200px);aspect-ratio:1;pointer-events:none;z-index:410}
  .xhair svg{width:100%;height:100%;display:block;color:#143a33}
  /* Kartenhelligkeit: nur die Grundkarten-Kacheln abdunkeln, Seezeichen/Marker unberührt. */
  .karte-mittel .seekarte-base{filter:brightness(.62) contrast(.96) saturate(.88)}
  .karte-dunkel .seekarte-base{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.85)}
  /* Fadenkreuz: Hell=schwarz, Mittel+Dunkel=rot (sonst auf dunkler Karte unsichtbar). */
  .karte-mittel .xhair svg,.karte-dunkel .xhair svg{color:#FF2A1E}
- .xh-ring{fill:none;stroke:currentColor;stroke-width:2.6;opacity:.92}
+ .xh-ring{fill:none;stroke:currentColor;stroke-width:1.6;opacity:.92}
  .xh-faint{opacity:.55}
- .xh-line{stroke:currentColor;stroke-width:2.4;opacity:.95}
+ .xh-line{stroke:currentColor;stroke-width:1.4;opacity:.95}
  /* Kurslinien-Overlay (leaflet-rotate zeichnet Vektor-Layer gedreht falsch) — z-index MUSS ueber 400
     liegen, da Leaflets .leaflet-map-pane selbst z-index:400 hat. */
  .courseov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:401}

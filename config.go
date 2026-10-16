@@ -12,6 +12,7 @@ import (
 type Config struct {
 	KaiBaseURL   string `json:"kai_base_url"` // z. B. https://kai-bsb.de  (Gerät ruft <base>/api/edge/… )
 	EdgeToken    string `json:"edge_token"`   // je Gerät, aus KAI-Verwaltung
+	AMKey        string `json:"am_key"`       // Asset-Manager-/HA-Schlüssel für den Netz-Scan (X-API-Key); leer = Scan aus
 	ShipID       int    `json:"ship_id"`      // optional; 0 = aus dem Bundle übernehmen
 	SendPosition bool   `json:"send_position"` // GPS direkt an KAI melden (aus, falls HA das liefert)
 	Listen       string `json:"listen"`        // lokale UI/API, z. B. ":8090"

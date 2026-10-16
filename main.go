@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.74"
+const version = "0.1.76"
 
 type App struct {
 	mu     sync.Mutex
@@ -104,7 +104,7 @@ func (a *App) bundleLoop() {
 		log.Printf("bundle: aus Platten-Cache geladen (%s)", b.Date)
 	}
 	if k := a.getKai(); k != nil && a.getCfg().EdgeToken != "" {
-		_ = k.Hello(version)
+		_ = k.Hello(version, a.getSys())
 	}
 	for {
 		cfg := a.getCfg()
@@ -117,6 +117,21 @@ func (a *App) bundleLoop() {
 			}
 		}
 		sleepSec(cfg.BundleRefreshSec, 300)
+	}
+}
+
+// heartbeatLoop meldet KAI minütlich Version + Gesundheits-Block (CPU-Temp/Last/RAM/Platte/Laufzeit),
+// damit das Monitoring in KAI online/offline und den Zustand sieht, ohne an Bord zu gehen. Nur
+// ausgehend (wie alles hier) und best effort — ein Fehlschlag wird geloggt, nicht weitergereicht.
+func (a *App) heartbeatLoop() {
+	for {
+		cfg := a.getCfg()
+		if k := a.getKai(); k != nil && cfg.EdgeToken != "" {
+			if err := k.Hello(version, a.getSys()); err != nil {
+				log.Printf("heartbeat: %v", err)
+			}
+		}
+		time.Sleep(60 * time.Second)
 	}
 }
 
@@ -181,6 +196,10 @@ func main() {
 	go app.detectLoop() // Objekterkennung (nur aktiv, wenn cfg.Detect.Enabled)
 	go app.infoLoop()   // Wetter + Pegel für die Anzeige (nur aktiv, wenn cfg.Info.Weather/Pegel)
 	go app.sysLoop()    // Pi-Zustand (CPU-Temp/Last/RAM/Platte) für die HA-Integration
+	go app.heartbeatLoop()  // minütlicher Herzschlag an KAI (Version + Gesundheit fürs Monitoring)
+	go app.smartmeterLoop() // Smartmeter-Bridge: Zähler per Modbus lesen (Konfig aus KAI) → an KAI pushen
+	go app.netScanLoop()    // Netz-Lebenszeichen: Scan-Ziele aus KAI, Ping+ARP, Status zurück (Asset Manager)
+	go app.routerLoop()     // Teltonika-Router-Diagnose per Modbus → KAI (Asset Manager/Monitoring)
 	go app.kmLoop()     // Tageskilometer vom/auf die Platte (reboot-fest)
 	go app.releaseCheckLoop() // GitHub-Release-Tag stündlich cachen (für „neue Version"-Hinweis)
 	go app.netLoop()    // Streckennetz + Anlegestellen cachen (Standalone-/Offline-Navigation)

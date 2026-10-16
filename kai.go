@@ -149,8 +149,15 @@ func (k *KaiClient) GetNetwork() (*NetworkData, error) {
 	return &n, nil
 }
 
-func (k *KaiClient) Hello(version string) error {
-	_, _, err := k.do("POST", "/api/edge/hello", map[string]any{"version": version})
+// Hello ist der Herzschlag an KAI: meldet die Version und — sofern vorhanden — den system-Block
+// (CPU-Temp/Last/RAM/Platte/Laufzeit), damit KAI die Gerätegesundheit zentral anzeigen kann. Der
+// Block wird ohnehin für die HA-Integration gemessen (system.go), hier reist er nur mit.
+func (k *KaiClient) Hello(version string, sys *SystemData) error {
+	body := map[string]any{"version": version, "kind": "bordwaechter"}
+	if sys != nil {
+		body["system"] = sys
+	}
+	_, _, err := k.do("POST", "/api/edge/hello", body)
 	return err
 }
 
