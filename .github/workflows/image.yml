@@ -64,7 +64,7 @@ jobs:
 
           # --- boot-Partition (zur Laufzeit /boot/firmware): SSH, Nutzer, Erst-Start ---
           sudo touch /mnt/bw-boot/ssh
-          HASH=$(echo 'bordwaechter' | openssl passwd -6 -stdin)
+          HASH=$(echo 'kai-terminal' | openssl passwd -6 -stdin)
           echo "pi:${HASH}" | sudo tee /mnt/bw-boot/userconf.txt >/dev/null
 
           # Erst-Start-Skript: Hostname, SSH+VNC an, Zeitzone, Dienst aktivieren, dann sich selbst
@@ -119,3 +119,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.pack.outputs.path }}
+          # Image-Release NICHT als „Latest" markieren — sonst zeigt releases/latest/download auf das
+          # Image (ohne Binärdateien) und das Selbst-Update (Aktualisieren) scheitert mit 404. „Latest"
+          # bleibt dem jüngsten Binär-Release (v*) vorbehalten. (Gleiche Lehre wie beim KAI-Kiosk.)
+          make_latest: false

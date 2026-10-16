@@ -17,9 +17,16 @@ type Config struct {
 	Listen       string `json:"listen"`        // lokale UI/API, z. B. ":8090"
 	UIPassword   string `json:"ui_password"`   // Schutz der lokalen Oberfläche (leer = offen im Bordnetz)
 	HAPassword   string `json:"ha_password"`   // eigenes Passwort für Home Assistant (leer = HA nutzt UIPassword)
+	Hostname     string `json:"hostname"`      // Gerätename (hostnamectl + /etc/hosts); Gerät danach als <hostname>.local erreichbar
+	SSHPassword  string `json:"ssh_password"`  // Passwort des SSH-Benutzers "pi" (leer = unverändert / Image-Standard "kai-terminal")
+	VNCPassword  string `json:"vnc_password"`  // Passwort für den VNC-Fernzugriff (leer = unverändert)
 	DisplayToken string `json:"display_token"`  // Token für die Kiosk-Anzeige (/anzeige?token=…), leer = Anzeige aus
 	DisplayView  string `json:"display_view"`   // Startansicht des Geräte-Kiosks: "pilot" | "seekarte"
 	DisplayRotate string `json:"display_rotate"` // Bildschirmdrehung des Monitors: "normal"|"left"|"right"|"inverted"
+	// Standalone-/Offline-Navigation OHNE KAI: Ziel aus dem gespeicherten Streckennetz wählen.
+	// Nur dann zeigt die Seekarte das Ziel-Auswahlfeld. Wer KAI nutzt, bekommt die Route automatisch
+	// aus dem Bundle und braucht das nicht. Vorgabe: aus.
+	Standalone bool `json:"standalone"`
 
 	GPS struct {
 		Source     string `json:"source"` // "teltonika" | "nmea" (USB-GPS-Maus) | "manual"
@@ -126,6 +133,7 @@ func defaultConfig() *Config {
 	c.Camera.HoldSec = 20
 	c.DisplayView = "pilot"
 	c.DisplayRotate = "normal"
+	c.Hostname = "bordwaechter"
 	c.Detect.FrigateURL = "http://127.0.0.1:5000"
 	c.Detect.Labels = "person,boat"
 	c.Detect.MinScore = 0.6

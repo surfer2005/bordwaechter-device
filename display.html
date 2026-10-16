@@ -273,13 +273,10 @@ function render(s){
   var gauge=$('gaugebox'),vd=$('verdict'),tl=$('tl'),ab=$('abfahrtblock'),hint=$('hint'),tk=$('todaykm')
   var hasAdvisory=(s.phase==='unterwegs'&&s.verdict&&s.verdict!=='none')
   if(s.today_km>0){ tk.innerHTML='Heute <b>'+fmt1(s.today_km)+'</b> km' }
-  var sb=$('sifabox')
-  if(s.sifa_active){
-    sb.style.display=''
-    if(s.sifa_deadman_active){ sb.className='sifabox due'; sb.innerHTML='TOTMANN — JETZT DRÜCKEN!' }
-    else if((s.sifa_countdown_sec||0)<=0){ sb.className='sifabox warn'; sb.innerHTML='Totmann: <b>bitte drücken</b>' }
-    else { sb.className='sifabox ok'; sb.innerHTML='Totmann OK · noch <b>'+s.sifa_countdown_sec+' s</b>' }
-  } else sb.style.display='none'
+  // Totmann-Countdown lokal im 1-s-Takt zeigen (die Seite pollt nur alle 2 s → sonst zählt die Zahl
+  // sichtbar in 2-s-Schritten). Beim Poll den Serverwert übernehmen, dazwischen selbst herunterzählen.
+  sifaState={active:!!s.sifa_active,due:!!s.sifa_deadman_active,cd:s.sifa_countdown_sec||0,at:Date.now()}
+  drawSifa()
 
   if(hasAdvisory){
     gauge.style.display='';vd.style.display='flex';tl.style.display='block';ab.style.display='none';hint.style.display='none'
@@ -421,6 +418,19 @@ cw.addEventListener('pointerup',camPtrUp)
 cw.addEventListener('pointercancel',function(e){ delete ptrs[e.pointerId] })
 // Nur im Standbild-Modus alle 1 s neu holen; der Livestream (MJPEG) läuft von selbst.
 setInterval(function(){ if($('camwrap').style.display!=='none' && camMode==='snapshot'){ $('camimg').src=snapUrl() } },1000)
+// Totmann-Anzeige: interpoliert den Countdown zwischen den 2-s-Polls auf 1-s-Schritte.
+var sifaState=null
+function drawSifa(){
+  var sb=$('sifabox'); if(!sb)return
+  var st=sifaState
+  if(!st||!st.active){ sb.style.display='none'; return }
+  sb.style.display=''
+  if(st.due){ sb.className='sifabox due'; sb.innerHTML='TOTMANN — JETZT DRÜCKEN!'; return }
+  var cd=st.cd-Math.floor((Date.now()-st.at)/1000); if(cd<0)cd=0
+  if(cd<=0){ sb.className='sifabox warn'; sb.innerHTML='Totmann: <b>bitte drücken</b>' }
+  else { sb.className='sifabox ok'; sb.innerHTML='Totmann OK · noch <b>'+cd+' s</b>' }
+}
+setInterval(drawSifa,250)
 load(); setInterval(load,2000)
 </script>
 </body>

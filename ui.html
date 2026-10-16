@@ -6,45 +6,47 @@
 <title>Bordwächter</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%231F6E5C'/%3E%3Cg transform='translate(112,112) scale(12)' fill='none' stroke='%23fff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 18c2 1.4 4 1.4 6 0s4-1.4 6 0 4 1.4 6 0M5 18l1.2-8.4a1 1 0 0 1 1-.86H12V4l6 4-6 3.2'/%3E%3C/g%3E%3C/svg%3E">
 <style>
-  :root{--bg:#F3F1EA;--panel:#fff;--line:#E2DDD0;--ink:#121A17;--muted:#5C6B64;--teal:#1F6E5C;--amber:#B16A12;--red:#C4442E;--radius:10px}
+  :root{--bg:#F3F1EA;--panel:#FBFAF5;--panel2:#F1EDE3;--line:#E2DDD0;--ink:#121A17;--muted:#5C6B64;--faint:#8A978F;--teal:#1F6E5C;--teal2:#17493E;--amber:#B16A12;--red:#C4442E;--btnink:#fff;--radius:12px}
+  @media(prefers-color-scheme:dark){:root{--bg:#081518;--panel:#0E2529;--panel2:#0B1E22;--line:#1C3B40;--ink:#EAF4F1;--muted:#8FB3AC;--faint:#5E8882;--teal:#54BC9F;--teal2:#3FA98B;--amber:#F0A93C;--red:#E8614E;--btnink:#05201b}}
   *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--bg);color:var(--ink);font-family:system-ui,sans-serif;line-height:1.5;padding:16px;max-width:900px;margin:0 auto}
-  h1{font-size:1.3rem;display:flex;align-items:center;gap:8px}h1 .d{width:26px;height:26px;border-radius:7px;background:var(--teal);color:#fff;display:grid;place-items:center}
-  h1 .d svg{width:17px;height:17px;display:block}
-  h2{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:18px 0 8px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px}
-  .banner{padding:10px 14px;border-radius:var(--radius);font-weight:700;margin-bottom:12px;display:none}
-  .b-warn{display:block;background:#f6e6c8;color:var(--amber)} .b-alarm{display:block;background:#f3d4ce;color:var(--red)}
+  body{background:var(--bg);color:var(--ink);font-family:system-ui,'Segoe UI',sans-serif;line-height:1.5;padding:16px;max-width:960px;margin:0 auto;-webkit-font-smoothing:antialiased}
+  h1{font-size:1.3rem;display:flex;align-items:center;gap:8px}h1 .d{width:28px;height:28px;border-radius:8px;background:var(--teal);color:#fff;display:grid;place-items:center}
+  h1 .d svg{width:18px;height:18px;display:block}
+  h2{font-size:.76rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:9px}
+  .tag{font-size:.6rem;letter-spacing:.04em;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--teal) 16%,transparent);color:var(--teal);border:1px solid var(--teal2);text-transform:none;letter-spacing:0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:16px}
+  .banner{padding:11px 15px;border-radius:var(--radius);font-weight:700;margin-bottom:14px;display:none}
+  .b-warn{display:block;background:color-mix(in srgb,var(--amber) 18%,var(--panel));color:var(--amber)} .b-alarm{display:block;background:color-mix(in srgb,var(--red) 18%,var(--panel));color:var(--red)}
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-  .kv{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
-  .kv .k{font-size:.64rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
-  .kv .v{font-weight:700;font-size:1.02rem;font-family:inherit;line-height:1.3;word-break:break-word}
-  label{display:block;font-size:.8rem;color:var(--muted);margin:6px 0 2px}
-  input,select{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff;color:var(--ink)}
-  .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
-  button{background:var(--teal);color:#fff;border:0;border-radius:8px;padding:9px 14px;font:inherit;font-weight:700;cursor:pointer}
-  button.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
-  a.ghost{display:inline-flex;align-items:center;background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px 14px;font-weight:700;text-decoration:none;cursor:pointer}
+  .kv{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 11px}
+  .kv .k{font-size:.62rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800}
+  .kv .v{font-weight:800;font-size:1.02rem;line-height:1.3;word-break:break-word;margin-top:2px}
+  label{display:block;font-size:.82rem;color:var(--muted);font-weight:700;margin:0 0 5px}
+  input,select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:.95rem;background:var(--panel2);color:var(--ink)}
+  .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px 14px}
+  button{background:var(--teal);color:var(--btnink);border:0;border-radius:9px;padding:10px 16px;font:inherit;font-weight:800;cursor:pointer}
+  button.ghost{background:transparent;color:var(--teal);border:1px solid var(--line)}
+  a.ghost{display:inline-flex;align-items:center;background:transparent;color:var(--teal);border:1px solid var(--line);border-radius:9px;padding:10px 16px;font-weight:800;text-decoration:none;cursor:pointer}
   a.ghost:hover{border-color:var(--teal)}
-  .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-  .dot{display:inline-block;width:11px;height:11px;border-radius:50%;background:#ccc;margin-right:5px}
+  .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+  .dot{display:inline-block;width:11px;height:11px;border-radius:50%;background:var(--faint);margin-right:5px}
   .on{background:var(--red)}
   .muted{color:var(--muted);font-size:.85rem}
-  fieldset{border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:10px}
-  legend{font-size:.75rem;color:var(--muted);padding:0 6px}
+  .sshbox{font-family:ui-monospace,monospace;font-size:.92rem;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;color:var(--ink)}
+  code{font-family:ui-monospace,monospace}
   #login{position:fixed;inset:0;background:var(--bg);display:none;place-items:center;z-index:100;padding:16px}
-  #login .box{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px;width:100%;max-width:340px}
+  #login .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px;width:100%;max-width:360px}
   #login h1{justify-content:center;margin-bottom:14px}
   #login .err{color:var(--red);font-size:.85rem;min-height:1.2em;margin-top:6px}
   #login button{width:100%;margin-top:12px}
-  h1.topbar{align-items:center;padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:4px}
+  h1.topbar{align-items:center;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:16px}
   .brandtext{display:flex;flex-direction:column;line-height:1.15}
   .bname{font-size:1.3rem;font-weight:800}
-  .bsub{font-size:.72rem;font-weight:600;color:var(--muted);letter-spacing:.02em}
-  .logout{margin-left:auto;font-size:.8rem;padding:6px 12px}
-  input[readonly]{background:var(--bg);color:var(--muted);cursor:default}
-  #ask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;place-items:center;z-index:120;padding:16px}
-  #ask .box{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px;width:100%;max-width:420px;box-shadow:0 16px 44px rgba(0,0,0,.35)}
+  .bsub{font-size:.74rem;font-weight:600;color:var(--muted);letter-spacing:.02em}
+  .logout{margin-left:auto;font-size:.8rem;padding:7px 13px}
+  input[readonly]{opacity:.65;cursor:default}
+  #ask{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;place-items:center;z-index:120;padding:16px}
+  #ask .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;width:100%;max-width:420px;box-shadow:0 16px 44px rgba(0,0,0,.4)}
   #ask .msg{font-size:1rem;margin-bottom:16px;line-height:1.4}
   #ask .btns{display:flex;gap:10px;justify-content:flex-end}
 </style>
@@ -92,7 +94,7 @@
       <button class="ghost" onclick="post('/api/test?out=lamp')">Lampe testen</button>
       <button class="ghost" onclick="gpioSelftest()">GPIO-Selbsttest</button>
     </div>
-    <pre id="gpioResult" style="display:none;white-space:pre-wrap;font-size:.8rem;background:var(--card2,#f3f3f3);padding:10px;border-radius:6px;margin-top:8px;max-height:340px;overflow:auto"></pre>
+    <pre id="gpioResult" style="display:none;white-space:pre-wrap;font-size:.8rem;background:var(--panel2);border:1px solid var(--line);padding:10px;border-radius:8px;margin-top:8px;max-height:340px;overflow:auto"></pre>
   </div>
 
   <div class="card" id="manualCard" style="display:none">
@@ -106,116 +108,167 @@
   </div>
 
   <div class="card">
-    <h2>Einstellungen</h2>
+    <h2>Netzwerk</h2>
+    <div class="row">
+      <div><label>Gerätename (Hostname)</label><input id="c_host" placeholder="bordwaechter"></div>
+      <div><label>Modus</label><select id="n_mode"><option value="dhcp">DHCP (automatisch)</option><option value="static">Feste IP</option></select></div>
+      <div><label>Schnittstelle</label><input id="n_if" placeholder="eth0"></div>
+      <div><label>IP-Adresse (CIDR)</label><input id="n_addr" placeholder="192.168.1.50/24"></div>
+      <div><label>Gateway</label><input id="n_gw" placeholder="192.168.1.1"></div>
+      <div><label>DNS (Komma)</label><input id="n_dns" placeholder="192.168.1.1,1.1.1.1"></div>
+    </div>
+    <div class="btns" style="margin-top:8px"><button onclick="applyNet()">IP übernehmen</button><button class="ghost" onclick="rebootPi()">Gerät neu starten (Pi)</button><span id="netMsg" class="muted"></span></div>
+    <p class="muted" style="margin-top:6px">Der <b>Gerätename</b> wird mit „Speichern" übernommen und nach einem Neustart wirksam — das Gerät ist dann als <code id="hostHint">bordwaechter.local</code> erreichbar. Feste IP/DHCP wirkt ebenfalls erst nach einem <b>Neustart des Geräts</b>. Vorsicht: eine falsche IP/Gateway kann das Gerät im Netz unerreichbar machen.</p>
+  </div>
+
+  <div class="card">
+    <h2>KAI-Anbindung &amp; Übermittlung</h2>
     <div class="row">
       <div><label>KAI-Adresse</label><input id="c_base" placeholder="https://kai-bsb.de/test  (ohne /api/edge)"></div>
       <div><label>Edge-Token</label><input id="c_token"></div>
       <div><label>Schiff-ID (0 = aus Bundle)</label><input id="c_ship" type="number"></div>
       <div><label>GPS an KAI melden</label><select id="c_sendpos"><option value="true">ja</option><option value="false">nein</option></select></div>
+      <div><label>Standalone-Modus (Ziel ohne KAI)</label><select id="c_standalone" title="Nur ohne KAI nötig: Ziel in der Seekarte selbst wählen (Fahrrinne/Luftlinie) statt der KAI-Route"><option value="false">aus (KAI liefert die Route)</option><option value="true">an (Ziel selbst wählen)</option></select></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Zugang</h2>
+    <div class="row">
       <div><label>Benutzer (Anmeldung)</label><input value="admin" readonly></div>
-      <div><label>UI-Passwort</label><input id="c_uipw" type="password" autocomplete="new-password"></div>
+      <div><label>UI-Passwort (Konfig-Seite)</label><input id="c_uipw" type="password" autocomplete="new-password"></div>
+      <div><label>VNC-Passwort (Fernzugriff) <span class="tag">neu</span></label><input id="c_vncpw" type="password" autocomplete="new-password" placeholder="leer = unverändert"></div>
       <div><label>HA-Passwort (leer = wie UI)</label><input id="c_hapw" type="password" autocomplete="new-password"></div>
     </div>
-    <fieldset><legend>GPS-Quelle</legend>
-      <div class="row">
-        <div><label>Quelle</label><select id="g_src"><option value="manual">manual (Test)</option><option value="nmea">USB-GPS-Maus (NMEA)</option><option value="teltonika">Teltonika (Modbus)</option></select></div>
-        <div><label>Gerät (USB-GPS-Maus)</label><input id="g_dev" placeholder="/dev/ttyACM0"></div>
-        <div><label>Baud (USB-GPS-Maus)</label><input id="g_baud" type="number" placeholder="9600"></div>
-        <div><label>Host</label><input id="g_host"></div>
-        <div><label>Port</label><input id="g_port" type="number"></div>
-        <div><label>Unit</label><input id="g_unit" type="number"></div>
-        <div><label>Lat-Register</label><input id="g_lat" type="number"></div>
-        <div><label>Lng-Register</label><input id="g_lng" type="number"></div>
-        <div><label>Speed-Register (-1=aus)</label><input id="g_speed" type="number"></div>
-        <div><label>Heading-Register (-1=aus)</label><input id="g_head" type="number"></div>
-        <div><label>Format</label><select id="g_fmt"><option>float32</option><option>int32_1e7</option><option>int32_1e6</option></select></div>
-        <div><label>Poll (s)</label><input id="g_poll" type="number"></div>
-      </div>
-      <p class="muted" style="margin-top:6px">Speed/Heading werden wie Lat/Lng im gewählten Format gelesen (float32 = 2 Register). -1 = nicht vorhanden → Tempo wird aus der Bewegung abgeleitet.</p>
-    </fieldset>
-    <fieldset><legend>SIFA / Alarm</legend>
-      <div class="row">
-        <div><label>Auslöser</label><select id="sf_combo" onchange="updateSifaFields()"><option value="either">GPS oder Kamera</option><option value="gps">nur GPS</option><option value="camera">nur Kamera</option><option value="both">GPS und Kamera</option><option value="manuell">manuell (nur Totmann/Zeit)</option><option value="aus">aus (kein Alarm)</option></select></div>
-        <div id="f_re"><label>Wiederhol-Alarm (s)</label><input id="sf_re" type="number"></div>
-        <div id="f_dm"><label>Totmann-SIFA</label><select id="sf_dm" onchange="updateSifaFields()"><option value="false">aus</option><option value="true">an</option></select></div>
-        <div id="f_dms"><label>Totmann-Intervall (s)</label><input id="sf_dms" type="number"></div>
-        <div id="f_pre"><label>Lampe→Hupe (s)</label><input id="sf_pre" type="number"></div>
-      </div>
-      <p class="muted" style="margin-top:6px"><b>Ereignis-Alarm</b> (GPS/Kamera): Lampe + Hupe gehen zusammen an; Quittieren schaltet <b>beides</b> aus. Besteht die Ursache weiter, kommt der Alarm nach <b>Wiederholung</b> Sekunden erneut — bis der Kurs wieder stimmt.<br><b>Totmann:</b> nach jedem <b>Totmann-Intervall</b> kommt zuerst die grüne <b>Lampe</b> (Frist zum Quittieren), <b>Lampe→Hupe</b> Sekunden später die <b>Hupe</b>. Quittieren schaltet beides aus und startet das Intervall neu. Auslöser „manuell": nur dieser Totmann, auch wenn „Totmann-SIFA" auf „aus" steht. Auslöser <b>„aus"</b>: alles stillgelegt — kein Ereignis-Alarm, kein Totmann (nur die Test-Knöpfe schalten die Ausgänge). Zum Einrichten/Vorführen.</p>
-    </fieldset>
-    <fieldset><legend>GPIO / Relais</legend>
-      <div class="row">
-        <div><label>Backend</label><select id="io_be"><option value="none">none (ohne Hardware)</option><option value="sysfs">sysfs (Raspberry)</option></select></div>
-        <div><label>Hupe-Pin</label><input id="io_horn" type="number"></div>
-        <div><label>Lampe-Pin</label><input id="io_lamp" type="number"></div>
-        <div><label>Quittier-Pin (-1=keiner)</label><input id="io_ack" type="number"></div>
-        <div><label>Quittier-Taster Aktiv-Low (gegen GND)</label><select id="io_ackal"><option value="false">nein (gegen 3,3V)</option><option value="true">ja (gegen GND)</option></select></div>
-        <div><label>Eingang-Vorspannung</label><select id="io_inbias"><option value="">sysfs-Standard</option><option value="pullup">Pull-up (Taster gegen GND)</option><option value="pulldown">Pull-down (Taster gegen 3,3V)</option><option value="disabled">aus</option></select></div>
-        <div><label>SIFA-Schlüssel-Pin (-1=keiner)</label><input id="io_key" type="number"></div>
-        <div><label>Aktiv-Low</label><select id="io_al"><option value="false">nein</option><option value="true">ja</option></select></div>
-      </div>
-    </fieldset>
-    <fieldset><legend>Kamera (Mobotix/AXIS, optional)</legend>
-      <div class="row">
-        <div><label>Kamera aktiv</label><select id="cam_en"><option value="false">nein</option><option value="true">ja</option></select></div>
-        <div><label>Webhook-Secret</label><input id="cam_sec"></div>
-        <div><label>Snapshot-URL</label><input id="cam_url" placeholder="http://benutzer:passwort@192.168.62.156/axis-cgi/jpg/image.cgi"></div>
-        <div><label>Hinweis-Dauer (s)</label><input id="cam_hold" type="number"></div>
-      </div>
-      <div class="row">
-        <div style="grid-column:1 / -1"><label>Livestream-URL (MJPEG, optional – flüssiges Live-Bild)</label><input id="cam_stream" placeholder="http://benutzer:passwort@192.168.62.156/axis-cgi/mjpg/video.cgi?fps=15&amp;resolution=1280x720"></div>
-      </div>
-      <p class="muted" id="cam_hint" style="margin-top:6px"></p>
-      <p class="muted" style="margin-top:4px">AXIS-Snapshot (Standbild, auch für den Alarm an KAI): <code>http://benutzer:passwort@&lt;kamera-ip&gt;/axis-cgi/jpg/image.cgi</code>. AXIS-Livestream (flüssig): <code>http://benutzer:passwort@&lt;kamera-ip&gt;/axis-cgi/mjpg/video.cgi</code>. Basic oder Digest wird automatisch erkannt; in der Anzeige schaltet man mit „Live-Bild"/„Livestream" um.</p>
-    </fieldset>
-    <fieldset><legend>Objekterkennung (Frigate, optional)</legend>
-      <div class="row">
-        <div><label>Erkennung aktiv</label><select id="det_en"><option value="false">nein</option><option value="true">ja</option></select></div>
-        <div><label>Frigate-URL</label><input id="det_url" placeholder="http://127.0.0.1:5000"></div>
-        <div><label>Objekte</label><input id="det_labels" placeholder="person,boat"></div>
-        <div><label>Mindest-Score (0–1)</label><input id="det_min" type="number" step="0.05"></div>
-        <div><label>Abfrage-Intervall (s)</label><input id="det_poll" type="number"></div>
-      </div>
-      <p class="muted" style="margin-top:6px">Erkennt Personen/Boote im Kamerastream über ein lokal laufendes Frigate (Pi 5 + AI-HAT/Hailo oder Coral) und meldet jeden Treffer mit Standbild an KAI (als Edge-Ereignis „detection"). Ist die Erkennung aus, läuft das Gerät als ganz normaler Bordwächter.</p>
-    </fieldset>
-    <fieldset><legend>Wetter &amp; Pegel (Anzeige)</legend>
-      <div class="row">
-        <div><label>Wetter anzeigen</label><select id="inf_w"><option value="true">ja</option><option value="false">nein</option></select></div>
-        <div><label>Pegel anzeigen</label><select id="inf_p"><option value="true">ja</option><option value="false">nein</option></select></div>
-        <div><label>Breite (Wetter)</label><input id="inf_lat" placeholder="47.66"></div>
-        <div><label>Länge (Wetter)</label><input id="inf_lng" placeholder="9.18"></div>
-        <div><label>Pegel-Station (PEGELONLINE-UUID)</label><input id="inf_uuid" placeholder="aa9179c1-17ef-4c61-a48a-74193fa7bfdf"></div>
-        <div><label>Pegel-Name</label><input id="inf_label" placeholder="Konstanz"></div>
-        <div><label>Abrufintervall (s)</label><input id="inf_poll" type="number"></div>
-      </div>
-      <p class="muted" style="margin-top:6px">Standard: Wetter &amp; Pegel kommen aus denselben Quellen wie KAI (Open-Meteo / PEGELONLINE) — dieselben Werte, und es läuft mit UND ohne KAI-Verbindung. Nur ändern, wenn das Gerät eine andere Station/Position nutzen soll oder das Gerät ohne KAI betrieben wird.</p>
-    </fieldset>
-    <fieldset><legend>Netzwerk (IP-Adresse)</legend>
-      <div class="row">
-        <div><label>Modus</label><select id="n_mode"><option value="dhcp">DHCP (automatisch)</option><option value="static">Feste IP</option></select></div>
-        <div><label>Schnittstelle</label><input id="n_if" placeholder="eth0"></div>
-        <div><label>IP-Adresse (CIDR)</label><input id="n_addr" placeholder="192.168.1.50/24"></div>
-        <div><label>Gateway</label><input id="n_gw" placeholder="192.168.1.1"></div>
-        <div><label>DNS (Komma)</label><input id="n_dns" placeholder="192.168.1.1,1.1.1.1"></div>
-      </div>
-      <div class="btns" style="margin-top:8px"><button onclick="applyNet()">IP übernehmen</button><button class="ghost" onclick="rebootPi()">Gerät neu starten (Pi)</button><span id="netMsg" class="muted"></span></div>
-      <p class="muted" style="margin-top:6px">Feste IP/DHCP wird erst nach einem <b>Neustart des Geräts</b> wirksam. Vorsicht: eine falsche IP/Gateway kann das Gerät im Netz unerreichbar machen — dann hilft nur Bildschirm+Tastatur am Raspberry.</p>
-    </fieldset>
-    <fieldset><legend>Anzeige (Kiosk-Seite)</legend>
-      <div class="row">
-        <div><label>Display-Token (leer = Anzeige aus)</label><input id="c_disptok"></div>
-        <div><label>Kiosk-Startansicht (Monitor am Gerät)</label><select id="c_dispview"><option value="pilot">Pilot</option><option value="seekarte">Seekarte</option></select></div>
-        <div><label>Bildschirmdrehung (Monitor)</label><select id="c_disprot"><option value="normal">normal</option><option value="left">links (90°)</option><option value="right">rechts (270°)</option><option value="inverted">kopfüber (180°)</option></select></div>
-      </div>
-      <div class="btns" style="margin-top:8px"><button class="ghost" onclick="genDispTok()">Neu erzeugen</button><a id="dispOpen" class="ghost" style="display:inline-block;text-decoration:none" href="#" target="_blank" rel="noopener">Anzeige öffnen</a></div>
-      <p class="muted" style="margin-top:6px">Vollbild-Anzeige für einen Monitor an Bord — ohne Login, der Token steckt in der Adresse. Diese Adresse am Monitor hinterlegen:<br><code id="dispUrl" style="word-break:break-all"></code></p>
-      <div class="btns" style="margin-top:10px"><button onclick="kioskSetup()">Anzeige am Monitor einrichten</button><button class="ghost" onclick="remoteAccess(1,0)">SSH einschalten</button><button class="ghost" onclick="remoteAccess(0,1)">VNC einschalten</button><button class="ghost" onclick="remoteAccess(1,1)">SSH + VNC</button><button class="ghost" onclick="kioskDiag()">Kiosk-Diagnose</button></div>
-      <p class="muted" style="margin-top:6px">„Anzeige am Monitor einrichten" legt den <b>Kiosk-Autostart</b> an (Bookworm/Wayland: labwc/wayfire, sonst X) — beim nächsten Neustart öffnet der Monitor automatisch die Anzeige (mit obiger Drehung). Erst <b>Speichern</b> (für Startansicht/Drehung), dann einrichten, dann <b>Gerät (Pi) neu starten</b>.</p>
-      <pre id="kioskLog" style="display:none;white-space:pre-wrap;font-size:.8rem;background:var(--card2,#f3f3f3);padding:10px;border-radius:6px;margin-top:8px;max-height:300px;overflow:auto"></pre>
-    </fieldset>
-    <div class="btns"><button onclick="saveCfg()">Speichern</button><button class="ghost" onclick="updateDev()">Aktualisieren</button><span id="updBadge" style="display:none;align-self:center;padding:2px 8px;border-radius:10px;background:#f3e2c0;color:#8a5a00;font-weight:600;font-size:13px"></span><button class="ghost" onclick="restartDev()">Neustart Dienst</button><button class="ghost" onclick="rebootPi()">Gerät (Pi) neu starten</button><span id="saveMsg" class="muted"></span></div>
-    <p class="muted" style="margin-top:6px">Hinweis: Änderung von GPS-Quelle oder GPIO-Backend wird nach einem Neustart des <b>Dienstes</b> wirksam. „Gerät (Pi) neu starten" bootet den ganzen Raspberry — danach kommt (bei aktivem Kiosk) die Anzeige automatisch wieder hoch.</p>
-    <div id="cfgfoot" style="text-align:center;margin-top:14px;font-size:13px;color:var(--muted)"></div>
+    <div style="margin-top:12px">
+      <label>Fernzugriff per SSH</label>
+      <div class="sshbox"><div>Befehl: <code id="sshCmd">ssh pi@bordwaechter.local</code></div><div style="margin-top:3px">Benutzer: <b>pi</b> &nbsp;·&nbsp; Passwort: <b id="sshPw">kai-terminal</b></div></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div><label>SSH-Passwort ändern (leer = unverändert)</label><input id="c_sshpw" type="text" autocomplete="off" placeholder="leer = unverändert"></div>
+    </div>
+    <p class="muted" style="margin-top:6px">Benutzer ist immer <b>pi</b>. Neue Passwörter (SSH/VNC) werden mit „Speichern" sofort übernommen.</p>
+  </div>
+
+  <div class="card">
+    <h2>Home Assistant <span class="tag">eigenes Kästchen</span></h2>
+    <div class="sshbox">http://<code id="haUrl">bordwaechter.local:8090</code> &nbsp;·&nbsp; Benutzer: <b>ha</b> &nbsp;·&nbsp; Passwort: s. „Zugang → HA-Passwort"</div>
+    <p class="muted" style="margin-top:6px">In Home Assistant die HACS-Integration „Bordwächter" mit dieser Adresse + HA-Passwort einbinden. Liefert Position, Alarm und Totmann-Countdown an HA.</p>
+  </div>
+
+  <div class="card">
+    <h2>GPS-Quelle</h2>
+    <div class="row">
+      <div><label>Quelle</label><select id="g_src"><option value="manual">manual (Test)</option><option value="nmea">USB-GPS-Maus (NMEA)</option><option value="teltonika">Teltonika (Modbus)</option></select></div>
+      <div><label>Gerät (USB-GPS-Maus)</label><input id="g_dev" placeholder="/dev/ttyACM0"></div>
+      <div><label>Baud (USB-GPS-Maus)</label><input id="g_baud" type="number" placeholder="9600"></div>
+      <div><label>Host</label><input id="g_host"></div>
+      <div><label>Port</label><input id="g_port" type="number"></div>
+      <div><label>Unit</label><input id="g_unit" type="number"></div>
+      <div><label>Lat-Register</label><input id="g_lat" type="number"></div>
+      <div><label>Lng-Register</label><input id="g_lng" type="number"></div>
+      <div><label>Speed-Register (-1=aus)</label><input id="g_speed" type="number"></div>
+      <div><label>Heading-Register (-1=aus)</label><input id="g_head" type="number"></div>
+      <div><label>Format</label><select id="g_fmt"><option>float32</option><option>int32_1e7</option><option>int32_1e6</option></select></div>
+      <div><label>Poll (s)</label><input id="g_poll" type="number"></div>
+    </div>
+    <p class="muted" style="margin-top:6px">Speed/Heading werden wie Lat/Lng im gewählten Format gelesen (float32 = 2 Register). -1 = nicht vorhanden → Tempo wird aus der Bewegung abgeleitet.</p>
+  </div>
+
+  <div class="card">
+    <h2>SIFA / Alarm</h2>
+    <div class="row">
+      <div><label>Auslöser</label><select id="sf_combo" onchange="updateSifaFields()"><option value="either">GPS oder Kamera</option><option value="gps">nur GPS</option><option value="camera">nur Kamera</option><option value="both">GPS und Kamera</option><option value="manuell">manuell (nur Totmann/Zeit)</option><option value="aus">aus (kein Alarm)</option></select></div>
+      <div id="f_re"><label>Wiederhol-Alarm (s)</label><input id="sf_re" type="number"></div>
+      <div id="f_dm"><label>Totmann-SIFA</label><select id="sf_dm" onchange="updateSifaFields()"><option value="false">aus</option><option value="true">an</option></select></div>
+      <div id="f_dms"><label>Totmann-Intervall (s)</label><input id="sf_dms" type="number"></div>
+      <div id="f_pre"><label>Lampe→Hupe (s)</label><input id="sf_pre" type="number"></div>
+    </div>
+    <p class="muted" style="margin-top:6px"><b>Ereignis-Alarm</b> (GPS/Kamera): Lampe + Hupe gehen zusammen an; Quittieren schaltet <b>beides</b> aus. Besteht die Ursache weiter, kommt der Alarm nach <b>Wiederholung</b> Sekunden erneut — bis der Kurs wieder stimmt.<br><b>Totmann:</b> nach jedem <b>Totmann-Intervall</b> kommt zuerst die grüne <b>Lampe</b> (Frist zum Quittieren), <b>Lampe→Hupe</b> Sekunden später die <b>Hupe</b>. Quittieren schaltet beides aus und startet das Intervall neu. Auslöser „manuell": nur dieser Totmann, auch wenn „Totmann-SIFA" auf „aus" steht. Auslöser <b>„aus"</b>: alles stillgelegt — kein Ereignis-Alarm, kein Totmann (nur die Test-Knöpfe schalten die Ausgänge). Zum Einrichten/Vorführen.</p>
+  </div>
+
+  <div class="card">
+    <h2>Verdrahtung / GPIO</h2>
+    <div class="row">
+      <div><label>Backend</label><select id="io_be"><option value="none">none (ohne Hardware)</option><option value="sysfs">sysfs (Raspberry)</option></select></div>
+      <div><label>Hupe-Pin</label><input id="io_horn" type="number"></div>
+      <div><label>Lampe-Pin</label><input id="io_lamp" type="number"></div>
+      <div><label>Quittier-Pin (-1=keiner)</label><input id="io_ack" type="number"></div>
+      <div><label>Quittier-Taster Aktiv-Low (gegen GND)</label><select id="io_ackal"><option value="false">nein (gegen 3,3V)</option><option value="true">ja (gegen GND)</option></select></div>
+      <div><label>Eingang-Vorspannung</label><select id="io_inbias"><option value="">sysfs-Standard</option><option value="pullup">Pull-up (Taster gegen GND)</option><option value="pulldown">Pull-down (Taster gegen 3,3V)</option><option value="disabled">aus</option></select></div>
+      <div><label>SIFA-Schlüssel-Pin (-1=keiner)</label><input id="io_key" type="number"></div>
+      <div><label>Aktiv-Low</label><select id="io_al"><option value="false">nein</option><option value="true">ja</option></select></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Kamera (Mobotix/AXIS) <span class="tag">optional</span></h2>
+    <div class="row">
+      <div><label>Kamera aktiv</label><select id="cam_en"><option value="false">nein</option><option value="true">ja</option></select></div>
+      <div><label>Webhook-Secret</label><input id="cam_sec"></div>
+      <div><label>Snapshot-URL</label><input id="cam_url" placeholder="http://benutzer:passwort@192.168.62.156/axis-cgi/jpg/image.cgi"></div>
+      <div><label>Hinweis-Dauer (s)</label><input id="cam_hold" type="number"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div style="grid-column:1 / -1"><label>Livestream-URL (MJPEG, optional – flüssiges Live-Bild)</label><input id="cam_stream" placeholder="http://benutzer:passwort@192.168.62.156/axis-cgi/mjpg/video.cgi?fps=15&amp;resolution=1280x720"></div>
+    </div>
+    <p class="muted" id="cam_hint" style="margin-top:6px"></p>
+    <p class="muted" style="margin-top:4px">AXIS-Snapshot (Standbild, auch für den Alarm an KAI): <code>http://benutzer:passwort@&lt;kamera-ip&gt;/axis-cgi/jpg/image.cgi</code>. AXIS-Livestream (flüssig): <code>http://benutzer:passwort@&lt;kamera-ip&gt;/axis-cgi/mjpg/video.cgi</code>. Basic oder Digest wird automatisch erkannt; in der Anzeige schaltet man mit „Live-Bild"/„Livestream" um.</p>
+  </div>
+
+  <div class="card">
+    <h2>Objekterkennung (Frigate) <span class="tag">optional</span></h2>
+    <div class="row">
+      <div><label>Erkennung aktiv</label><select id="det_en"><option value="false">nein</option><option value="true">ja</option></select></div>
+      <div><label>Frigate-URL</label><input id="det_url" placeholder="http://127.0.0.1:5000"></div>
+      <div><label>Objekte</label><input id="det_labels" placeholder="person,boat"></div>
+      <div><label>Mindest-Score (0–1)</label><input id="det_min" type="number" step="0.05"></div>
+      <div><label>Abfrage-Intervall (s)</label><input id="det_poll" type="number"></div>
+    </div>
+    <p class="muted" style="margin-top:6px">Erkennt Personen/Boote im Kamerastream über ein lokal laufendes Frigate (Pi 5 + AI-HAT/Hailo oder Coral) und meldet jeden Treffer mit Standbild an KAI (als Edge-Ereignis „detection"). Ist die Erkennung aus, läuft das Gerät als ganz normaler Bordwächter.</p>
+  </div>
+
+  <div class="card">
+    <h2>Wetter &amp; Pegel (Anzeige)</h2>
+    <div class="row">
+      <div><label>Wetter anzeigen</label><select id="inf_w"><option value="true">ja</option><option value="false">nein</option></select></div>
+      <div><label>Pegel anzeigen</label><select id="inf_p"><option value="true">ja</option><option value="false">nein</option></select></div>
+      <div><label>Breite (Wetter)</label><input id="inf_lat" placeholder="47.66"></div>
+      <div><label>Länge (Wetter)</label><input id="inf_lng" placeholder="9.18"></div>
+      <div><label>Pegel-Station (PEGELONLINE-UUID)</label><input id="inf_uuid" placeholder="aa9179c1-17ef-4c61-a48a-74193fa7bfdf"></div>
+      <div><label>Pegel-Name</label><input id="inf_label" placeholder="Konstanz"></div>
+      <div><label>Abrufintervall (s)</label><input id="inf_poll" type="number"></div>
+    </div>
+    <p class="muted" style="margin-top:6px">Standard: Wetter &amp; Pegel kommen aus denselben Quellen wie KAI (Open-Meteo / PEGELONLINE) — dieselben Werte, und es läuft mit UND ohne KAI-Verbindung. Nur ändern, wenn das Gerät eine andere Station/Position nutzen soll oder das Gerät ohne KAI betrieben wird.</p>
+  </div>
+
+  <div class="card">
+    <h2>Anzeige am Monitor (Kiosk-Seite)</h2>
+    <div class="row">
+      <div><label>Display-Token (leer = Anzeige aus)</label><input id="c_disptok"></div>
+      <div><label>Kiosk-Startansicht (Monitor am Gerät)</label><select id="c_dispview"><option value="pilot">Pilot</option><option value="seekarte">Seekarte</option></select></div>
+      <div><label>Bildschirmdrehung (Monitor)</label><select id="c_disprot"><option value="normal">normal</option><option value="left">links (90°)</option><option value="right">rechts (270°)</option><option value="inverted">kopfüber (180°)</option></select></div>
+    </div>
+    <div class="btns" style="margin-top:8px"><button class="ghost" onclick="genDispTok()">Neu erzeugen</button><a id="dispOpen" class="ghost" style="display:inline-block;text-decoration:none" href="#" target="_blank" rel="noopener">Anzeige öffnen</a></div>
+    <p class="muted" style="margin-top:6px">Vollbild-Anzeige für einen Monitor an Bord — ohne Login, der Token steckt in der Adresse. Diese Adresse am Monitor hinterlegen:<br><code id="dispUrl" style="word-break:break-all"></code></p>
+    <div class="btns" style="margin-top:10px"><button onclick="kioskSetup()">Anzeige am Monitor einrichten</button><button class="ghost" onclick="kioskDiag()">Kiosk-Diagnose</button></div>
+    <p class="muted" style="margin-top:6px">„Anzeige am Monitor einrichten" legt den <b>Kiosk-Autostart</b> an (Bookworm/Wayland: labwc/wayfire, sonst X) — beim nächsten Neustart öffnet der Monitor automatisch die Anzeige (mit obiger Drehung). Erst <b>Speichern</b> (für Startansicht/Drehung), dann einrichten, dann <b>Gerät (Pi) neu starten</b>.</p>
+    <pre id="kioskLog" style="display:none;white-space:pre-wrap;font-size:.8rem;background:var(--panel2);border:1px solid var(--line);padding:10px;border-radius:8px;margin-top:8px;max-height:300px;overflow:auto"></pre>
+  </div>
+
+  <div class="btns" style="margin-bottom:16px"><button onclick="saveCfg()">Speichern</button><span id="saveMsg" class="muted" style="align-self:center"></span></div>
+
+  <div class="card">
+    <h2>Software</h2>
+    <div id="cfgfoot" class="muted" style="margin-bottom:4px"></div>
+    <div class="btns"><button class="ghost" onclick="updateDev()">Aktualisieren</button><span id="updBadge" style="display:none;align-self:center;padding:3px 10px;border-radius:999px;background:#f3e2c0;color:#8a5a00;font-weight:700;font-size:13px"></span></div>
+    <p class="muted" style="margin-top:6px">Holt die neueste Version aus dem Internet und startet den Dienst neu.</p>
+  </div>
+
+  <div class="card">
+    <h2>Gerät</h2>
+    <div class="btns"><button class="ghost" onclick="restartDev()">Konfig-Dienst neu starten</button><button class="ghost" onclick="rebootPi()">Gerät (Pi) neu starten</button></div>
+    <p class="muted" style="margin-top:6px">Änderung von GPS-Quelle oder GPIO-Backend wirkt nach einem Neustart des <b>Dienstes</b>. „Gerät (Pi) neu starten" bootet den ganzen Raspberry — danach kommt (bei aktivem Kiosk) die Anzeige automatisch wieder hoch.</p>
   </div>
 
 <script>
@@ -347,13 +400,21 @@ async function refresh(){
     else if(s.off_state==='warn'){ b.className='banner b-warn'; b.textContent='Kurs prüfen · '+s.off_course_m+' m neben der Fahrrinne' }
   }catch(e){}
 }
+async function loadNetinfo(){
+  try{ const r=await fetch('/api/netinfo'); if(!r.ok)return; const n=await r.json()
+    if(g('sshCmd')) g('sshCmd').textContent=n.command||('ssh '+(n.user||'pi')+'@'+(n.host||''))
+    if(g('sshPw')) g('sshPw').textContent=n.password||''
+    if(g('hostHint')) g('hostHint').textContent=(n.hostname||'bordwaechter')+'.local'
+    if(g('haUrl')) g('haUrl').textContent=(n.hostname||'bordwaechter')+'.local:8090'
+  }catch(e){}
+}
 async function loadCfg(){
   const rc=await fetch('/api/config')
   if(rc.status===401){ showLogin(); return }
   const c=await rc.json()
   g('ver').textContent='Konfiguration · Schiff-ID '+(c.ship_id||0)
   g('c_base').value=c.kai_base_url||''; g('c_token').value=c.edge_token||''; g('c_ship').value=c.ship_id||0
-  g('c_sendpos').value=String(!!c.send_position); g('c_uipw').value=c.ui_password||''; g('c_hapw').value=c.ha_password||''
+  g('c_sendpos').value=String(!!c.send_position); g('c_standalone').value=String(!!c.standalone); g('c_uipw').value=c.ui_password||''; g('c_hapw').value=c.ha_password||''
   g('c_disptok').value=c.display_token||''; g('c_dispview').value=c.display_view||'pilot'; g('c_disprot').value=c.display_rotate||'normal'; updateDispUrl()
   g('g_src').value=c.gps.source; g('g_dev').value=c.gps.device||''; g('g_baud').value=c.gps.baud||9600; g('g_host').value=c.gps.host||''; g('g_port').value=c.gps.port; g('g_unit').value=c.gps.unit
   g('g_lat').value=c.gps.lat_reg; g('g_lng').value=c.gps.lng_reg; g('g_speed').value=c.gps.speed_reg; g('g_head').value=c.gps.heading_reg; g('g_fmt').value=c.gps.format; g('g_poll').value=c.gps.poll_sec
@@ -366,13 +427,15 @@ async function loadCfg(){
   { const d=c.detect||{}; g('det_en').value=String(!!d.enabled); g('det_url').value=d.frigate_url||''; g('det_labels').value=d.labels||''; g('det_min').value=(d.min_score!=null?d.min_score:0.6); g('det_poll').value=(d.poll_sec||3) }
   { const i=c.info||{}; g('inf_w').value=String(i.weather!==false); g('inf_p').value=String(i.pegel!==false); g('inf_lat').value=i.lat||''; g('inf_lng').value=i.lng||''; g('inf_uuid').value=i.pegel_uuid||''; g('inf_label').value=i.pegel_label||''; g('inf_poll').value=(i.poll_sec||600) }
   const n=c.network||{}; g('n_mode').value=n.mode||'dhcp'; g('n_if').value=n.interface||'eth0'; g('n_addr').value=n.address||''; g('n_gw').value=n.gateway||''; g('n_dns').value=n.dns||''
+  g('c_host').value=c.hostname||''; g('c_sshpw').value=''; g('c_vncpw').value=''
+  loadNetinfo()
   g('manualCard').style.display = c.gps.source==='manual' ? 'block':'none'
   g('cam_hint').textContent='Ereignis-Webhook (in die Kamera eintragen — Mobotix MxMessage bzw. AXIS „Benachrichtigung senden über HTTP"): '+location.origin+'/api/camera/event?secret='+(c.camera.webhook_secret||'<secret>')
 }
 async function saveCfg(){
   const num=(id)=>parseInt(g(id).value||'0',10)
   const c={ kai_base_url:g('c_base').value, edge_token:g('c_token').value, ship_id:num('c_ship'),
-    send_position:g('c_sendpos').value==='true', listen:':8090', ui_password:g('c_uipw').value, ha_password:g('c_hapw').value, display_token:g('c_disptok').value, display_view:g('c_dispview').value, display_rotate:g('c_disprot').value, bundle_refresh_sec:300,
+    send_position:g('c_sendpos').value==='true', standalone:g('c_standalone').value==='true', listen:':8090', ui_password:g('c_uipw').value, ha_password:g('c_hapw').value, hostname:g('c_host').value.trim(), display_token:g('c_disptok').value, display_view:g('c_dispview').value, display_rotate:g('c_disprot').value, bundle_refresh_sec:300,
     gps:{source:g('g_src').value,device:g('g_dev').value,baud:num('g_baud'),host:g('g_host').value,port:num('g_port'),unit:num('g_unit'),lat_reg:num('g_lat'),lng_reg:num('g_lng'),speed_reg:num('g_speed'),heading_reg:num('g_head'),format:g('g_fmt').value,poll_sec:num('g_poll')},
     sifa:{trigger_combo:g('sf_combo').value,realarm_sec:num('sf_re'),deadman_on:g('sf_dm').value==='true',deadman_sec:num('sf_dms'),deadman_prewarn_sec:num('sf_pre')},
     gpio:{backend:g('io_be').value,horn_pin:num('io_horn'),lamp_pin:num('io_lamp'),ack_pin:num('io_ack'),ack_active_low:g('io_ackal').value==='true',sifa_key_pin:num('io_key'),active_low:g('io_al').value==='true',input_bias:g('io_inbias').value},
@@ -380,6 +443,8 @@ async function saveCfg(){
     detect:{enabled:g('det_en').value==='true',frigate_url:g('det_url').value,labels:g('det_labels').value,min_score:Number(g('det_min').value)||0,poll_sec:num('det_poll')},
     info:{weather:g('inf_w').value==='true',pegel:g('inf_p').value==='true',lat:g('inf_lat').value,lng:g('inf_lng').value,pegel_uuid:g('inf_uuid').value,pegel_label:g('inf_label').value,poll_sec:num('inf_poll')},
     network:{mode:g('n_mode').value,interface:g('n_if').value,address:g('n_addr').value,gateway:g('n_gw').value,dns:g('n_dns').value} }
+  if(g('c_sshpw').value.trim()!=='') c.ssh_password=g('c_sshpw').value.trim()
+  if(g('c_vncpw').value.trim()!=='') c.vnc_password=g('c_vncpw').value.trim()
   const r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)})
   g('saveMsg').textContent = r.ok ? 'Gespeichert.' : 'Fehler.'
   setTimeout(()=>g('saveMsg').textContent='',2500); loadCfg()

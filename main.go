@@ -3,11 +3,12 @@ package main
 import (
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
 
-const version = "0.1.68"
+const version = "0.1.74"
 
 type App struct {
 	mu     sync.Mutex
@@ -20,6 +21,7 @@ type App struct {
 	info   *InfoData
 	sys    *SystemData
 	sysAt  time.Time
+	net    *NetworkData
 }
 
 func (a *App) getCfg() *Config     { a.mu.Lock(); defer a.mu.Unlock(); return a.cfg }
@@ -28,6 +30,25 @@ func (a *App) getSrc() GPSSource   { a.mu.Lock(); defer a.mu.Unlock(); return a.
 func (a *App) getInfo() *InfoData  { a.mu.Lock(); defer a.mu.Unlock(); return a.info }
 func (a *App) setInfo(i *InfoData) { a.mu.Lock(); a.info = i; a.mu.Unlock() }
 func (a *App) setSys(s *SystemData) { a.mu.Lock(); a.sys = s; a.sysAt = time.Now(); a.mu.Unlock() }
+func (a *App) getNet() *NetworkData { a.mu.Lock(); defer a.mu.Unlock(); return a.net }
+func (a *App) setNet(n *NetworkData) { a.mu.Lock(); a.net = n; a.mu.Unlock() }
+
+// netLoop: Streckennetz + Anlegestellen von KAI holen und cachen (für den Standalone-/Offline-Modus).
+// Beim Start aus dem Platten-Cache laden, dann bei Verbindung gelegentlich auffrischen.
+func (a *App) netLoop() {
+	if n := loadNetwork(); n != nil && len(n.Segments) > 0 {
+		a.setNet(n)
+	}
+	for {
+		if k := a.getKai(); k != nil && a.getCfg().EdgeToken != "" {
+			if n, err := k.GetNetwork(); err == nil && len(n.Segments) > 0 {
+				a.setNet(n)
+				saveNetwork(n)
+			}
+		}
+		sleepSec(6*60*60, 6*60*60) // alle ~6 h auffrischen
+	}
+}
 func (a *App) getSys() *SystemData {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -40,6 +61,17 @@ func (a *App) getSys() *SystemData {
 }
 
 func (a *App) applyConfig(n *Config) error {
+	// SSH-Passwort wird in der Oberfläche nie zurückgespielt (leer = unverändert) → bestehenden Wert
+	// bewahren, damit ein Speichern ohne Eingabe ihn nicht verwirft.
+	if strings.TrimSpace(n.SSHPassword) == "" {
+		n.SSHPassword = a.getCfg().SSHPassword
+	}
+	// VNC-Passwort: nur anwenden, wenn in der Oberfläche eines eingegeben wurde; leer = bestehenden
+	// Wert bewahren (gleiche Regel wie SSH — die Oberfläche spielt es nie zurück).
+	applyVNCNow := strings.TrimSpace(n.VNCPassword) != ""
+	if !applyVNCNow {
+		n.VNCPassword = a.getCfg().VNCPassword
+	}
 	if err := saveConfig(n); err != nil {
 		return err
 	}
@@ -49,6 +81,11 @@ func (a *App) applyConfig(n *Config) error {
 	a.src = buildGPS(n, a.manual) // Hinweis: GPIO-Backend-Wechsel greift erst nach Neustart
 	a.mu.Unlock()
 	a.eng.SetConfig(n, a.getKai())
+	applyHostname(n)    // Hostname beim Speichern anwenden (voll wirksam nach Neustart)
+	applySSHPassword(n) // SSH-Passwort beim Speichern anwenden
+	if applyVNCNow {
+		applyVNC(n) // VNC-Passwort setzen + VNC-Dienst sicherstellen (nur bei Eingabe)
+	}
 	return nil
 }
 
@@ -130,6 +167,8 @@ func (a *App) kmLoop() {
 func main() {
 	cfg := loadConfig()
 	refreshKioskOnStartup() // Kiosk-Skript + Keyring beim Start auf den Programmstand bringen
+	applyHostname(cfg)      // Gerätename (hostnamectl + /etc/hosts) → erreichbar als <hostname>.local
+	applySSHPassword(cfg)   // einheitliches SSH-Passwort für Benutzer "pi"
 	manual := &ManualGPS{}
 	kai := newKaiClient(cfg.KaiBaseURL, cfg.EdgeToken)
 	gpio := buildGPIO(cfg)
@@ -144,6 +183,7 @@ func main() {
 	go app.sysLoop()    // Pi-Zustand (CPU-Temp/Last/RAM/Platte) für die HA-Integration
 	go app.kmLoop()     // Tageskilometer vom/auf die Platte (reboot-fest)
 	go app.releaseCheckLoop() // GitHub-Release-Tag stündlich cachen (für „neue Version"-Hinweis)
+	go app.netLoop()    // Streckennetz + Anlegestellen cachen (Standalone-/Offline-Navigation)
 
 	log.Printf("Bordwächter %s — lokale Oberfläche auf %s (GPS-Quelle: %s, GPIO: %s)",
 		version, cfg.Listen, cfg.GPS.Source, cfg.GPIO.Backend)

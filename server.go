@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
@@ -30,11 +31,21 @@ var seekarteHTML []byte
 // Quelle für den Self-Update ("Aktualisieren"-Knopf): die neueste Release-Binärdatei des Geräte-Repos.
 const updateBase = "https://github.com/surfer2005/bordwaechter-device/releases/latest/download"
 
-// reexecSoon ersetzt den laufenden Prozess nach kurzer Verzögerung durch sich selbst (liest die Config
-// neu, setzt alle Loops neu auf). Die Verzögerung lässt die HTTP-Antwort noch raus.
+// reexecSoon startet den Dienst nach kurzer Verzögerung neu — damit nach Selbst-Update bzw.
+// Konfig-/GPS-/GPIO-Änderung der NEUE Stand sauber läuft. Kanonisch unter systemd: den eigenen Dienst
+// neu starten. `--no-block` reiht die Aufgabe ein und kehrt SOFORT zurück (bevor systemd diesen Prozess
+// beim Stoppen beendet). Das frühere In-Prozess-`syscall.Exec` griff unter systemd NICHT zuverlässig
+// (Live-Fall Kiosk: neue Version war installiert, wurde aber nicht gestartet — „Aktualisieren" blieb
+// hängen) — daher nur noch als Rückfall; `Restart=always` holt den Dienst sonst ohnehin hoch.
 func reexecSoon() {
 	go func() {
-		time.Sleep(400 * time.Millisecond)
+		time.Sleep(600 * time.Millisecond) // HTTP-Antwort rausflushen lassen
+		if _, err := exec.LookPath("systemctl"); err == nil {
+			if err := exec.Command("systemctl", "--no-block", "restart", "bordwaechter.service").Run(); err == nil {
+				time.Sleep(15 * time.Second) // systemd stoppt/startet uns; hier nur noch auf das SIGTERM warten
+				return
+			}
+		}
 		exe, err := os.Executable()
 		if err != nil {
 			exe = os.Args[0]
@@ -185,6 +196,15 @@ func isLoopback(r *http.Request) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
+}
+
+// displayAuthOK: wie /api/display — localhost (Gerät) darf ohne Token, aus dem Netz nur mit Token.
+func (a *App) displayAuthOK(r *http.Request) bool {
+	if isLoopback(r) {
+		return true
+	}
+	tok := a.getCfg().DisplayToken
+	return tok != "" && r.URL.Query().Get("token") == tok
 }
 
 // statusWithInfo: Engine-Status plus das optionale Wetter/Pegel-Objekt (info) für die Anzeige.
@@ -353,6 +373,41 @@ func (a *App) routes() *http.ServeMux {
 		writeJSON(w, map[string]any{"path": path, "rotate": rot})
 	})
 
+	// Standalone-/Offline-Navigation: Anlegestellen-Liste (für das „Ziel"-Auswahlfeld der Anzeige).
+	mux.HandleFunc("/api/landings", func(w http.ResponseWriter, r *http.Request) {
+		if !a.displayAuthOK(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		// Nur im Standalone-Modus (Betrieb ohne KAI) anbieten; sonst kommt die Route aus dem Bundle.
+		if !a.getCfg().Standalone {
+			writeJSON(w, map[string]any{"landings": []any{}, "has_net": false})
+			return
+		}
+		n := a.getNet()
+		ls := landingsFromNet(n)
+		writeJSON(w, map[string]any{"landings": ls, "has_net": n != nil && len(n.Segments) > 0})
+	})
+	// Route von der aktuellen Position zum gewählten Ziel (Luftlinie oder Fahrrinne) — auch offline.
+	mux.HandleFunc("/api/manual-route", func(w http.ResponseWriter, r *http.Request) {
+		if !a.displayAuthOK(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if !a.getCfg().Standalone {
+			writeJSON(w, map[string]any{"ok": false, "note": "Standalone-Modus aus"})
+			return
+		}
+		pos := a.eng.CurrentPos()
+		if !pos.Valid {
+			writeJSON(w, map[string]any{"ok": false, "note": "keine Position"})
+			return
+		}
+		mode := r.URL.Query().Get("mode")
+		to := r.URL.Query().Get("to")
+		writeJSON(w, manualRoute(a.getNet(), pos.Lat, pos.Lng, to, mode))
+	})
+
 	// Kamera-Snapshot für die Anzeige: holt das Bild von der konfigurierten Kamera-Snapshot-URL
 	// (Mobotix per Basic, AXIS per Digest — s. cameraGet) und reicht es weiter — so bleibt die
 	// Kamera-Adresse/der Zugang auf dem Gerät, nicht im Monitor-Browser.
@@ -457,6 +512,11 @@ func (a *App) routes() *http.ServeMux {
 		writeJSON(w, a.getCfg())
 	}))
 
+	// Fernzugriff-Infos für die Konfig-Seite: SSH-Benutzer/Passwort/Adresse + fertiger ssh-Befehl.
+	mux.HandleFunc("/api/netinfo", a.guard(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, sshInfo(a.getCfg()))
+	}))
+
 	// Neustart aus der Oberfläche: Prozess per Re-Exec frisch starten (liest die Config neu ein,
 	// setzt GPIO-Backend/alle Loops neu auf). systemd-unabhängig — ersetzt das laufende Programm.
 	mux.HandleFunc("/api/restart", a.guard(func(w http.ResponseWriter, r *http.Request) {
@@ -487,7 +547,10 @@ func (a *App) routes() *http.ServeMux {
 
 	// Versionsprüfung: meldet die laufende und die neueste verfügbare Version (GitHub releases/latest).
 	mux.HandleFunc("/api/update-check", a.guard(func(w http.ResponseWriter, r *http.Request) {
-		latest := latestReleaseTag()
+		// Den STÜNDLICH gecachten Tag nehmen (wie die Anzeige-Fußzeile), nicht bei jedem Aufruf frisch
+		// die GitHub-API fragen — die ist unauthentifiziert rate-limitiert und antwortete dann leer,
+		// sodass die Konfigseite „aktuell" zeigte, obwohl es eine neue Version gab.
+		latest := cachedLatestTag()
 		writeJSON(w, map[string]any{
 			"current":         version,
 			"latest":          latest,

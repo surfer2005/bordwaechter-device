@@ -31,6 +31,7 @@ func refreshKioskOnStartup() {
 		log.Printf("kiosk-refresh: %v", err)
 		return
 	}
+	writeChromiumPolicy()
 	for _, n := range []string{"gnome-keyring-secrets", "gnome-keyring-pkcs11", "gnome-keyring-ssh"} {
 		body := "[Desktop Entry]\nType=Application\nName=" + n + " (deaktiviert)\nExec=/bin/true\nHidden=true\nX-GNOME-Autostart-enabled=false\nNoDisplay=true\n"
 		_ = writeUserFile(u, ".config/autostart/"+n+".desktop", body, 0o644)
@@ -74,6 +75,19 @@ func desktopUser() kioskUser {
 }
 
 func hasBin(name string) bool { _, err := exec.LookPath(name); return err == nil }
+
+// writeChromiumPolicy legt eine Enterprise-Richtlinie an, die die Übersetzen-Leiste („Deutsch/
+// Englisch") und andere störende Einblendungen im Kiosk ABSCHALTET — unabhängig von den
+// Kommandozeilen-Flags. Chromium liest /etc/chromium[/-browser]/policies/managed/*.json.
+func writeChromiumPolicy() {
+	policy := `{"TranslateEnabled": false, "DefaultBrowserSettingEnabled": false, "MetricsReportingEnabled": false, "PasswordManagerEnabled": false, "BackgroundModeEnabled": false}`
+	for _, dir := range []string{"/etc/chromium/policies/managed", "/etc/chromium-browser/policies/managed"} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			continue
+		}
+		_ = os.WriteFile(filepath.Join(dir, "bordwaechter.json"), []byte(policy), 0o644)
+	}
+}
 
 // runCmd führt einen Befehl aus und gibt eine kurze Protokollzeile zurück.
 func runCmd(name string, args ...string) string {
@@ -303,6 +317,8 @@ func runKioskSetup() map[string]any {
 		}
 	}
 	add("gnome-keyring-Autostart deaktiviert (kein Passwort-Dialog mehr)")
+	writeChromiumPolicy()
+	add("Chromium-Richtlinie geschrieben (Übersetzen-Leiste aus)")
 
 	if env["chromium"] == "" {
 		add("⚠️ Chromium nicht gefunden — auf einem Lite-Image fehlt es (Desktop-Image hat es). Dann: sudo apt install chromium-browser")

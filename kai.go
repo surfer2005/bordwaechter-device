@@ -123,6 +123,32 @@ func (k *KaiClient) GetBundle(shipID int) (*Bundle, error) {
 	return &b, nil
 }
 
+// Streckennetz + Anlegestellen für den Standalone-/Offline-Modus (wird gecacht).
+type NetSegment struct {
+	From   string       `json:"from"`
+	To     string       `json:"to"`
+	Km     float64      `json:"km"`
+	Points [][2]float64 `json:"points"` // [lon,lat]
+}
+type NetworkData struct {
+	Segments []NetSegment `json:"segments"`
+}
+
+func (k *KaiClient) GetNetwork() (*NetworkData, error) {
+	data, code, err := k.do("GET", "/api/edge/network", nil)
+	if err != nil {
+		return nil, err
+	}
+	if code != 200 {
+		return nil, fmt.Errorf("network http %d", code)
+	}
+	var n NetworkData
+	if err := json.Unmarshal(data, &n); err != nil {
+		return nil, err
+	}
+	return &n, nil
+}
+
 func (k *KaiClient) Hello(version string) error {
 	_, _, err := k.do("POST", "/api/edge/hello", map[string]any{"version": version})
 	return err
