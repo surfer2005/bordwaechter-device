@@ -169,6 +169,9 @@ func (k *KaiClient) Hello(version string, sys *SystemData, gpsHost string, gpsPo
 		body["gps_host"] = gpsHost
 		body["gps_port"] = gpsPort
 	}
+	if ip := localIPv4(); ip != "" {
+		body["lan_ip"] = ip // echte LAN-Adresse des Geräts (statt der Verbindungs-Quelle 127.0.0.1 in KAI)
+	}
 	if sifa != nil {
 		body["sifa"] = sifa
 	}

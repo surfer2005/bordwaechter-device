@@ -162,6 +162,32 @@ func localSubnetHosts() ([]string, string) {
 	return nil, ""
 }
 
+// localIPv4 liefert die primäre LAN-IPv4 des Geräts (erste nicht-Loopback-IPv4) — für die Anzeige in
+// KAI (Geräte-IP), damit dort nicht die Verbindungs-Quelle 127.0.0.1 steht.
+func localIPv4() string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return ""
+	}
+	for _, ifc := range ifaces {
+		if ifc.Flags&net.FlagUp == 0 || ifc.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := ifc.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range addrs {
+			if ipnet, ok := a.(*net.IPNet); ok {
+				if ip4 := ipnet.IP.To4(); ip4 != nil && !ip4.IsLoopback() {
+					return ip4.String()
+				}
+			}
+		}
+	}
+	return ""
+}
+
 func ipToUint(ip net.IP) uint32 {
 	ip = ip.To4()
 	if ip == nil {
