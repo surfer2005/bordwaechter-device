@@ -9,7 +9,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -20,11 +19,6 @@ import (
 	"time"
 )
 
-type scanTarget struct {
-	Name string   `json:"name"`
-	IP   string   `json:"ip"`
-	Macs []string `json:"macs"`
-}
 type connEntry struct {
 	Name     string `json:"name"`
 	EntityID string `json:"entity_id"`
@@ -48,69 +42,22 @@ func (a *App) netScanLoop() {
 	}
 }
 
-// runNetScan meldet den Konnektivitäts-Stand des Bordnetzes an KAI (POST ha-connectivity) — genau wie
-// die frühere Home-Assistant-Netzwerk-Integration (die KAI ersetzen soll). Zwei Quellen, zusammengeführt:
-//  1) Das EIGENE Subnetz entdecken (Ping-Sweep + ARP) — findet alles, was gerade an Bord läuft.
-//  2) Zusätzlich die bekannten KAI-Ziele (scan-targets) auf on/off prüfen — damit ein ausgefallenes,
-//     bekanntes Gerät auch wirklich „offline" meldet (eine reine Entdeckung kennt kein „aus").
+// runNetScan meldet den Konnektivitäts-Stand des Bordnetzes an KAI (POST ha-connectivity) — als Ersatz
+// für die frühere Home-Assistant-Netzwerk-Integration. OHNE gepflegte Soll-/Zielliste (Nutzervorgabe):
+// der Bordwächter entdeckt einfach SEIN eigenes Subnetz (Ping-Sweep + ARP) und meldet die gefundenen
+// Online-Hosts. „Offline" entsteht in KAI aus dem Scan-Gedächtnis (zuvor gesehen, jetzt weg), nicht hier.
 // Die Zuordnung zum Schiff macht KAI über den Edge-Token des meldenden Geräts.
 func runNetScan(k *KaiClient) error {
-	seen := map[string]bool{}
-	entries := make([]connEntry, 0, 64)
-
-	// 1) eigenes Netz entdecken
-	for _, e := range discoverLocalHosts() {
-		entries = append(entries, e)
-		if e.IP != "" {
-			seen[e.IP] = true
-		}
-	}
-
-	// 2) bekannte Ziele aus KAI (on/off), nur falls nicht schon entdeckt
-	if data, code, err := k.do("GET", "/api/asset-manager/scan-targets", nil); err == nil && code == 200 {
-		var tr struct {
-			Items []scanTarget `json:"items"`
-		}
-		if json.Unmarshal(data, &tr) == nil {
-			arp := readArpMacs()
-			for _, tgt := range tr.Items {
-				if tgt.IP != "" && seen[tgt.IP] {
-					continue
-				}
-				online := tgt.IP != "" && pingHost(tgt.IP)
-				if !online {
-					for _, m := range tgt.Macs {
-						if arp[normMacStr(m)] {
-							online = true
-							break
-						}
-					}
-				}
-				mac := ""
-				if len(tgt.Macs) > 0 {
-					mac = tgt.Macs[0]
-				}
-				st := "off"
-				if online {
-					st = "on"
-				}
-				entries = append(entries, connEntry{Name: tgt.Name, EntityID: "ping", Status: st, IP: tgt.IP, Mac: mac})
-				if tgt.IP != "" {
-					seen[tgt.IP] = true
-				}
-			}
-		}
-	}
-
+	entries := discoverLocalHosts()
 	if len(entries) == 0 {
 		return nil
 	}
-	_, code2, err := k.do("POST", "/api/asset-manager/ha-connectivity", map[string]any{"readings": entries})
+	_, code, err := k.do("POST", "/api/asset-manager/ha-connectivity", map[string]any{"readings": entries})
 	if err != nil {
 		return err
 	}
-	if code2 != 200 {
-		return fmt.Errorf("ha-connectivity http %d", code2)
+	if code != 200 {
+		return fmt.Errorf("ha-connectivity http %d", code)
 	}
 	return nil
 }
@@ -268,24 +215,3 @@ func normMacStr(s string) string {
 	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(s), "-", ":"))
 }
 
-// readArpMacs liest die MAC-Adressen aus der Kernel-ARP-Tabelle (wer wurde zuletzt im LAN gesehen).
-func readArpMacs() map[string]bool {
-	out := map[string]bool{}
-	b, err := os.ReadFile("/proc/net/arp")
-	if err != nil {
-		return out
-	}
-	for i, ln := range strings.Split(string(b), "\n") {
-		if i == 0 {
-			continue // Kopfzeile
-		}
-		f := strings.Fields(ln)
-		if len(f) >= 4 {
-			mac := normMacStr(f[3])
-			if mac != "" && mac != "00:00:00:00:00:00" {
-				out[mac] = true
-			}
-		}
-	}
-	return out
-}
