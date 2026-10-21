@@ -156,6 +156,7 @@ type HelloResp struct {
 	OK              bool `json:"ok"`
 	ReportScan      bool `json:"report_scan"`      // Netz-Scan-Schalter aus KAI (zentral umlegbar)
 	ReportTeltonika bool `json:"report_teltonika"` // Teltonika-Router-Diagnose an/aus (zentral)
+	SpeedtestRequested bool `json:"speedtest_requested"` // im KAI-Monitoring angeforderter Speedtest
 }
 
 // Hello: Herzschlag an KAI. gpsHost/gpsPort werden mitgemeldet (für die Teltonika-Übersicht / Router-IP),

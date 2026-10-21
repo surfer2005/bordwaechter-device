@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.81"
+const version = "0.1.82"
 
 type App struct {
 	mu     sync.Mutex
@@ -201,6 +201,9 @@ func (a *App) heartbeatLoop() {
 				kaiReachable = true
 				a.setReportScan(hr.ReportScan)           // Netz-Scan-Schalter aus KAI
 				a.setReportTeltonika(hr.ReportTeltonika)  // Teltonika-Schalter aus KAI
+				if hr.SpeedtestRequested {
+					go a.runSpeedtest() // im KAI-Monitoring angefordert
+				}
 			}
 		}
 		time.Sleep(60 * time.Second)
