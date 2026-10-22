@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.85"
+const version = "0.1.86"
 
 type App struct {
 	mu     sync.Mutex
@@ -189,6 +189,24 @@ func (a *App) sifaBlock() map[string]any {
 	}
 }
 
+// updateAusKai: im KAI-Monitoring angeforderte Aktualisierung — wie der Knopf „Aktualisieren“ am Gerät
+// (Nutzervorgabe 2026-10-22: von beiden Seiten aktualisieren). Erst KAI melden (Flag weg), dann laden + neu starten.
+var updateLaeuft sync.Mutex
+
+func updateAusKai(k *KaiClient) {
+	if !updateLaeuft.TryLock() {
+		return
+	}
+	defer updateLaeuft.Unlock()
+	k.UpdateGestartet()
+	if err := selfUpdate(); err != nil {
+		logEvent("error", "Aktualisierung (aus KAI) fehlgeschlagen: "+err.Error())
+		return
+	}
+	logEvent("info", "Aktualisierung aus KAI geladen, Neustart (bisher Version "+version+")")
+	reexecSoon()
+}
+
 // auftragLoop fragt alle 10 s bei KAI nach, ob ein Auftrag wartet (Speedtest) — vorher kam er erst mit dem
 // minütlichen Herzschlag an (Nutzerhinweis 2026-10-22 „warum müssen wir beim Speedtest auf den Herzschlag warten“).
 func (a *App) auftragLoop() {
@@ -196,8 +214,13 @@ func (a *App) auftragLoop() {
 		time.Sleep(10 * time.Second)
 		cfg := a.getCfg()
 		if k := a.getKai(); k != nil && cfg.EdgeToken != "" {
-			if st, err := k.GetAuftrag(); err == nil && st {
-				go a.runSpeedtest()
+			if au, err := k.GetAuftrag(); err == nil {
+				if au.Speedtest {
+					go a.runSpeedtest()
+				}
+				if au.Update {
+					go updateAusKai(k)
+				}
 			}
 		}
 	}
@@ -220,6 +243,9 @@ func (a *App) heartbeatLoop() {
 				a.setReportTeltonika(hr.ReportTeltonika)  // Teltonika-Schalter aus KAI
 				if hr.SpeedtestRequested {
 					go a.runSpeedtest() // im KAI-Monitoring angefordert
+				}
+				if hr.UpdateRequested {
+					go updateAusKai(k)
 				}
 				if hr.LatestVersion != "" {
 					setLatestTag(hr.LatestVersion) // „Neue Version verfügbar“ binnen einer Minute statt stündlich

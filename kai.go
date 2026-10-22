@@ -113,22 +113,26 @@ func (k *KaiClient) do(method, path string, body any) ([]byte, int, error) {
 // GetAuftrag: schlanke Nachfrage, ob in KAI ein Auftrag für dieses Gerät wartet (z. B. Speedtest).
 // KAI kann das Gerät nicht selbst ansprechen (nur ausgehende Verbindungen) — deshalb fragt das Gerät
 // alle paar Sekunden nach, statt bis zum nächsten Herzschlag zu warten.
-func (k *KaiClient) GetAuftrag() (bool, error) {
+type Auftrag struct {
+	Speedtest bool `json:"speedtest"`
+	Update    bool `json:"update"` // Aktualisierung aus KAI angefordert
+}
+
+func (k *KaiClient) GetAuftrag() (Auftrag, error) {
+	var r Auftrag
 	data, code, err := k.do("GET", "/api/edge/auftrag", nil)
 	if err != nil {
-		return false, err
+		return r, err
 	}
 	if code != 200 {
-		return false, fmt.Errorf("HTTP %d", code)
+		return r, fmt.Errorf("HTTP %d", code)
 	}
-	var r struct {
-		Speedtest bool `json:"speedtest"`
-	}
-	if err := json.Unmarshal(data, &r); err != nil {
-		return false, err
-	}
-	return r.Speedtest, nil
+	err = json.Unmarshal(data, &r)
+	return r, err
 }
+
+// UpdateGestartet meldet KAI, dass die angeforderte Aktualisierung jetzt läuft (KAI nimmt das Flag zurück).
+func (k *KaiClient) UpdateGestartet() { _, _, _ = k.do("POST", "/api/edge/update-gestartet", map[string]any{}) }
 
 func (k *KaiClient) GetBundle(shipID int) (*Bundle, error) {
 	p := "/api/edge/bundle"
@@ -187,6 +191,7 @@ type HelloResp struct {
 	ReportTeltonika bool `json:"report_teltonika"` // Teltonika-Router-Diagnose an/aus (zentral)
 	SpeedtestRequested bool `json:"speedtest_requested"` // im KAI-Monitoring angeforderter Speedtest
 	LatestVersion      string `json:"latest_version"`      // neueste Release-Version (KAI fragt GitHub zentral)
+	UpdateRequested    bool   `json:"update_requested"`    // Aktualisierung aus KAI angefordert
 }
 
 // Hello: Herzschlag an KAI. gpsHost/gpsPort werden mitgemeldet (für die Teltonika-Übersicht / Router-IP),
