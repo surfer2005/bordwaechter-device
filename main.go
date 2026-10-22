@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.83"
+const version = "0.1.84"
 
 type App struct {
 	mu     sync.Mutex
@@ -189,6 +189,20 @@ func (a *App) sifaBlock() map[string]any {
 	}
 }
 
+// auftragLoop fragt alle 10 s bei KAI nach, ob ein Auftrag wartet (Speedtest) — vorher kam er erst mit dem
+// minütlichen Herzschlag an (Nutzerhinweis 2026-10-22 „warum müssen wir beim Speedtest auf den Herzschlag warten“).
+func (a *App) auftragLoop() {
+	for {
+		time.Sleep(10 * time.Second)
+		cfg := a.getCfg()
+		if k := a.getKai(); k != nil && cfg.EdgeToken != "" {
+			if st, err := k.GetAuftrag(); err == nil && st {
+				go a.runSpeedtest()
+			}
+		}
+	}
+}
+
 // heartbeatLoop meldet KAI minütlich Version + Gesundheits-Block (CPU-Temp/Last/RAM/Platte/Laufzeit),
 // damit das Monitoring in KAI online/offline und den Zustand sieht, ohne an Bord zu gehen. Nur
 // ausgehend (wie alles hier) und best effort — ein Fehlschlag wird geloggt, nicht weitergereicht.
@@ -274,6 +288,7 @@ func main() {
 	go app.detectLoop() // Objekterkennung (nur aktiv, wenn cfg.Detect.Enabled)
 	go app.infoLoop()   // Wetter + Pegel für die Anzeige (nur aktiv, wenn cfg.Info.Weather/Pegel)
 	go app.sysLoop()    // Pi-Zustand (CPU-Temp/Last/RAM/Platte) für die HA-Integration
+	go app.auftragLoop()    // alle 10 s: wartet ein Auftrag (Speedtest)?
 	go app.heartbeatLoop()  // minütlicher Herzschlag an KAI (Version + Gesundheit fürs Monitoring)
 	go app.devlogLoop()     // Geräte-Protokoll (Ereignisse/Fehler, offline gepuffert) → KAI
 	go app.smartmeterLoop() // Smartmeter-Bridge: Zähler per Modbus lesen (Konfig aus KAI) → an KAI pushen

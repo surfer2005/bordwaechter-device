@@ -110,6 +110,26 @@ func (k *KaiClient) do(method, path string, body any) ([]byte, int, error) {
 	return data, resp.StatusCode, nil
 }
 
+// GetAuftrag: schlanke Nachfrage, ob in KAI ein Auftrag für dieses Gerät wartet (z. B. Speedtest).
+// KAI kann das Gerät nicht selbst ansprechen (nur ausgehende Verbindungen) — deshalb fragt das Gerät
+// alle paar Sekunden nach, statt bis zum nächsten Herzschlag zu warten.
+func (k *KaiClient) GetAuftrag() (bool, error) {
+	data, code, err := k.do("GET", "/api/edge/auftrag", nil)
+	if err != nil {
+		return false, err
+	}
+	if code != 200 {
+		return false, fmt.Errorf("HTTP %d", code)
+	}
+	var r struct {
+		Speedtest bool `json:"speedtest"`
+	}
+	if err := json.Unmarshal(data, &r); err != nil {
+		return false, err
+	}
+	return r.Speedtest, nil
+}
+
 func (k *KaiClient) GetBundle(shipID int) (*Bundle, error) {
 	p := "/api/edge/bundle"
 	if shipID > 0 {
