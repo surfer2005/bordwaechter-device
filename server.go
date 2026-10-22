@@ -94,6 +94,13 @@ var (
 )
 
 // cachedLatestTag liefert den zuletzt bekannten Release-Tag OHNE Netzzugriff (für den Status-Tick).
+// setLatestTag übernimmt die neueste Version, die KAI beim Herzschlag mitgibt (KAI fragt GitHub zentral).
+func setLatestTag(tag string) {
+	relMu.Lock()
+	relTag, relAt = tag, time.Now()
+	relMu.Unlock()
+}
+
 func cachedLatestTag() string {
 	relMu.Lock()
 	defer relMu.Unlock()

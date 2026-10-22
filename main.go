@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.84"
+const version = "0.1.85"
 
 type App struct {
 	mu     sync.Mutex
@@ -220,6 +220,9 @@ func (a *App) heartbeatLoop() {
 				a.setReportTeltonika(hr.ReportTeltonika)  // Teltonika-Schalter aus KAI
 				if hr.SpeedtestRequested {
 					go a.runSpeedtest() // im KAI-Monitoring angefordert
+				}
+				if hr.LatestVersion != "" {
+					setLatestTag(hr.LatestVersion) // „Neue Version verfügbar“ binnen einer Minute statt stündlich
 				}
 			}
 		}
