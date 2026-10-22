@@ -184,6 +184,14 @@
       <div id="f_dms"><label>Totmann-Intervall (s)</label><input id="sf_dms" type="number"></div>
       <div id="f_pre"><label>Lampe→Hupe (s)</label><input id="sf_pre" type="number"></div>
     </div>
+    <h3 style="margin:12px 0 4px;font-size:14px">Scharf erst draußen</h3>
+    <div class="row">
+      <div><label>SIFA im Hafen</label><select id="sf_hafen"><option value="false">scharf</option><option value="true">aus (ruht im Hafenkreis)</option></select></div>
+      <div><label>SIFA unter km/h aus (0 = nie)</label><input id="sf_min" type="number" step="0.5"></div>
+      <div><label>Kamera-Alarm im Hafen</label><select id="sf_camhafen"><option value="false">scharf</option><option value="true">aus (ruht im Hafenkreis)</option></select></div>
+      <div><label>Kamera-Alarm unter km/h aus (0 = nie)</label><input id="sf_cammin" type="number" step="0.5"></div>
+    </div>
+    <p class="muted" style="margin-top:6px">Der <b>Hafenkreis</b> kommt aus KAI (Radius je Hafen unter Landanlagen, sonst Vorgabe 300 m). Fährt das Schiff hinaus (bzw. schneller als die Mindestgeschwindigkeit), wird scharf geschaltet, beim Einlaufen ruht es wieder. <b>Ruht</b> heißt: keine Hupe, keine Lampe — das Kamerabild läuft weiter und darf rot werden, ein Kamera-Hinweis wird an KAI gemeldet. Ohne aktuelle Position bleibt alles scharf.</p>
     <p class="muted" style="margin-top:6px"><b>Ereignis-Alarm</b> (GPS/Kamera): Lampe + Hupe gehen zusammen an; Quittieren schaltet <b>beides</b> aus. Besteht die Ursache weiter, kommt der Alarm nach <b>Wiederholung</b> Sekunden erneut — bis der Kurs wieder stimmt.<br><b>Totmann:</b> nach jedem <b>Totmann-Intervall</b> kommt zuerst die grüne <b>Lampe</b> (Frist zum Quittieren), <b>Lampe→Hupe</b> Sekunden später die <b>Hupe</b>. Quittieren schaltet beides aus und startet das Intervall neu. Auslöser „manuell": nur dieser Totmann, auch wenn „Totmann-SIFA" auf „aus" steht. Auslöser <b>„aus"</b>: alles stillgelegt — kein Ereignis-Alarm, kein Totmann (nur die Test-Knöpfe schalten die Ausgänge). Zum Einrichten/Vorführen.</p>
   </div>
 
@@ -420,6 +428,8 @@ async function loadCfg(){
   g('g_lat').value=c.gps.lat_reg; g('g_lng').value=c.gps.lng_reg; g('g_speed').value=c.gps.speed_reg; g('g_head').value=c.gps.heading_reg; g('g_fmt').value=c.gps.format; g('g_poll').value=c.gps.poll_sec
   g('sf_combo').value=c.sifa.trigger_combo; g('sf_re').value=c.sifa.realarm_sec; g('sf_dm').value=String(!!c.sifa.deadman_on)
   g('sf_dms').value=c.sifa.deadman_sec; g('sf_pre').value=c.sifa.deadman_prewarn_sec
+  g('sf_hafen').value=String(!!c.sifa.harbor_off); g('sf_min').value=c.sifa.min_kmh||0
+  g('sf_camhafen').value=String(!!c.sifa.camera_harbor_off); g('sf_cammin').value=c.sifa.camera_min_kmh||0
   updateSifaFields()
   g('io_be').value=c.gpio.backend; g('io_horn').value=c.gpio.horn_pin; g('io_lamp').value=c.gpio.lamp_pin
   g('io_ack').value=c.gpio.ack_pin; g('io_key').value=c.gpio.sifa_key_pin; g('io_al').value=String(!!c.gpio.active_low); g('io_ackal').value=String(!!c.gpio.ack_active_low); g('io_inbias').value=c.gpio.input_bias||''
@@ -437,7 +447,7 @@ async function saveCfg(){
   const c={ kai_base_url:g('c_base').value, edge_token:g('c_token').value, ship_id:num('c_ship'),
     send_position:g('c_sendpos').value==='true', standalone:g('c_standalone').value==='true', listen:':8090', ui_password:g('c_uipw').value, ha_password:g('c_hapw').value, hostname:g('c_host').value.trim(), display_token:g('c_disptok').value, display_view:g('c_dispview').value, display_rotate:g('c_disprot').value, bundle_refresh_sec:300,
     gps:{source:g('g_src').value,device:g('g_dev').value,baud:num('g_baud'),host:g('g_host').value,port:num('g_port'),unit:num('g_unit'),lat_reg:num('g_lat'),lng_reg:num('g_lng'),speed_reg:num('g_speed'),heading_reg:num('g_head'),format:g('g_fmt').value,poll_sec:num('g_poll')},
-    sifa:{trigger_combo:g('sf_combo').value,realarm_sec:num('sf_re'),deadman_on:g('sf_dm').value==='true',deadman_sec:num('sf_dms'),deadman_prewarn_sec:num('sf_pre')},
+    sifa:{trigger_combo:g('sf_combo').value,realarm_sec:num('sf_re'),deadman_on:g('sf_dm').value==='true',deadman_sec:num('sf_dms'),deadman_prewarn_sec:num('sf_pre'),harbor_off:g('sf_hafen').value==='true',min_kmh:parseFloat(g('sf_min').value)||0,camera_harbor_off:g('sf_camhafen').value==='true',camera_min_kmh:parseFloat(g('sf_cammin').value)||0},
     gpio:{backend:g('io_be').value,horn_pin:num('io_horn'),lamp_pin:num('io_lamp'),ack_pin:num('io_ack'),ack_active_low:g('io_ackal').value==='true',sifa_key_pin:num('io_key'),active_low:g('io_al').value==='true',input_bias:g('io_inbias').value},
     camera:{enabled:g('cam_en').value==='true',webhook_secret:g('cam_sec').value,snapshot_url:g('cam_url').value,stream_url:g('cam_stream').value,hold_sec:num('cam_hold')},
     detect:{enabled:g('det_en').value==='true',frigate_url:g('det_url').value,labels:g('det_labels').value,min_score:Number(g('det_min').value)||0,poll_sec:num('det_poll')},

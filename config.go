@@ -50,6 +50,13 @@ type Config struct {
 		DeadmanOn         bool   `json:"deadman_on"`    // allgemeine SIFA (Totmann)
 		DeadmanSec        int    `json:"deadman_sec"`
 		DeadmanPrewarnSec int    `json:"deadman_prewarn_sec"` // Sek. NACH der grünen Lampe bis zur Hupe (Frist zum Quittieren)
+		// Scharf erst draußen (Nutzervorgabe 2026-10-22): SIFA und Kamera-Alarm je getrennt im Hafenkreis
+		// (Radius je Hafen aus KAI) und/oder unter einer Mindestgeschwindigkeit stumm. Bild/rote Anzeige
+		// bleiben, ein Kamera-Ereignis geht weiter an KAI — nur Hupe und Lampe bleiben aus.
+		HarborOff       bool    `json:"harbor_off"`        // SIFA (Totmann + Kurs-Alarm) im Hafen aus
+		MinKmh          float64 `json:"min_kmh"`           // SIFA unter X km/h aus (0 = immer scharf)
+		CameraHarborOff bool    `json:"camera_harbor_off"` // Kamera-Alarm im Hafen aus
+		CameraMinKmh    float64 `json:"camera_min_kmh"`    // Kamera-Alarm unter X km/h aus (0 = immer scharf)
 	} `json:"sifa"`
 
 	GPIO struct {

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.82"
+const version = "0.1.83"
 
 type App struct {
 	mu     sync.Mutex
@@ -183,6 +183,9 @@ func (a *App) sifaBlock() map[string]any {
 		"deadman_sec": cfg.SIFA.DeadmanSec,
 		"prewarn_sec": cfg.SIFA.DeadmanPrewarnSec,
 		"rearm_sec":   cfg.SIFA.ReAlarmSec,
+		"ruht":        st.SifaRuht,
+		"kamera_ruht": st.KameraRuht,
+		"im_hafen":    st.ImHafen,
 	}
 }
 

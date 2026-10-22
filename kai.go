@@ -50,9 +50,18 @@ type Bundle struct {
 		Unit            string  `json:"unit"`
 	} `json:"thresholds"`
 	HatBordbuch bool   `json:"hatBordbuch"`
+	Haefen      []Hafen `json:"haefen"` // Häfen/Landestellen mit Hafenkreis (SIFA/Kamera-Alarm ruht darin)
 	Legs        []Leg  `json:"legs"`
 	GeneratedAt string `json:"generated_at"`
 	Error       string `json:"error"`
+}
+
+// Hafen: Mittelpunkt + Radius des Hafenkreises (Radius je Hafen in KAI einstellbar, sonst Vorgabe).
+type Hafen struct {
+	Name    string  `json:"name"`
+	Lat     float64 `json:"lat"`
+	Lng     float64 `json:"lng"`
+	RadiusM float64 `json:"radius_m"`
 }
 
 type KaiClient struct {

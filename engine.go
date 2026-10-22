@@ -50,6 +50,9 @@ type Status struct {
 	PosAgeSec    int     `json:"pos_age_sec"`
 	PosValid     bool    `json:"pos_valid"`
 	CameraHazard bool    `json:"camera_hazard"`
+	ImHafen      string  `json:"im_hafen"`       // Name des Hafens, in dessen Kreis das Schiff liegt ("" = draußen)
+	SifaRuht     string  `json:"sifa_ruht"`      // Grund, warum SIFA stumm ist ("" = scharf)
+	KameraRuht   string  `json:"kamera_ruht"`    // Grund, warum der Kamera-Alarm stumm ist ("" = scharf)
 	CamConfigured bool   `json:"cam_configured"`    // Snapshot-URL hinterlegt → Live-Bild möglich
 	StreamConfigured bool `json:"stream_configured"` // Livestream-URL (MJPEG) hinterlegt → flüssiger Stream möglich
 	HatBordbuch  bool    `json:"hat_bordbuch"`
@@ -85,6 +88,9 @@ type Engine struct {
 	// Kamera
 	camHazardUntil time.Time
 	prevAck        bool
+	prevCamHazard  bool
+	// Hafenkreis / Mindestgeschwindigkeit (mit Hysterese, damit es an der Grenze nicht flattert)
+	gate gateState
 
 	// Test-Puls (Hupe/Lampe kurz schalten)
 	testHornUntil time.Time
@@ -533,8 +539,23 @@ func (e *Engine) Tick(now time.Time) {
 	st.CamConfigured = cfg.Camera.SnapshotURL != ""
 	st.StreamConfigured = cfg.Camera.StreamURL != ""
 
+	// Scharf erst draußen: Hafenkreis + Mindestgeschwindigkeit, getrennt für SIFA und Kamera.
+	posFresh := pos.Valid && now.Sub(pos.TS) <= time.Duration(posStaleSec(b))*time.Second
+	var haefen []Hafen
+	if b != nil {
+		haefen = b.Haefen
+	}
+	g := e.gate.update(cfg, haefen, pos, posFresh)
+	st.ImHafen, st.SifaRuht, st.KameraRuht = g.hafen, g.sifaRuht, g.kameraRuht
+	camRising := camHazard && !e.prevCamHazard
+	e.prevCamHazard = camHazard
+	camSilentEvent := camRising && g.kameraRuht != ""
+	if g.kameraRuht != "" {
+		camHazard = false // Bild + rote Anzeige bleiben (st.CameraHazard), aber kein Alarm-Auslöser
+	}
+
 	// Ursache (Fusion je nach Kombi)
-	offAlarm := st.OffState == "alarm"
+	offAlarm := st.OffState == "alarm" && g.sifaRuht == ""
 	var cause bool
 	switch cfg.SIFA.TriggerCombo {
 	case "gps":
@@ -577,7 +598,9 @@ func (e *Engine) Tick(now time.Time) {
 
 	// Totmann-SIFA (auch erzwungen im Auslöser-Modus "manuell" — dann IST der Totmann die SIFA)
 	deadmanHorn, deadmanLamp := false, false
-	if cfg.SIFA.TriggerCombo != "aus" && (cfg.SIFA.DeadmanOn || cfg.SIFA.TriggerCombo == "manuell") {
+	if g.sifaRuht != "" {
+		e.lastDeadmanAck = now // ruht → beim Scharfwerden beginnt das Intervall frisch (nicht sofort Hupe)
+	} else if cfg.SIFA.TriggerCombo != "aus" && (cfg.SIFA.DeadmanOn || cfg.SIFA.TriggerCombo == "manuell") {
 		sec := cfg.SIFA.DeadmanSec
 		if sec <= 0 {
 			sec = 30
@@ -659,6 +682,17 @@ func (e *Engine) Tick(now time.Time) {
 					log.Printf("edge-event (alarm): %v", err)
 				}
 			}(pos, st.OffCourseM, reasonDetail, snap)
+		} else if camSilentEvent {
+			// Kamera-Hinweis, während der Alarm ruht: nur protokollieren (Nutzervorgabe „Ereignis an KAI").
+			snap := ""
+			if cfg.Camera.Enabled && cfg.Camera.SnapshotURL != "" {
+				snap = fetchSnapshotB64(snapURL)
+			}
+			go func(p Position, d, sn string) {
+				if err := kai.PostEvent("kamera", "hinweis", d, p, 0, sn); err != nil {
+					log.Printf("edge-event (kamera): %v", err)
+				}
+			}(pos, "Kamera-Hinweis ohne Alarm ("+st.KameraRuht+")", snap)
 		} else if eventCleared {
 			go func(p Position) {
 				if err := kai.PostEvent("status", "ok", "Kurs wieder geklärt", p, 0, ""); err != nil {

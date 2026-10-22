@@ -50,6 +50,7 @@
  .sifabox b{font-family:var(--mono)}
  .sifabox.ok{background:var(--tone-green-bg,#1f3b30);color:var(--tone-green-fg,#9fe3c4)}
  .sifabox.warn{background:#5a3a12;color:#ffcf8f}
+ .sifabox.ruht{background:#26302c;color:#a9b8b1}
  .sifabox.due{background:#5a1f17;color:#ffb3a8;font-weight:700}
  .verdict{display:flex;align-items:center;gap:13px;font-weight:800;margin-top:16px}.verdict .ar{font-size:3rem;line-height:1}.verdict .w{font-size:2rem}
  .verdict .de{font-family:var(--mono);font-weight:700;font-size:1.05rem;padding:3px 10px;border-radius:999px;border:1px solid currentColor}
@@ -275,7 +276,7 @@ function render(s){
   if(s.today_km>0){ tk.innerHTML='Heute <b>'+fmt1(s.today_km)+'</b> km' }
   // Totmann-Countdown lokal im 1-s-Takt zeigen (die Seite pollt nur alle 2 s → sonst zählt die Zahl
   // sichtbar in 2-s-Schritten). Beim Poll den Serverwert übernehmen, dazwischen selbst herunterzählen.
-  sifaState={active:!!s.sifa_active,due:!!s.sifa_deadman_active,cd:s.sifa_countdown_sec||0,at:Date.now()}
+  sifaState={active:!!s.sifa_active,due:!!s.sifa_deadman_active,cd:s.sifa_countdown_sec||0,at:Date.now(),ruht:s.sifa_ruht||'',kamRuht:s.kamera_ruht||''}
   drawSifa()
 
   if(hasAdvisory){
@@ -423,6 +424,12 @@ var sifaState=null
 function drawSifa(){
   var sb=$('sifabox'); if(!sb)return
   var st=sifaState
+  if(st&&!st.active&&(st.ruht||st.kamRuht)){
+    // Scharf erst draußen: im Hafen/zu langsam ruhen SIFA bzw. Kamera-Alarm — sichtbar, damit niemand rätselt
+    sb.style.display=''; sb.className='sifabox ruht'
+    sb.textContent=st.ruht&&st.kamRuht&&st.ruht===st.kamRuht ? 'SIFA + Kamera-Alarm ruhen · '+st.ruht
+      : [st.ruht?'SIFA ruht · '+st.ruht:'', st.kamRuht?'Kamera-Alarm ruht · '+st.kamRuht:''].filter(Boolean).join('  ·  ')
+    return }
   if(!st||!st.active){ sb.style.display='none'; return }
   sb.style.display=''
   if(st.due){ sb.className='sifabox due'; sb.innerHTML='TOTMANN — JETZT DRÜCKEN!'; return }
