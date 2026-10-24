@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.86"
+const version = "0.1.87"
 
 type App struct {
 	mu     sync.Mutex
@@ -102,7 +102,8 @@ func (a *App) applyConfig(n *Config) error {
 	}
 	// VNC-Passwort: nur anwenden, wenn in der Oberfläche eines eingegeben wurde; leer = bestehenden
 	// Wert bewahren (gleiche Regel wie SSH — die Oberfläche spielt es nie zurück).
-	applyVNCNow := strings.TrimSpace(n.VNCPassword) != ""
+	// (aus KAI kommt das Passwort bei jedem Abgleich mit — angewandt wird es nur, wenn es sich ändert)
+	applyVNCNow := strings.TrimSpace(n.VNCPassword) != "" && n.VNCPassword != a.getCfg().VNCPassword
 	if !applyVNCNow {
 		n.VNCPassword = a.getCfg().VNCPassword
 	}
@@ -221,6 +222,12 @@ func (a *App) auftragLoop() {
 				if au.Update {
 					go updateAusKai(k)
 				}
+				if au.ConfigRev > cfg.KaiConfigRev {
+					go a.kaiSync(au.ConfigRev, false) // neuer Stand der Einstellungen in KAI
+				}
+				if au.Befehl != nil {
+					go a.kaiBefehl(au.Befehl) // Testschalter aus KAI
+				}
 			}
 		}
 	}
@@ -249,6 +256,9 @@ func (a *App) heartbeatLoop() {
 				}
 				if hr.LatestVersion != "" {
 					setLatestTag(hr.LatestVersion) // „Neue Version verfügbar“ binnen einer Minute statt stündlich
+				}
+				if hr.ConfigRev > cfg.KaiConfigRev {
+					go a.kaiSync(hr.ConfigRev, false)
 				}
 			}
 		}
@@ -326,6 +336,7 @@ func main() {
 	go app.kmLoop()     // Tageskilometer vom/auf die Platte (reboot-fest)
 	go app.releaseCheckLoop() // GitHub-Release-Tag stündlich cachen (für „neue Version"-Hinweis)
 	go app.netLoop()    // Streckennetz + Anlegestellen cachen (Standalone-/Offline-Navigation)
+	go app.kaiStartSync() // Einstellungen einmal mit KAI abgleichen (Stand kann sich offline geändert haben)
 
 	log.Printf("Bordwächter %s — lokale Oberfläche auf %s (GPS-Quelle: %s, GPIO: %s)",
 		version, cfg.Listen, cfg.GPS.Source, cfg.GPIO.Backend)

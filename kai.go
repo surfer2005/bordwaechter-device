@@ -116,6 +116,8 @@ func (k *KaiClient) do(method, path string, body any) ([]byte, int, error) {
 type Auftrag struct {
 	Speedtest bool `json:"speedtest"`
 	Update    bool `json:"update"` // Aktualisierung aus KAI angefordert
+	ConfigRev int         `json:"config_rev"` // Stand der Einstellungen in KAI (s. kaiconfig.go)
+	Befehl    *kaiBefehlT `json:"befehl"`     // Testschalter aus KAI (Hupe/Lampe/GPIO-Test/Quittieren)
 }
 
 func (k *KaiClient) GetAuftrag() (Auftrag, error) {
@@ -192,6 +194,7 @@ type HelloResp struct {
 	SpeedtestRequested bool `json:"speedtest_requested"` // im KAI-Monitoring angeforderter Speedtest
 	LatestVersion      string `json:"latest_version"`      // neueste Release-Version (KAI fragt GitHub zentral)
 	UpdateRequested    bool   `json:"update_requested"`    // Aktualisierung aus KAI angefordert
+	ConfigRev          int    `json:"config_rev"`          // Stand der Einstellungen in KAI
 }
 
 // Hello: Herzschlag an KAI. gpsHost/gpsPort werden mitgemeldet (für die Teltonika-Übersicht / Router-IP),

@@ -506,6 +506,41 @@ func (a *App) routes() *http.ServeMux {
 		writeJSON(w, a.getCfg())
 	}))
 
+	// Mit KAI koppeln: KAI-Adresse + Kopplungscode (aus KAI, 30 Min., einmal) → Geräte-Schlüssel, Schiff
+	// und danach alle Einstellungen aus KAI. Am Gerät bleiben nur KAI-Adresse und Netzwerk.
+	mux.HandleFunc("/api/koppeln", a.guard(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "POST erwartet", 405)
+			return
+		}
+		var b struct {
+			KaiBaseURL string `json:"kai_base_url"`
+			Code       string `json:"code"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil || strings.TrimSpace(b.KaiBaseURL) == "" || strings.TrimSpace(b.Code) == "" {
+			http.Error(w, "KAI-Adresse und Kopplungscode angeben", 400)
+			return
+		}
+		ant, err := koppelnMitKai(strings.TrimSpace(b.KaiBaseURL), strings.TrimSpace(b.Code))
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		cur := *a.getCfg()
+		n := &cur
+		n.KaiBaseURL = strings.TrimSpace(b.KaiBaseURL)
+		n.EdgeToken = ant.Token
+		n.ShipID = ant.ShipID
+		n.KaiConfigRev = 0
+		if err := a.applyConfig(n); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		logEvent("info", "Mit KAI gekoppelt als "+ant.Device)
+		go a.kaiSync(0, true) // sofort alle Einstellungen aus KAI holen
+		writeJSON(w, map[string]any{"ok": true, "device": ant.Device, "ship_id": ant.ShipID})
+	}))
+
 	// Fernzugriff-Infos für die Konfig-Seite: SSH-Benutzer/Passwort/Adresse + fertiger ssh-Befehl.
 	mux.HandleFunc("/api/netinfo", a.guard(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, sshInfo(a.getCfg()))

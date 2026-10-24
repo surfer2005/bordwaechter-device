@@ -113,6 +113,9 @@ type Config struct {
 	} `json:"network"`
 
 	BundleRefreshSec int `json:"bundle_refresh_sec"`
+
+	// Stand der zuletzt aus KAI übernommenen Einstellungen (0 = noch nie). Siehe kaiconfig.go.
+	KaiConfigRev int `json:"kai_config_rev"`
 }
 
 func defaultConfig() *Config {

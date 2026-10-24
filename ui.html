@@ -72,6 +72,22 @@
 
   <div id="banner" class="banner"></div>
 
+  <div class="card" id="kopplungCard">
+    <h2>Kopplung mit KAI</h2>
+    <div id="kop_ok" style="display:none">
+      <p><b id="kop_text">Gekoppelt</b></p>
+      <p class="muted" style="margin-top:6px">Die Einstellungen dieses Geräts werden in KAI gepflegt (Administration → Monitoring → Schiffe &amp; Landestellen) und hier automatisch übernommen. Hier geänderte Werte überschreibt KAI beim nächsten Abgleich – am Gerät bleiben nur KAI-Adresse und Netzwerk.</p>
+    </div>
+    <div id="kop_form">
+      <div class="row">
+        <div><label>KAI-Adresse</label><input id="kop_base" placeholder="https://kai-bsb.de"></div>
+        <div><label>Kopplungscode (aus KAI)</label><input id="kop_code" placeholder="XXXX-XXXX" style="text-transform:uppercase;letter-spacing:.1em"></div>
+      </div>
+      <div class="btns"><button onclick="koppeln()">Koppeln</button><span id="kop_msg" class="muted" style="align-self:center"></span></div>
+      <p class="muted" style="margin-top:6px">Den Code erzeugt man in KAI beim Schiff unter „Gerät koppeln“ bzw. „Gerät tauschen“. Er gilt 30 Minuten und nur einmal. Danach holt sich das Gerät seinen Schlüssel und alle Einstellungen aus KAI.</p>
+    </div>
+  </div>
+
   <div class="card">
     <h2>Status</h2>
     <div class="grid">
@@ -416,10 +432,22 @@ async function loadNetinfo(){
     if(g('haUrl')) g('haUrl').textContent=(n.hostname||'bordwaechter')+'.local:8090'
   }catch(e){}
 }
+async function koppeln(){
+  const m=g('kop_msg'); m.textContent='Koppeln …'
+  const r=await fetch('/api/koppeln',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kai_base_url:g('kop_base').value.trim(),code:g('kop_code').value.trim()})})
+  if(!r.ok){ m.textContent=(await r.text())||'Koppeln fehlgeschlagen'; return }
+  const j=await r.json(); m.textContent='Gekoppelt als '+j.device+' – Einstellungen werden aus KAI geholt …'
+  setTimeout(loadCfg,4000)
+}
 async function loadCfg(){
   const rc=await fetch('/api/config')
   if(rc.status===401){ showLogin(); return }
   const c=await rc.json()
+  const gek=!!c.edge_token
+  g('kop_ok').style.display=gek?'block':'none'
+  g('kop_text').textContent=gek?('Gekoppelt mit '+(c.kai_base_url||'KAI')+' · Schiff-ID '+(c.ship_id||0)+(c.kai_config_rev?(' · Einstellungen aus KAI, Stand '+c.kai_config_rev):' · Einstellungen aus KAI noch nicht übernommen')):''
+  g('kop_form').style.display=gek?'none':'block'
+  if(!g('kop_base').value) g('kop_base').value=c.kai_base_url||''
   g('ver').textContent='Konfiguration · Schiff-ID '+(c.ship_id||0)
   g('c_base').value=c.kai_base_url||''; g('c_token').value=c.edge_token||''; g('c_ship').value=c.ship_id||0
   g('c_sendpos').value=String(!!c.send_position); g('c_standalone').value=String(!!c.standalone); g('c_uipw').value=c.ui_password||''; g('c_hapw').value=c.ha_password||''
