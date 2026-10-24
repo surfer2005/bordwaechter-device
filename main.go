@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.90"
+const version = "0.1.91"
 
 type App struct {
 	mu     sync.Mutex
@@ -222,6 +222,9 @@ func (a *App) auftragLoop() {
 		time.Sleep(10 * time.Second)
 		cfg := a.getCfg()
 		if k := a.getKai(); k != nil && cfg.EdgeToken != "" {
+			if !istMedienRolle(cfg.Rolle) {
+				_ = k.SendSifa(a.sifaBlock()) // SIFA-Restzeit für KAI aktuell halten (ältere KAI antworten 404, harmlos)
+			}
 			if au, err := k.GetAuftrag(); err == nil {
 				if au.Speedtest {
 					go a.runSpeedtest()

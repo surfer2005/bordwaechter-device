@@ -133,6 +133,16 @@ func (k *KaiClient) GetAuftrag() (Auftrag, error) {
 	return r, err
 }
 
+// SendSifa meldet den SIFA-/Totmann-Stand zwischen zwei Herzschlägen (alle 10 s mit der Auftragsabfrage),
+// damit die Restzeit in KAI stimmt — der Herzschlag kommt nur minütlich, Taktzeiten von 30 s sind üblich.
+func (k *KaiClient) SendSifa(sifa map[string]any) error {
+	_, code, err := k.do("POST", "/api/edge/sifa", map[string]any{"sifa": sifa})
+	if err == nil && code != 200 {
+		err = fmt.Errorf("HTTP %d", code)
+	}
+	return err
+}
+
 // UpdateGestartet meldet KAI, dass die angeforderte Aktualisierung jetzt läuft (KAI nimmt das Flag zurück).
 func (k *KaiClient) UpdateGestartet() { _, _, _ = k.do("POST", "/api/edge/update-gestartet", map[string]any{}) }
 
