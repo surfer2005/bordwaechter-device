@@ -23,6 +23,9 @@
   .kv .v{font-weight:800;font-size:1.02rem;line-height:1.3;word-break:break-word;margin-top:2px}
   label{display:block;font-size:.82rem;color:var(--muted);font-weight:700;margin:0 0 5px}
   input,select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:.95rem;background:var(--panel2);color:var(--ink)}
+  body.auskai .card input:disabled, body.auskai .card select:disabled{background:transparent;border-color:transparent;padding-left:0;padding-right:0;appearance:none;-webkit-appearance:none;color:var(--ink);opacity:1;font-weight:700;-webkit-text-fill-color:var(--ink)}
+  body.auskai .nur-lokal-pw{display:none}
+  .nur-kai-pw{display:none} body.auskai .nur-kai-pw{display:block}
   .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px 14px}
   button{background:var(--teal);color:var(--btnink);border:0;border-radius:9px;padding:10px 16px;font:inherit;font-weight:800;cursor:pointer}
   button.ghost{background:transparent;color:var(--teal);border:1px solid var(--line)}
@@ -74,6 +77,10 @@ body.medienrolle .nur-bw{display:none!important}
 
   <div id="banner" class="banner"></div>
 
+  <div class="card" id="ausKaiHinweis" style="display:none;border-color:#1F6E5C;background:#DCEBE4;color:#154E41">
+    <b>Einstellungen kommen aus KAI.</b> Hier werden sie nur angezeigt; ändern unter Monitoring → Schiffe &amp; Landestellen.
+    Am Gerät änderbar sind nur KAI-Adresse und Netzwerk. Die Anzeige am Monitor richtet das Gerät selbst ein.
+  </div>
   <div class="card" id="kopplungCard">
     <h2>Kopplung mit KAI</h2>
     <div id="kop_ok" style="display:none">
@@ -154,24 +161,26 @@ body.medienrolle .nur-bw{display:none!important}
     <h2>Zugang</h2>
     <div class="row">
       <div><label>Benutzer (Anmeldung)</label><input value="admin" readonly></div>
-      <div><label>UI-Passwort (Konfig-Seite)</label><input id="c_uipw" type="password" autocomplete="new-password"></div>
-      <div><label>VNC-Passwort (Fernzugriff) <span class="tag">neu</span></label><input id="c_vncpw" type="password" autocomplete="new-password" placeholder="leer = unverändert"></div>
-      <div><label>HA-Passwort (leer = wie UI)</label><input id="c_hapw" type="password" autocomplete="new-password"></div>
+      <div class="nur-lokal-pw"><label>UI-Passwort (Konfig-Seite)</label><input id="c_uipw" type="password" autocomplete="new-password"></div>
+      <div class="nur-lokal-pw"><label>VNC-Passwort (Fernzugriff) <span class="tag">neu</span></label><input id="c_vncpw" type="password" autocomplete="new-password" placeholder="leer = unverändert"></div>
+      <div class="nur-lokal-pw"><label>HA-Passwort (leer = wie UI)</label><input id="c_hapw" type="password" autocomplete="new-password"></div>
     </div>
     <div style="margin-top:12px">
       <label>Fernzugriff per SSH</label>
       <div class="sshbox"><div>Befehl: <code id="sshCmd">ssh pi@bordwaechter.local</code></div><div style="margin-top:3px">Benutzer: <b>pi</b> &nbsp;·&nbsp; Passwort: <b id="sshPw">kai-terminal</b></div></div>
     </div>
-    <div class="row" style="margin-top:12px">
+    <div class="row nur-lokal-pw" style="margin-top:12px">
       <div><label>SSH-Passwort ändern (leer = unverändert)</label><input id="c_sshpw" type="text" autocomplete="off" placeholder="leer = unverändert"></div>
     </div>
-    <p class="muted" style="margin-top:6px">Benutzer ist immer <b>pi</b>. Neue Passwörter (SSH/VNC) werden mit „Speichern" sofort übernommen.</p>
+    <p class="muted nur-lokal-pw" style="margin-top:6px">Benutzer ist immer <b>pi</b>. Neue Passwörter (SSH/VNC) werden mit „Speichern" sofort übernommen.</p>
+    <p class="muted nur-kai-pw" style="margin-top:6px">Passwörter (Konfig-Seite, VNC, Home Assistant, SSH) werden in KAI gepflegt und hier nicht angezeigt.</p>
   </div>
 
   <div class="card nur-bw">
-    <h2>Home Assistant <span class="tag">eigenes Kästchen</span></h2>
+    <h2>Home Assistant <span class="tag">nur Hinweis · keine Einstellung</span></h2>
     <div class="sshbox">http://<code id="haUrl">bordwaechter.local:8090</code> &nbsp;·&nbsp; Benutzer: <b>ha</b> &nbsp;·&nbsp; Passwort: s. „Zugang → HA-Passwort"</div>
     <p class="muted" style="margin-top:6px">In Home Assistant die HACS-Integration „Bordwächter" mit dieser Adresse + HA-Passwort einbinden. Liefert Position, Alarm und Totmann-Countdown an HA.</p>
+    <p class="muted" style="margin-top:6px"><b>Nur nötig, wenn an Bord ein eigener Home Assistant den Bordwächter einbinden soll.</b> KAI braucht das nicht: Position, Alarm und Smartmeter meldet das Gerät direkt an KAI.</p>
   </div>
 
   <div class="card nur-bw">
@@ -275,14 +284,14 @@ body.medienrolle .nur-bw{display:none!important}
       <div><label>Kiosk-Startansicht (Monitor am Gerät)</label><select id="c_dispview"><option value="pilot">Pilot</option><option value="seekarte">Seekarte</option></select></div>
       <div><label>Bildschirmdrehung (Monitor)</label><select id="c_disprot"><option value="normal">normal</option><option value="left">links (90°)</option><option value="right">rechts (270°)</option><option value="inverted">kopfüber (180°)</option></select></div>
     </div>
-    <div class="btns" style="margin-top:8px"><button class="ghost" onclick="genDispTok()">Neu erzeugen</button><a id="dispOpen" class="ghost" style="display:inline-block;text-decoration:none" href="#" target="_blank" rel="noopener">Anzeige öffnen</a></div>
+    <div class="btns" style="margin-top:8px"><button class="ghost" id="dispNeu" onclick="genDispTok()">Neu erzeugen</button><a id="dispOpen" class="ghost" style="display:inline-block;text-decoration:none" href="#" target="_blank" rel="noopener">Anzeige öffnen</a></div>
     <p class="muted" style="margin-top:6px">Vollbild-Anzeige für einen Monitor an Bord — ohne Login, der Token steckt in der Adresse. Diese Adresse am Monitor hinterlegen:<br><code id="dispUrl" style="word-break:break-all"></code></p>
     <div class="btns" style="margin-top:10px"><button onclick="kioskSetup()">Anzeige am Monitor einrichten</button><button class="ghost" onclick="kioskDiag()">Kiosk-Diagnose</button></div>
     <p class="muted" style="margin-top:6px">„Anzeige am Monitor einrichten" legt den <b>Kiosk-Autostart</b> an (Bookworm/Wayland: labwc/wayfire, sonst X) — beim nächsten Neustart öffnet der Monitor automatisch die Anzeige (mit obiger Drehung). Erst <b>Speichern</b> (für Startansicht/Drehung), dann einrichten, dann <b>Gerät (Pi) neu starten</b>.</p>
     <pre id="kioskLog" style="display:none;white-space:pre-wrap;font-size:.8rem;background:var(--panel2);border:1px solid var(--line);padding:10px;border-radius:8px;margin-top:8px;max-height:300px;overflow:auto"></pre>
   </div>
 
-  <div class="btns" style="margin-bottom:16px"><button onclick="saveCfg()">Speichern</button><span id="saveMsg" class="muted" style="align-self:center"></span></div>
+  <div class="btns" style="margin-bottom:16px"><button onclick="saveCfg()" id="saveBtn">Speichern</button><span id="saveMsg" class="muted" style="align-self:center"></span></div>
 
   <div class="card">
     <h2>Software</h2>
@@ -459,8 +468,14 @@ async function loadCfg(){
   g('kop_form').style.display=gek?'none':'block'
   if(!g('kop_base').value) g('kop_base').value=c.kai_base_url||''
   document.body.classList.toggle('medienrolle',!!rolle); window.__rolle=rolle||'Bordwächter'
+  // Mit KAI gekoppelt: alles aus KAI ist hier gesperrt (nur Anzeige); frei bleiben KAI-Adresse, Netzwerk, Anzeige-Schlüssel
+  const ausKai=gek&&(c.kai_config_rev||0)>0, LOKAL=['c_base','n_mode','n_if','n_addr','n_gw','n_dns','kop_base','kop_code','m_lat','m_lng','m_sp']
+  g('ausKaiHinweis').style.display=ausKai?'block':'none'; document.body.classList.toggle('auskai',ausKai)
+  document.querySelectorAll('.card input, .card select, .card textarea').forEach(function(e){ if(!LOKAL.includes(e.id)) e.disabled=ausKai })
+  g('saveBtn').textContent=ausKai?'KAI-Adresse speichern':'Speichern'
+  g('dispNeu').style.display=ausKai?'none':''
   g('ver').textContent=(rolle?('Rolle: '+rolle+' · '):'Rolle: Bordwächter · ')+'Konfiguration · Schiff-ID '+(c.ship_id||0)
-  g('c_base').value=c.kai_base_url||''; g('c_token').value=c.edge_token||''; g('c_ship').value=c.ship_id||0
+  g('c_base').value=c.kai_base_url||''; window.__tok=c.edge_token||''; g('c_token').value=ausKai&&c.edge_token?(c.edge_token.slice(0,8)+'… (gekoppelt)'):(c.edge_token||''); g('c_ship').value=c.ship_id||0
   g('c_sendpos').value=String(!!c.send_position); g('c_standalone').value=String(!!c.standalone); g('c_uipw').value=c.ui_password||''; g('c_hapw').value=c.ha_password||''
   g('c_disptok').value=c.display_token||''; g('c_dispview').value=c.display_view||'pilot'; g('c_disprot').value=c.display_rotate||'normal'; updateDispUrl()
   g('g_src').value=c.gps.source; g('g_dev').value=c.gps.device||''; g('g_baud').value=c.gps.baud||9600; g('g_host').value=c.gps.host||''; g('g_port').value=c.gps.port; g('g_unit').value=c.gps.unit
@@ -483,7 +498,7 @@ async function loadCfg(){
 }
 async function saveCfg(){
   const num=(id)=>parseInt(g(id).value||'0',10)
-  const c={ kai_base_url:g('c_base').value, edge_token:g('c_token').value, ship_id:num('c_ship'),
+  const c={ kai_base_url:g('c_base').value, edge_token:g('c_token').disabled?(window.__tok||''):g('c_token').value, ship_id:num('c_ship'),
     send_position:g('c_sendpos').value==='true', standalone:g('c_standalone').value==='true', listen:':8090', ui_password:g('c_uipw').value, ha_password:g('c_hapw').value, hostname:g('c_host').value.trim(), display_token:g('c_disptok').value, display_view:g('c_dispview').value, display_rotate:g('c_disprot').value, bundle_refresh_sec:300,
     gps:{source:g('g_src').value,device:g('g_dev').value,baud:num('g_baud'),host:g('g_host').value,port:num('g_port'),unit:num('g_unit'),lat_reg:num('g_lat'),lng_reg:num('g_lng'),speed_reg:num('g_speed'),heading_reg:num('g_head'),format:g('g_fmt').value,poll_sec:num('g_poll')},
     sifa:{trigger_combo:g('sf_combo').value,realarm_sec:num('sf_re'),deadman_on:g('sf_dm').value==='true',deadman_sec:num('sf_dms'),deadman_prewarn_sec:num('sf_pre'),harbor_off:g('sf_hafen').value==='true',min_kmh:parseFloat(g('sf_min').value)||0,camera_harbor_off:g('sf_camhafen').value==='true',camera_min_kmh:parseFloat(g('sf_cammin').value)||0},

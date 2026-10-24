@@ -40,3 +40,28 @@ func TestMischeKaiConfig(t *testing.T) {
 		t.Fatal("Kamera-Adresse muss bleiben, wenn KAI sie nicht liefert")
 	}
 }
+
+func TestKonfigSeiteGesperrtWennAusKai(t *testing.T) {
+	cur := defaultConfig()
+	cur.EdgeToken, cur.KaiConfigRev, cur.KaiBaseURL = "tok", 3, "https://kai-bsb.de/test"
+	cur.GPS.Host, cur.SIFA.DeadmanSec = "192.168.2.1", 30
+	neu := *cur
+	neu.GPS.Host, neu.SIFA.DeadmanSec, neu.KaiBaseURL, neu.DisplayToken = "10.0.0.9", 5, "https://kai-bsb.de", "anz"
+	neu.Network.Mode = "static"
+	c, gesperrt := sperreAusKai(cur, neu)
+	if !gesperrt || c.GPS.Host != "192.168.2.1" || c.SIFA.DeadmanSec != 30 {
+		t.Fatalf("Einstellungen aus KAI dürfen am Gerät nicht änderbar sein: %v %s %d", gesperrt, c.GPS.Host, c.SIFA.DeadmanSec)
+	}
+	if c.KaiBaseURL != "https://kai-bsb.de" || c.Network.Mode != "static" {
+		t.Fatalf("KAI-Adresse und Netzwerk bleiben am Gerät änderbar: %+v", c)
+	}
+	if c.DisplayToken == "anz" {
+		t.Fatal("der Anzeige-Schlüssel kommt aus KAI")
+	}
+	// nicht gekoppelt (eigenständig): alles änderbar
+	frei := defaultConfig()
+	c, gesperrt = sperreAusKai(frei, neu)
+	if gesperrt || c.GPS.Host != "10.0.0.9" {
+		t.Fatal("ohne KAI bleibt alles am Gerät änderbar")
+	}
+}

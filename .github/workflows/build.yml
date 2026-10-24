@@ -34,7 +34,3 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          # Tag mit Zusatz (z. B. v0.1.88-test) = Vorabversion: NICHT „Latest“, damit „Aktualisieren“ an Bord
-          # und KAI sie nicht ziehen — erst auf einem Ersatzgerät testen, danach als vX.Y.Z freigeben.
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          make_latest: ${{ !contains(github.ref_name, '-') }}

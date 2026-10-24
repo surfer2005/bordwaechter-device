@@ -497,11 +497,15 @@ func (a *App) routes() *http.ServeMux {
 				http.Error(w, err.Error(), 400)
 				return
 			}
+			// Mit KAI gekoppelt: Einstellungen kommen aus KAI und werden NUR dort geändert. Am Gerät bleiben
+			// KAI-Adresse und Netzwerk — alles andere aus der Anfrage wird verworfen,
+			// sonst stünde am Gerät still etwas anderes als in KAI (und der nächste Abgleich nähme es zurück).
+			c, gesperrt := sperreAusKai(a.getCfg(), c)
 			if err := a.applyConfig(&c); err != nil {
 				http.Error(w, err.Error(), 500)
 				return
 			}
-			writeJSON(w, map[string]any{"ok": true})
+			writeJSON(w, map[string]any{"ok": true, "aus_kai": gesperrt})
 			return
 		}
 		writeJSON(w, a.getCfg())

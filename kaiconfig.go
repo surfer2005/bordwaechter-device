@@ -206,6 +206,7 @@ func (a *App) kaiSync(kaiRev int, erzwingen bool) {
 		return
 	}
 	logEvent("info", fmt.Sprintf("Einstellungen aus KAI übernommen (Stand %d)", kc.Rev))
+	go a.anzeigeAutomatisch()
 	// 3) übernommenen Stand zurückmelden
 	_ = k.PostConfigIst(kc.Rev, a.getCfg())
 }
@@ -255,4 +256,20 @@ type kaiBefehlT struct {
 func (a *App) kaiStartSync() {
 	time.Sleep(15 * time.Second)
 	a.kaiSync(0, true)
+	a.anzeigeAutomatisch() // Anzeige am Monitor aus KAI einrichten (einmalig, wenn ein Monitor dranhängt)
+}
+
+// ausKaiGesteuert: gekoppelt und Einstellungen aus KAI übernommen → am Gerät nur KAI-Adresse und Netzwerk
+// änderbar (Festlegung 2026-10-24: Einstellungen werden in KAI gepflegt).
+func ausKaiGesteuert(c *Config) bool { return c != nil && c.EdgeToken != "" && c.KaiConfigRev > 0 }
+
+// sperreAusKai: was von einer Speicherung der Konfig-Seite übernommen wird. Ist das Gerät aus KAI gesteuert,
+// nur KAI-Adresse und Netzwerk; der Rest (auch der Anzeige-Schlüssel) bleibt wie aus KAI übernommen. Rein, testbar.
+func sperreAusKai(cur *Config, neu Config) (Config, bool) {
+	if !ausKaiGesteuert(cur) {
+		return neu, false
+	}
+	n := *cur
+	n.KaiBaseURL, n.Network = neu.KaiBaseURL, neu.Network
+	return n, true
 }

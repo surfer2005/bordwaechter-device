@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.89"
+const version = "0.1.90"
 
 type App struct {
 	mu     sync.Mutex
@@ -140,7 +140,7 @@ func (a *App) bundleLoop() {
 	}
 	if k := a.getKai(); k != nil && a.getCfg().EdgeToken != "" {
 		gh, gp := a.gpsHostForHello()
-		if hr, err := k.Hello(version, "bordwaechter", a.getSys(), gh, gp, a.sifaBlock()); err == nil && hr != nil {
+		if hr, err := k.Hello(version, "bordwaechter", a.getSys(), gh, gp, a.sifaBlock(), anzeigeZustand(a.getCfg())); err == nil && hr != nil {
 			kaiReachable = true
 			a.setReportScan(hr.ReportScan)
 			a.setReportTeltonika(hr.ReportTeltonika)
@@ -187,6 +187,13 @@ func (a *App) sifaBlock() map[string]any {
 		"ruht":        st.SifaRuht,
 		"kamera_ruht": st.KameraRuht,
 		"im_hafen":    st.ImHafen,
+		// Lage wie die Status-Kacheln der Geräteseite — KAI zeigt dasselbe (Abgleich Gerät ↔ KAI)
+		"lage": map[string]any{
+			"ship": st.Ship, "reg": st.Reg, "phase": st.Phase, "from": st.From, "to": st.To, "soll": st.Soll,
+			"remain_km": st.RemainKm, "ist_kmh": st.IstKmh, "soll_kmh": st.SollKmh, "verdict": st.Verdict,
+			"off_course_m": st.OffCourseM, "off_state": st.OffState, "pos_valid": st.PosValid, "pos_age_sec": st.PosAgeSec,
+			"alarm_state": st.AlarmState, "ack_level_high": st.AckLevelHigh,
+		},
 	}
 }
 
@@ -247,7 +254,7 @@ func (a *App) heartbeatLoop() {
 			} else {
 				sifa = a.sifaBlock()
 			}
-			if hr, err := k.Hello(version, rolleFuerKai(cfg.Rolle), a.getSys(), gh, gp, sifa); err != nil {
+			if hr, err := k.Hello(version, rolleFuerKai(cfg.Rolle), a.getSys(), gh, gp, sifa, anzeigeZustand(cfg)); err != nil {
 				kaiReachable = false
 				log.Printf("heartbeat: %v", err)
 			} else if hr != nil {
@@ -337,6 +344,7 @@ func main() {
 		go app.heartbeatLoop()
 		go app.devlogLoop()
 		go app.releaseCheckLoop()
+		go app.anzeigeAutomatischSpaeter() // Abspielseite am Monitor einrichten (einmalig)
 		log.Printf("KAI-Bordgerät %s in der Rolle %s — lokale Oberfläche auf %s", version, cfg.Rolle, cfg.Listen)
 		if err := http.ListenAndServe(cfg.Listen, app.routes()); err != nil {
 			log.Fatal(err)

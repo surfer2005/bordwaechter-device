@@ -208,8 +208,11 @@ type HelloResp struct {
 
 // Hello: Herzschlag an KAI. gpsHost/gpsPort werden mitgemeldet (für die Teltonika-Übersicht / Router-IP),
 // sifa (optional) trägt den SIFA-/Totmann-Zustand (Hupe/Leuchttaster/Quittier-Taster + Deadman-Countdown).
-func (k *KaiClient) Hello(version, kind string, sys *SystemData, gpsHost string, gpsPort int, sifa map[string]any) (*HelloResp, error) {
+func (k *KaiClient) Hello(version, kind string, sys *SystemData, gpsHost string, gpsPort int, sifa, anzeige map[string]any) (*HelloResp, error) {
 	body := map[string]any{"version": version, "kind": kind}
+	if anzeige != nil {
+		body["anzeige"] = anzeige // Anzeige am Monitor: eingerichtet/läuft/Ansicht/Drehung
+	}
 	if sys != nil {
 		body["system"] = sys
 	}
