@@ -364,7 +364,8 @@ func (a *App) routes() *http.ServeMux {
 		if rot == "" {
 			rot = "normal"
 		}
-		writeJSON(w, map[string]any{"path": path, "rotate": rot})
+		// Bildschirm/Bordmusik: die Abspielseite aus KAI statt Pilot/Seekarte
+		writeJSON(w, map[string]any{"path": path, "rotate": rot, "url": medienStartZiel(cfg)})
 	})
 
 	// Standalone-/Offline-Navigation: Anlegestellen-Liste (für das „Ziel"-Auswahlfeld der Anzeige).
@@ -532,13 +533,22 @@ func (a *App) routes() *http.ServeMux {
 		n.EdgeToken = ant.Token
 		n.ShipID = ant.ShipID
 		n.KaiConfigRev = 0
+		n.Rolle, n.MedienPfad = "", ""
+		if istMedienRolle(ant.Rolle) && ant.Medien != nil {
+			n.Rolle, n.MedienPfad = ant.Rolle, ant.Medien.Pfad
+			if ant.Device == "" {
+				ant.Device = ant.Medien.Name
+			}
+		}
 		if err := a.applyConfig(n); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
 		logEvent("info", "Mit KAI gekoppelt als "+ant.Device)
-		go a.kaiSync(0, true) // sofort alle Einstellungen aus KAI holen
-		writeJSON(w, map[string]any{"ok": true, "device": ant.Device, "ship_id": ant.ShipID})
+		if !istMedienRolle(n.Rolle) {
+			go a.kaiSync(0, true) // sofort alle Einstellungen aus KAI holen
+		}
+		writeJSON(w, map[string]any{"ok": true, "device": ant.Device, "ship_id": ant.ShipID, "rolle": rolleFuerKai(n.Rolle), "neustart": istMedienRolle(n.Rolle)})
 	}))
 
 	// Fernzugriff-Infos für die Konfig-Seite: SSH-Benutzer/Passwort/Adresse + fertiger ssh-Befehl.
@@ -666,6 +676,11 @@ func (a *App) routes() *http.ServeMux {
 	}))
 
 	// Manuelle Position (Test, nur bei GPS-Quelle "manual")
+	// Position fürs Bord-Netz (Bildschirme/Bordmusik desselben Schiffs, mit Lese-Schlüssel aus KAI)
+	mux.HandleFunc("/api/bord/position", a.handleBordPosition)
+	// Bildschirm/Bordmusik: Position des Bordwächters für die Abspielseite (nur vom Gerät selbst)
+	mux.HandleFunc("/api/medien/position", a.handleMedienPosition)
+
 	mux.HandleFunc("/api/position", a.guard(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		lat, _ := strconv.ParseFloat(q.Get("lat"), 64)

@@ -26,7 +26,8 @@ import (
 
 // Felder, die NIE aus KAI kommen: Verbindung zu KAI selbst, lokaler Port und Netzwerk (sonst käme das
 // Gerät nach einem Fehler nicht mehr ins Netz).
-var nurAmGeraet = map[string]bool{"kai_base_url": true, "edge_token": true, "listen": true, "network": true, "bundle_refresh_sec": true, "kai_config_rev": true}
+var nurAmGeraet = map[string]bool{"kai_base_url": true, "edge_token": true, "listen": true, "network": true, "bundle_refresh_sec": true, "kai_config_rev": true,
+	"rolle": true, "medien_pfad": true, "bordwaechter": true, "bordwaechter_token": true}
 
 type koppelAntwort struct {
 	OK        bool   `json:"ok"`
@@ -36,12 +37,17 @@ type koppelAntwort struct {
 	ShipID    int    `json:"ship_id"`
 	ConfigRev int    `json:"config_rev"`
 	Error     string `json:"error"`
+	Medien    *struct {
+		Name string `json:"name"`
+		Pfad string `json:"pfad"`
+	} `json:"medien"`
 }
 
 // koppelnMitKai löst einen Kopplungscode aus KAI ein und liefert den Geräte-Schlüssel.
 func koppelnMitKai(base, code string) (*koppelAntwort, error) {
 	k := newKaiClient(base, "")
-	body, _ := json.Marshal(map[string]any{"code": code, "rolle": "bordwaechter", "version": version, "serial": geraeteSerial()})
+	// Rolle kommt aus dem Code (Bordwächter, Bildschirm oder Bordmusik) — „geraet“: mit Gerätesoftware gekoppelt
+	body, _ := json.Marshal(map[string]any{"code": code, "geraet": true, "version": version, "serial": geraeteSerial()})
 	req, err := http.NewRequest("POST", k.base+"/api/edge/koppeln", bytes.NewReader(body))
 	if err != nil {
 		return nil, err

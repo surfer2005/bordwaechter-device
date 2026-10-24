@@ -25,6 +25,8 @@ done
 if [ -s /tmp/bw-kt.json ]; then
   p=$(sed -n 's/.*"path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' /tmp/bw-kt.json | head -n1); [ -n "$p" ] && STARTPATH="$p"
   r=$(sed -n 's/.*"rotate"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' /tmp/bw-kt.json | head -n1); [ -n "$r" ] && ROT="$r"
+  # Bildschirm/Bordmusik: volle Adresse der Abspielseite aus KAI statt Pilot/Seekarte
+  u=$(sed -n 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' /tmp/bw-kt.json | head -n1 | sed 's/\\u0026/\&/g')
 fi
 echo "startpath=$STARTPATH rotate=$ROT"
 
@@ -55,9 +57,10 @@ fi
 
 PROFILE="${HOME:-/home/pi}/.config/bordwaechter-kiosk"
 mkdir -p "$PROFILE"
-echo "starte $BIN $BASE$STARTPATH"
+ZIEL="$BASE$STARTPATH"; [ -n "${u:-}" ] && ZIEL="$u"
+echo "starte $BIN $ZIEL"
 exec "$BIN" \
-  --kiosk --app="$BASE$STARTPATH" \
+  --kiosk --app="$ZIEL" \
   --user-data-dir="$PROFILE" \
   --password-store=basic \
   --noerrdialogs --disable-infobars --disable-session-crashed-bubble \

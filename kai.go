@@ -195,12 +195,21 @@ type HelloResp struct {
 	LatestVersion      string `json:"latest_version"`      // neueste Release-Version (KAI fragt GitHub zentral)
 	UpdateRequested    bool   `json:"update_requested"`    // Aktualisierung aus KAI angefordert
 	ConfigRev          int    `json:"config_rev"`          // Stand der Einstellungen in KAI
+	BordToken          string `json:"bord_token"`          // Lese-Schlüssel für die Position im Bord-Netz
+	Rolle              string `json:"rolle"`               // Rolle aus KAI (bordwaechter | bildschirm | audio)
+	Medien             *struct {
+		Pfad string `json:"pfad"`
+	} `json:"medien"` // Bildschirm/Bordmusik: Abspielseite
+	Bordwaechter *struct {
+		URL   string `json:"url"`
+		Token string `json:"token"`
+	} `json:"bordwaechter"` // Bildschirm/Bordmusik: Bordwächter desselben Schiffs
 }
 
 // Hello: Herzschlag an KAI. gpsHost/gpsPort werden mitgemeldet (für die Teltonika-Übersicht / Router-IP),
 // sifa (optional) trägt den SIFA-/Totmann-Zustand (Hupe/Leuchttaster/Quittier-Taster + Deadman-Countdown).
-func (k *KaiClient) Hello(version string, sys *SystemData, gpsHost string, gpsPort int, sifa map[string]any) (*HelloResp, error) {
-	body := map[string]any{"version": version, "kind": "bordwaechter"}
+func (k *KaiClient) Hello(version, kind string, sys *SystemData, gpsHost string, gpsPort int, sifa map[string]any) (*HelloResp, error) {
+	body := map[string]any{"version": version, "kind": kind}
 	if sys != nil {
 		body["system"] = sys
 	}

@@ -49,6 +49,8 @@
   #ask .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;width:100%;max-width:420px;box-shadow:0 16px 44px rgba(0,0,0,.4)}
   #ask .msg{font-size:1rem;margin-bottom:16px;line-height:1.4}
   #ask .btns{display:flex;gap:10px;justify-content:flex-end}
+/* Rolle Bildschirm/Bordmusik: Bordwächter-Karten (GPS, SIFA, Kamera …) ausblenden */
+body.medienrolle .nur-bw{display:none!important}
 </style>
 </head>
 <body>
@@ -88,7 +90,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card nur-bw">
     <h2>Status</h2>
     <div class="grid">
       <div class="kv"><div class="k">Schiff</div><div class="v" id="s_ship" style="font-size:.9rem">—</div></div>
@@ -113,7 +115,7 @@
     <pre id="gpioResult" style="display:none;white-space:pre-wrap;font-size:.8rem;background:var(--panel2);border:1px solid var(--line);padding:10px;border-radius:8px;margin-top:8px;max-height:340px;overflow:auto"></pre>
   </div>
 
-  <div class="card" id="manualCard" style="display:none">
+  <div class="card nur-bw" id="manualCard" style="display:none">
     <h2>Manuelle Position (Test)</h2>
     <div class="row">
       <div><label>Breite (lat)</label><input id="m_lat" value="47.655"></div>
@@ -137,7 +139,7 @@
     <p class="muted" style="margin-top:6px">Der <b>Gerätename</b> wird mit „Speichern" übernommen und nach einem Neustart wirksam — das Gerät ist dann als <code id="hostHint">bordwaechter.local</code> erreichbar. Feste IP/DHCP wirkt ebenfalls erst nach einem <b>Neustart des Geräts</b>. Vorsicht: eine falsche IP/Gateway kann das Gerät im Netz unerreichbar machen.</p>
   </div>
 
-  <div class="card">
+  <div class="card nur-bw">
     <h2>KAI-Anbindung &amp; Übermittlung</h2>
     <div class="row">
       <div><label>KAI-Adresse</label><input id="c_base" placeholder="https://kai-bsb.de/test  (ohne /api/edge)"></div>
@@ -166,13 +168,13 @@
     <p class="muted" style="margin-top:6px">Benutzer ist immer <b>pi</b>. Neue Passwörter (SSH/VNC) werden mit „Speichern" sofort übernommen.</p>
   </div>
 
-  <div class="card">
+  <div class="card nur-bw">
     <h2>Home Assistant <span class="tag">eigenes Kästchen</span></h2>
     <div class="sshbox">http://<code id="haUrl">bordwaechter.local:8090</code> &nbsp;·&nbsp; Benutzer: <b>ha</b> &nbsp;·&nbsp; Passwort: s. „Zugang → HA-Passwort"</div>
     <p class="muted" style="margin-top:6px">In Home Assistant die HACS-Integration „Bordwächter" mit dieser Adresse + HA-Passwort einbinden. Liefert Position, Alarm und Totmann-Countdown an HA.</p>
   </div>
 
-  <div class="card">
+  <div class="card nur-bw">
     <h2>GPS-Quelle</h2>
     <div class="row">
       <div><label>Quelle</label><select id="g_src"><option value="manual">manual (Test)</option><option value="nmea">USB-GPS-Maus (NMEA)</option><option value="teltonika">Teltonika (Modbus)</option></select></div>
@@ -191,7 +193,7 @@
     <p class="muted" style="margin-top:6px">Speed/Heading werden wie Lat/Lng im gewählten Format gelesen (float32 = 2 Register). -1 = nicht vorhanden → Tempo wird aus der Bewegung abgeleitet.</p>
   </div>
 
-  <div class="card">
+  <div class="card nur-bw">
     <h2>SIFA / Alarm</h2>
     <div class="row">
       <div><label>Auslöser</label><select id="sf_combo" onchange="updateSifaFields()"><option value="either">GPS oder Kamera</option><option value="gps">nur GPS</option><option value="camera">nur Kamera</option><option value="both">GPS und Kamera</option><option value="manuell">manuell (nur Totmann/Zeit)</option><option value="aus">aus (kein Alarm)</option></select></div>
@@ -211,7 +213,7 @@
     <p class="muted" style="margin-top:6px"><b>Ereignis-Alarm</b> (GPS/Kamera): Lampe + Hupe gehen zusammen an; Quittieren schaltet <b>beides</b> aus. Besteht die Ursache weiter, kommt der Alarm nach <b>Wiederholung</b> Sekunden erneut — bis der Kurs wieder stimmt.<br><b>Totmann:</b> nach jedem <b>Totmann-Intervall</b> kommt zuerst die grüne <b>Lampe</b> (Frist zum Quittieren), <b>Lampe→Hupe</b> Sekunden später die <b>Hupe</b>. Quittieren schaltet beides aus und startet das Intervall neu. Auslöser „manuell": nur dieser Totmann, auch wenn „Totmann-SIFA" auf „aus" steht. Auslöser <b>„aus"</b>: alles stillgelegt — kein Ereignis-Alarm, kein Totmann (nur die Test-Knöpfe schalten die Ausgänge). Zum Einrichten/Vorführen.</p>
   </div>
 
-  <div class="card">
+  <div class="card nur-bw">
     <h2>Verdrahtung / GPIO</h2>
     <div class="row">
       <div><label>Backend</label><select id="io_be"><option value="none">none (ohne Hardware)</option><option value="sysfs">sysfs (Raspberry)</option></select></div>
@@ -225,7 +227,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card nur-bw">
     <h2>Kamera (Mobotix/AXIS) <span class="tag">optional</span></h2>
     <div class="row">
       <div><label>Kamera aktiv</label><select id="cam_en"><option value="false">nein</option><option value="true">ja</option></select></div>
@@ -240,7 +242,7 @@
     <p class="muted" style="margin-top:4px">AXIS-Snapshot (Standbild, auch für den Alarm an KAI): <code>http://benutzer:passwort@&lt;kamera-ip&gt;/axis-cgi/jpg/image.cgi</code>. AXIS-Livestream (flüssig): <code>http://benutzer:passwort@&lt;kamera-ip&gt;/axis-cgi/mjpg/video.cgi</code>. Basic oder Digest wird automatisch erkannt; in der Anzeige schaltet man mit „Live-Bild"/„Livestream" um.</p>
   </div>
 
-  <div class="card">
+  <div class="card nur-bw">
     <h2>Objekterkennung (Frigate) <span class="tag">optional</span></h2>
     <div class="row">
       <div><label>Erkennung aktiv</label><select id="det_en"><option value="false">nein</option><option value="true">ja</option></select></div>
@@ -252,7 +254,7 @@
     <p class="muted" style="margin-top:6px">Erkennt Personen/Boote im Kamerastream über ein lokal laufendes Frigate (Pi 5 + AI-HAT/Hailo oder Coral) und meldet jeden Treffer mit Standbild an KAI (als Edge-Ereignis „detection"). Ist die Erkennung aus, läuft das Gerät als ganz normaler Bordwächter.</p>
   </div>
 
-  <div class="card">
+  <div class="card nur-bw">
     <h2>Wetter &amp; Pegel (Anzeige)</h2>
     <div class="row">
       <div><label>Wetter anzeigen</label><select id="inf_w"><option value="true">ja</option><option value="false">nein</option></select></div>
@@ -404,7 +406,7 @@ async function refresh(){
     hideLogin()
     checkUpdate()
     const s=await r.json()
-    g('ver').textContent='Konfiguration · Schiff-ID '+(s.ship_id||0)+(s.version?(' · v'+s.version):'')
+    g('ver').textContent='Rolle: '+(window.__rolle||'Bordwächter')+' · Konfiguration · Schiff-ID '+(s.ship_id||0)+(s.version?(' · v'+s.version):'')
     g('s_ship').textContent=(s.ship||'—')+(s.registration_number?(' · '+s.registration_number):'')
     g('s_phase').textContent=s.phase||'—'
     g('s_leg').textContent=(s.from&&s.to)?(s.from+' → '+s.to):'—'
@@ -436,7 +438,14 @@ async function koppeln(){
   const m=g('kop_msg'); m.textContent='Koppeln …'
   const r=await fetch('/api/koppeln',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kai_base_url:g('kop_base').value.trim(),code:g('kop_code').value.trim()})})
   if(!r.ok){ m.textContent=(await r.text())||'Koppeln fehlgeschlagen'; return }
-  const j=await r.json(); m.textContent='Gekoppelt als '+j.device+' – Einstellungen werden aus KAI geholt …'
+  const j=await r.json()
+  if(j.neustart){
+    // Bildschirm/Bordmusik: andere Rolle → Gerät startet neu und öffnet danach die Abspielseite aus KAI
+    m.textContent='Gekoppelt als '+(j.rolle==='audio'?'Bordmusik':'Bildschirm')+' „'+j.device+'“ – Gerät startet neu und öffnet die Abspielseite …'
+    try{ await fetch('/api/reboot',{method:'POST'}) }catch(e){}
+    return
+  }
+  m.textContent='Gekoppelt als '+j.device+' – Einstellungen werden aus KAI geholt …'
   setTimeout(loadCfg,4000)
 }
 async function loadCfg(){
@@ -445,10 +454,12 @@ async function loadCfg(){
   const c=await rc.json()
   const gek=!!c.edge_token
   g('kop_ok').style.display=gek?'block':'none'
-  g('kop_text').textContent=gek?('Gekoppelt mit '+(c.kai_base_url||'KAI')+' · Schiff-ID '+(c.ship_id||0)+(c.kai_config_rev?(' · Einstellungen aus KAI, Stand '+c.kai_config_rev):' · Einstellungen aus KAI noch nicht übernommen')):''
+  const rolle=c.rolle==='audio'?'Bordmusik':c.rolle==='bildschirm'?'Bildschirm':''
+  g('kop_text').textContent=gek&&rolle?('Gekoppelt als '+rolle+' mit '+(c.kai_base_url||'KAI')+(c.bordwaechter?' · Position vom Bordwächter '+c.bordwaechter:' · noch kein Bordwächter bekannt')):gek?('Gekoppelt mit '+(c.kai_base_url||'KAI')+' · Schiff-ID '+(c.ship_id||0)+(c.kai_config_rev?(' · Einstellungen aus KAI, Stand '+c.kai_config_rev):' · Einstellungen aus KAI noch nicht übernommen')):''
   g('kop_form').style.display=gek?'none':'block'
   if(!g('kop_base').value) g('kop_base').value=c.kai_base_url||''
-  g('ver').textContent='Konfiguration · Schiff-ID '+(c.ship_id||0)
+  document.body.classList.toggle('medienrolle',!!rolle); window.__rolle=rolle||'Bordwächter'
+  g('ver').textContent=(rolle?('Rolle: '+rolle+' · '):'Rolle: Bordwächter · ')+'Konfiguration · Schiff-ID '+(c.ship_id||0)
   g('c_base').value=c.kai_base_url||''; g('c_token').value=c.edge_token||''; g('c_ship').value=c.ship_id||0
   g('c_sendpos').value=String(!!c.send_position); g('c_standalone').value=String(!!c.standalone); g('c_uipw').value=c.ui_password||''; g('c_hapw').value=c.ha_password||''
   g('c_disptok').value=c.display_token||''; g('c_dispview').value=c.display_view||'pilot'; g('c_disprot').value=c.display_rotate||'normal'; updateDispUrl()

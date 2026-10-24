@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.87"
+const version = "0.1.88"
 
 type App struct {
 	mu     sync.Mutex
@@ -140,7 +140,7 @@ func (a *App) bundleLoop() {
 	}
 	if k := a.getKai(); k != nil && a.getCfg().EdgeToken != "" {
 		gh, gp := a.gpsHostForHello()
-		if hr, err := k.Hello(version, a.getSys(), gh, gp, a.sifaBlock()); err == nil && hr != nil {
+		if hr, err := k.Hello(version, "bordwaechter", a.getSys(), gh, gp, a.sifaBlock()); err == nil && hr != nil {
 			kaiReachable = true
 			a.setReportScan(hr.ReportScan)
 			a.setReportTeltonika(hr.ReportTeltonika)
@@ -241,7 +241,13 @@ func (a *App) heartbeatLoop() {
 		cfg := a.getCfg()
 		if k := a.getKai(); k != nil && cfg.EdgeToken != "" {
 			gh, gp := a.gpsHostForHello()
-			if hr, err := k.Hello(version, a.getSys(), gh, gp, a.sifaBlock()); err != nil {
+			var sifa map[string]any
+			if istMedienRolle(cfg.Rolle) {
+				gh, gp = "", 0 // Bildschirm/Bordmusik: kein GPS, keine SIFA
+			} else {
+				sifa = a.sifaBlock()
+			}
+			if hr, err := k.Hello(version, rolleFuerKai(cfg.Rolle), a.getSys(), gh, gp, sifa); err != nil {
 				kaiReachable = false
 				log.Printf("heartbeat: %v", err)
 			} else if hr != nil {
@@ -260,6 +266,8 @@ func (a *App) heartbeatLoop() {
 				if hr.ConfigRev > cfg.KaiConfigRev {
 					go a.kaiSync(hr.ConfigRev, false)
 				}
+				setBordToken(hr.BordToken) // Position fürs Bord-Netz (Bildschirme/Bordmusik)
+				a.medienAusHerzschlag(hr)  // Bildschirm/Bordmusik: Abspielseite + Bordwächter-Adresse
 			}
 		}
 		time.Sleep(60 * time.Second)
@@ -321,6 +329,20 @@ func main() {
 	eng := NewEngine(cfg, kai, gpio)
 	app := &App{cfg: cfg, kai: kai, gpio: gpio, manual: manual, src: buildGPS(cfg, manual), eng: eng}
 
+	if istMedienRolle(cfg.Rolle) {
+		// Bildschirm/Bordmusik: nur Herzschlag, Protokoll, Aktualisierung und Gerätezustand — kein GPS,
+		// keine SIFA/Hupe, kein Smartmeter. Der Browser spielt die Abspielseite aus KAI.
+		go app.sysLoop()
+		go app.auftragLoop()
+		go app.heartbeatLoop()
+		go app.devlogLoop()
+		go app.releaseCheckLoop()
+		log.Printf("Gerätesoftware %s in der Rolle %s — lokale Oberfläche auf %s", version, cfg.Rolle, cfg.Listen)
+		if err := http.ListenAndServe(cfg.Listen, app.routes()); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	go app.bundleLoop()
 	go app.gpsLoop()
 	go app.tickLoop()

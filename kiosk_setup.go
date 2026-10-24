@@ -7,6 +7,7 @@ package main
 // und an den Browser zurückgegeben, damit man ohne Shell sieht, was erkannt/getan wurde.
 
 import (
+	"encoding/json"
 	_ "embed"
 	"fmt"
 	"log"
@@ -80,7 +81,14 @@ func hasBin(name string) bool { _, err := exec.LookPath(name); return err == nil
 // Englisch") und andere störende Einblendungen im Kiosk ABSCHALTET — unabhängig von den
 // Kommandozeilen-Flags. Chromium liest /etc/chromium[/-browser]/policies/managed/*.json.
 func writeChromiumPolicy() {
-	policy := `{"TranslateEnabled": false, "DefaultBrowserSettingEnabled": false, "MetricsReportingEnabled": false, "PasswordManagerEnabled": false, "BackgroundModeEnabled": false}`
+	policy := `{"TranslateEnabled": false, "DefaultBrowserSettingEnabled": false, "MetricsReportingEnabled": false, "PasswordManagerEnabled": false, "BackgroundModeEnabled": false`
+	// Bildschirm/Bordmusik: die Abspielseite (KAI, https) darf den eigenen Gerätedienst (localhost) nach der
+	// Position fragen — ohne Rückfrage am Bildschirm (Chromium „Zugriff aufs lokale Netz“).
+	if h := kaiHerkunft(loadConfig().KaiBaseURL); h != "" {
+		hj, _ := json.Marshal([]string{h})
+		policy += `, "LocalNetworkAccessAllowedForUrls": ` + string(hj)
+	}
+	policy += `}`
 	for _, dir := range []string{"/etc/chromium/policies/managed", "/etc/chromium-browser/policies/managed"} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			continue
