@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.91"
+const version = "0.1.92"
 
 type App struct {
 	mu     sync.Mutex
@@ -58,13 +58,13 @@ func (a *App) gpsHostForHello() (string, int) {
 	return "", 0
 }
 
-func (a *App) getCfg() *Config     { a.mu.Lock(); defer a.mu.Unlock(); return a.cfg }
-func (a *App) getKai() *KaiClient  { a.mu.Lock(); defer a.mu.Unlock(); return a.kai }
-func (a *App) getSrc() GPSSource   { a.mu.Lock(); defer a.mu.Unlock(); return a.src }
-func (a *App) getInfo() *InfoData  { a.mu.Lock(); defer a.mu.Unlock(); return a.info }
-func (a *App) setInfo(i *InfoData) { a.mu.Lock(); a.info = i; a.mu.Unlock() }
-func (a *App) setSys(s *SystemData) { a.mu.Lock(); a.sys = s; a.sysAt = time.Now(); a.mu.Unlock() }
-func (a *App) getNet() *NetworkData { a.mu.Lock(); defer a.mu.Unlock(); return a.net }
+func (a *App) getCfg() *Config       { a.mu.Lock(); defer a.mu.Unlock(); return a.cfg }
+func (a *App) getKai() *KaiClient    { a.mu.Lock(); defer a.mu.Unlock(); return a.kai }
+func (a *App) getSrc() GPSSource     { a.mu.Lock(); defer a.mu.Unlock(); return a.src }
+func (a *App) getInfo() *InfoData    { a.mu.Lock(); defer a.mu.Unlock(); return a.info }
+func (a *App) setInfo(i *InfoData)   { a.mu.Lock(); a.info = i; a.mu.Unlock() }
+func (a *App) setSys(s *SystemData)  { a.mu.Lock(); a.sys = s; a.sysAt = time.Now(); a.mu.Unlock() }
+func (a *App) getNet() *NetworkData  { a.mu.Lock(); defer a.mu.Unlock(); return a.net }
 func (a *App) setNet(n *NetworkData) { a.mu.Lock(); a.net = n; a.mu.Unlock() }
 
 // netLoop: Streckennetz + Anlegestellen von KAI holen und cachen (für den Standalone-/Offline-Modus).
@@ -187,6 +187,7 @@ func (a *App) sifaBlock() map[string]any {
 		"ruht":        st.SifaRuht,
 		"kamera_ruht": st.KameraRuht,
 		"im_hafen":    st.ImHafen,
+		"protokoll":   a.eng.SifaProtokoll(), // kurze Signale: wann zuletzt + Anzahl heute (ab 0.1.92)
 		// Lage wie die Status-Kacheln der Geräteseite — KAI zeigt dasselbe (Abgleich Gerät ↔ KAI)
 		"lage": map[string]any{
 			"ship": st.Ship, "reg": st.Reg, "phase": st.Phase, "from": st.From, "to": st.To, "soll": st.Soll,
@@ -263,7 +264,7 @@ func (a *App) heartbeatLoop() {
 			} else if hr != nil {
 				kaiReachable = true
 				a.setReportScan(hr.ReportScan)           // Netz-Scan-Schalter aus KAI
-				a.setReportTeltonika(hr.ReportTeltonika)  // Teltonika-Schalter aus KAI
+				a.setReportTeltonika(hr.ReportTeltonika) // Teltonika-Schalter aus KAI
 				if hr.SpeedtestRequested {
 					go a.runSpeedtest() // im KAI-Monitoring angefordert
 				}
@@ -357,19 +358,19 @@ func main() {
 	go app.bundleLoop()
 	go app.gpsLoop()
 	go app.tickLoop()
-	go app.detectLoop() // Objekterkennung (nur aktiv, wenn cfg.Detect.Enabled)
-	go app.infoLoop()   // Wetter + Pegel für die Anzeige (nur aktiv, wenn cfg.Info.Weather/Pegel)
-	go app.sysLoop()    // Pi-Zustand (CPU-Temp/Last/RAM/Platte) für die HA-Integration
-	go app.auftragLoop()    // alle 10 s: wartet ein Auftrag (Speedtest)?
-	go app.heartbeatLoop()  // minütlicher Herzschlag an KAI (Version + Gesundheit fürs Monitoring)
-	go app.devlogLoop()     // Geräte-Protokoll (Ereignisse/Fehler, offline gepuffert) → KAI
-	go app.smartmeterLoop() // Smartmeter-Bridge: Zähler per Modbus lesen (Konfig aus KAI) → an KAI pushen
-	go app.netScanLoop()    // Netz-Lebenszeichen: Scan-Ziele aus KAI, Ping+ARP, Status zurück (Asset Manager)
-	go app.routerLoop()     // Teltonika-Router-Diagnose per Modbus → KAI (Asset Manager/Monitoring)
-	go app.kmLoop()     // Tageskilometer vom/auf die Platte (reboot-fest)
+	go app.detectLoop()       // Objekterkennung (nur aktiv, wenn cfg.Detect.Enabled)
+	go app.infoLoop()         // Wetter + Pegel für die Anzeige (nur aktiv, wenn cfg.Info.Weather/Pegel)
+	go app.sysLoop()          // Pi-Zustand (CPU-Temp/Last/RAM/Platte) für die HA-Integration
+	go app.auftragLoop()      // alle 10 s: wartet ein Auftrag (Speedtest)?
+	go app.heartbeatLoop()    // minütlicher Herzschlag an KAI (Version + Gesundheit fürs Monitoring)
+	go app.devlogLoop()       // Geräte-Protokoll (Ereignisse/Fehler, offline gepuffert) → KAI
+	go app.smartmeterLoop()   // Smartmeter-Bridge: Zähler per Modbus lesen (Konfig aus KAI) → an KAI pushen
+	go app.netScanLoop()      // Netz-Lebenszeichen: Scan-Ziele aus KAI, Ping+ARP, Status zurück (Asset Manager)
+	go app.routerLoop()       // Teltonika-Router-Diagnose per Modbus → KAI (Asset Manager/Monitoring)
+	go app.kmLoop()           // Tageskilometer vom/auf die Platte (reboot-fest)
 	go app.releaseCheckLoop() // GitHub-Release-Tag stündlich cachen (für „neue Version"-Hinweis)
-	go app.netLoop()    // Streckennetz + Anlegestellen cachen (Standalone-/Offline-Navigation)
-	go app.kaiStartSync() // Einstellungen einmal mit KAI abgleichen (Stand kann sich offline geändert haben)
+	go app.netLoop()          // Streckennetz + Anlegestellen cachen (Standalone-/Offline-Navigation)
+	go app.kaiStartSync()     // Einstellungen einmal mit KAI abgleichen (Stand kann sich offline geändert haben)
 
 	log.Printf("KAI-Bordgerät %s, Rolle Bordwächter — lokale Oberfläche auf %s (GPS-Quelle: %s, GPIO: %s)",
 		version, cfg.Listen, cfg.GPS.Source, cfg.GPIO.Backend)

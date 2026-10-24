@@ -10,59 +10,59 @@ import (
 )
 
 type Status struct {
-	Ship         string  `json:"ship"`
-	Reg          string  `json:"registration_number"`
-	ShipID       int     `json:"ship_id"`
-	Phase        string  `json:"phase"` // none | vor_abfahrt | unterwegs | beendet
-	From         string  `json:"from"`
-	To           string  `json:"to"`
-	Soll         string  `json:"soll"`
-	Abfahrt      string  `json:"abfahrt"`
-	WartenMin    int     `json:"warten_min"`
-	RestMin      int     `json:"rest_min"`
-	RemainKm     float64 `json:"remain_km"`
-	IstKmh       float64 `json:"ist_kmh"`
-	TodayKm      float64 `json:"today_km"` // heute gefahrene Strecke (aus GPS-Bewegung, Reset um Mitternacht)
-	SollKmh      float64 `json:"soll_kmh"`
-	Verdict      string  `json:"verdict"` // ok | faster | slower | ankunft | late | none
-	DiffKmh      float64 `json:"diff_kmh"`
-	DelayMin     int     `json:"delay_min"`
-	OffCourseM   float64 `json:"off_course_m"`
-	OffLimitM    float64 `json:"off_course_limit_m"` // „Grenze" (streckenadaptiv) für die Anzeige
-	OffState     string  `json:"off_state"`          // ok | warn | alarm | unknown
-	MaxKmh       float64 `json:"max_kmh"`
-	Alarm        bool    `json:"alarm"`
-	AlarmState   string  `json:"alarm_state"` // normal | alarm | acked
-	SifaDeadman  bool    `json:"sifa_deadman_active"`
-	SifaActive   bool    `json:"sifa_active"`         // Totmann läuft in diesem Modus
-	SifaCountdownSec int `json:"sifa_countdown_sec"`  // Sekunden bis zur nächsten Aufforderung (Lampe), 0 = jetzt
-	AckLevelHigh bool    `json:"ack_level_high"` // aktueller Pegel des Quittier-Eingangs (Diagnose)
-	AckPressed   bool    `json:"ack_pressed"`    // interpretiert (ack_active_low beachtet)
-	Lat          float64 `json:"lat"`
-	Lng          float64 `json:"lng"`
-	Heading      float64 `json:"heading"` // Kurs über Grund (°), aus der Bewegung abgeleitet
-	FromLat      float64      `json:"from_lat"`
-	FromLng      float64      `json:"from_lng"`
-	ToLat        float64      `json:"to_lat"`
-	ToLng        float64      `json:"to_lng"`
+	Ship             string       `json:"ship"`
+	Reg              string       `json:"registration_number"`
+	ShipID           int          `json:"ship_id"`
+	Phase            string       `json:"phase"` // none | vor_abfahrt | unterwegs | beendet
+	From             string       `json:"from"`
+	To               string       `json:"to"`
+	Soll             string       `json:"soll"`
+	Abfahrt          string       `json:"abfahrt"`
+	WartenMin        int          `json:"warten_min"`
+	RestMin          int          `json:"rest_min"`
+	RemainKm         float64      `json:"remain_km"`
+	IstKmh           float64      `json:"ist_kmh"`
+	TodayKm          float64      `json:"today_km"` // heute gefahrene Strecke (aus GPS-Bewegung, Reset um Mitternacht)
+	SollKmh          float64      `json:"soll_kmh"`
+	Verdict          string       `json:"verdict"` // ok | faster | slower | ankunft | late | none
+	DiffKmh          float64      `json:"diff_kmh"`
+	DelayMin         int          `json:"delay_min"`
+	OffCourseM       float64      `json:"off_course_m"`
+	OffLimitM        float64      `json:"off_course_limit_m"` // „Grenze" (streckenadaptiv) für die Anzeige
+	OffState         string       `json:"off_state"`          // ok | warn | alarm | unknown
+	MaxKmh           float64      `json:"max_kmh"`
+	Alarm            bool         `json:"alarm"`
+	AlarmState       string       `json:"alarm_state"` // normal | alarm | acked
+	SifaDeadman      bool         `json:"sifa_deadman_active"`
+	SifaActive       bool         `json:"sifa_active"`        // Totmann läuft in diesem Modus
+	SifaCountdownSec int          `json:"sifa_countdown_sec"` // Sekunden bis zur nächsten Aufforderung (Lampe), 0 = jetzt
+	AckLevelHigh     bool         `json:"ack_level_high"`     // aktueller Pegel des Quittier-Eingangs (Diagnose)
+	AckPressed       bool         `json:"ack_pressed"`        // interpretiert (ack_active_low beachtet)
+	Lat              float64      `json:"lat"`
+	Lng              float64      `json:"lng"`
+	Heading          float64      `json:"heading"` // Kurs über Grund (°), aus der Bewegung abgeleitet
+	FromLat          float64      `json:"from_lat"`
+	FromLng          float64      `json:"from_lng"`
+	ToLat            float64      `json:"to_lat"`
+	ToLng            float64      `json:"to_lng"`
 	RouteGeom        [][2]float64 `json:"route_geom"`         // [lon,lat] des aktuellen Legs (für die Karte)
 	RouteGeomReverse [][2]float64 `json:"route_geom_reverse"` // Gegenrichtung (blasse Linie)
-	PosAgeSec    int     `json:"pos_age_sec"`
-	PosValid     bool    `json:"pos_valid"`
-	CameraHazard bool    `json:"camera_hazard"`
-	ImHafen      string  `json:"im_hafen"`       // Name des Hafens, in dessen Kreis das Schiff liegt ("" = draußen)
-	SifaRuht     string  `json:"sifa_ruht"`      // Grund, warum SIFA stumm ist ("" = scharf)
-	KameraRuht   string  `json:"kamera_ruht"`    // Grund, warum der Kamera-Alarm stumm ist ("" = scharf)
-	CamConfigured bool   `json:"cam_configured"`    // Snapshot-URL hinterlegt → Live-Bild möglich
-	StreamConfigured bool `json:"stream_configured"` // Livestream-URL (MJPEG) hinterlegt → flüssiger Stream möglich
-	HatBordbuch  bool    `json:"hat_bordbuch"`
-	BundleAgeSec int     `json:"bundle_age_sec"`
-	Hint         string  `json:"hint"`
-	NextLogbookHint bool `json:"next_logbook_hint"` // am Ziel + kein weiteres Leg → Bordbuch für nächste Fahrt
-	Horn         bool    `json:"horn"`
-	Lamp         bool    `json:"lamp"`
-	Version      string  `json:"version"`
-	UpdatedAt    string  `json:"updated_at"`
+	PosAgeSec        int          `json:"pos_age_sec"`
+	PosValid         bool         `json:"pos_valid"`
+	CameraHazard     bool         `json:"camera_hazard"`
+	ImHafen          string       `json:"im_hafen"`          // Name des Hafens, in dessen Kreis das Schiff liegt ("" = draußen)
+	SifaRuht         string       `json:"sifa_ruht"`         // Grund, warum SIFA stumm ist ("" = scharf)
+	KameraRuht       string       `json:"kamera_ruht"`       // Grund, warum der Kamera-Alarm stumm ist ("" = scharf)
+	CamConfigured    bool         `json:"cam_configured"`    // Snapshot-URL hinterlegt → Live-Bild möglich
+	StreamConfigured bool         `json:"stream_configured"` // Livestream-URL (MJPEG) hinterlegt → flüssiger Stream möglich
+	HatBordbuch      bool         `json:"hat_bordbuch"`
+	BundleAgeSec     int          `json:"bundle_age_sec"`
+	Hint             string       `json:"hint"`
+	NextLogbookHint  bool         `json:"next_logbook_hint"` // am Ziel + kein weiteres Leg → Bordbuch für nächste Fahrt
+	Horn             bool         `json:"horn"`
+	Lamp             bool         `json:"lamp"`
+	Version          string       `json:"version"`
+	UpdatedAt        string       `json:"updated_at"`
 }
 
 type Engine struct {
@@ -71,8 +71,8 @@ type Engine struct {
 	kai  *KaiClient
 	gpio GPIO
 
-	bundle   *Bundle
-	bundleAt time.Time
+	bundle      *Bundle
+	bundleAt    time.Time
 	pos         Position
 	lastPos     Position
 	lastHeading float64 // zuletzt abgeleiteter Kurs (wird bei Stillstand gehalten)
@@ -88,7 +88,11 @@ type Engine struct {
 	// Kamera
 	camHazardUntil time.Time
 	prevAck        bool
-	prevCamHazard  bool
+	// SIFA-Protokoll für KAI (2026-10-24): Hupe/Lampe/Quittierung sind kurze Signale, die eine Momentaufnahme
+	// alle 10 s fast nie trifft — deshalb „zuletzt“ + Anzahl heute. Testschalter und die kurze
+	// Quittier-Bestätigung zählen nicht.
+	prot          sifaProt
+	prevCamHazard bool
 	// Hafenkreis / Mindestgeschwindigkeit (mit Hysterese, damit es an der Grenze nicht flattert)
 	gate gateState
 
@@ -222,6 +226,7 @@ func (e *Engine) Ack() {
 	e.mu.Lock()
 	now := time.Now()
 	e.lastDeadmanAck = now
+	e.prot.quittiert(now)
 	if e.alarmState == "alarm" || e.alarmState == "acked" {
 		e.alarmState = "acked"
 		e.lastAck = now
@@ -230,6 +235,61 @@ func (e *Engine) Ack() {
 		e.ackBlinkUntil = now.Add(400 * time.Millisecond)
 	}
 	e.mu.Unlock()
+}
+
+type sifaProt struct {
+	tag                               string
+	hupeZuletzt, lampeZuletzt         time.Time
+	quittZuletzt                      time.Time
+	alarmGrund                        string
+	hupeHeute, lampeHeute, quittHeute int
+	prevHupe, prevLampe               bool
+}
+
+func (p *sifaProt) rollover(now time.Time) {
+	if d := now.Local().Format("2006-01-02"); p.tag != d {
+		p.tag, p.hupeHeute, p.lampeHeute, p.quittHeute = d, 0, 0, 0
+	}
+}
+
+// signale wertet die echten (nicht Test-)Ausgänge aus und zählt steigende Flanken.
+func (p *sifaProt) signale(now time.Time, hupe, lampe bool, grund string) {
+	p.rollover(now)
+	if hupe && !p.prevHupe {
+		p.hupeZuletzt, p.alarmGrund = now, grund
+		p.hupeHeute++
+	}
+	if lampe && !p.prevLampe {
+		p.lampeZuletzt = now
+		p.lampeHeute++
+	}
+	p.prevHupe, p.prevLampe = hupe, lampe
+}
+
+func (p *sifaProt) quittiert(now time.Time) {
+	p.rollover(now)
+	p.quittZuletzt = now
+	p.quittHeute++
+}
+
+func zeitOderLeer(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
+}
+
+// SifaProtokoll: wann zuletzt Hupe/Lampe/Quittierung, letzter Alarm samt Grund, Anzahl heute.
+func (e *Engine) SifaProtokoll() map[string]any {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.prot.rollover(time.Now())
+	p := e.prot
+	return map[string]any{
+		"hupe_zuletzt": zeitOderLeer(p.hupeZuletzt), "lampe_zuletzt": zeitOderLeer(p.lampeZuletzt),
+		"quittiert_zuletzt": zeitOderLeer(p.quittZuletzt), "last_alarm_at": zeitOderLeer(p.hupeZuletzt),
+		"alarm_grund": p.alarmGrund, "hupe_heute": p.hupeHeute, "lampe_heute": p.lampeHeute, "quittiert_heute": p.quittHeute,
+	}
 }
 
 func hhmmToMin(s string) int {
@@ -633,6 +693,11 @@ func (e *Engine) Tick(now time.Time) {
 	st.Alarm = eventHorn
 	st.AlarmState = e.alarmState
 	st.Horn, st.Lamp = horn, lamp
+	grund := "Ereignis"
+	if deadmanHorn && !eventHorn {
+		grund = "Totmann nicht quittiert"
+	}
+	e.prot.signale(now, eventHorn || deadmanHorn, eventLamp || deadmanLamp, grund)
 	st.Version = version
 	st.UpdatedAt = now.Format(time.RFC3339)
 	e.rolloverTodayLocked(now)
