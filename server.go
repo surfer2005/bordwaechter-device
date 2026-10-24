@@ -680,6 +680,7 @@ func (a *App) routes() *http.ServeMux {
 	mux.HandleFunc("/api/bord/position", a.handleBordPosition)
 	// Bildschirm/Bordmusik: Position des Bordwächters für die Abspielseite (nur vom Gerät selbst)
 	mux.HandleFunc("/api/medien/position", a.handleMedienPosition)
+	a.medienRoutes(mux) // Bedienung ohne Netz: Befehle, Stand, Bedienseite /bedienen
 
 	mux.HandleFunc("/api/position", a.guard(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()

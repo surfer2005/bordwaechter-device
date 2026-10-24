@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bedienung an Bord</title>
+<style>
+:root{--bg:#F3F1EA;--card:#fff;--text:#17211F;--muted:#57625A;--line:#DCD7C8;--pri:#1F6E5C;--pri-soft:#DCEBE4;--warn-bg:#F1E6D2;--warn:#93691F}
+@media (prefers-color-scheme:dark){:root{--bg:#101613;--card:#161D1A;--text:#ECE8DC;--muted:#AFB7AC;--line:#2B342E;--pri:#54BC9F;--pri-soft:#1D3B33;--warn-bg:#3A3020;--warn:#E2B866}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,"Segoe UI",sans-serif}
+.wrap{max-width:640px;margin:0 auto;padding:16px}
+h1{font-size:1.25rem;margin:0 0 4px}h2{font-size:1rem;margin:0 0 8px}
+.muted{color:var(--muted);font-size:.86rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;margin-top:12px}
+.reihe{display:flex;gap:8px;flex-wrap:wrap}
+button{font:600 1rem system-ui,sans-serif;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:6px;padding:12px 16px;min-width:64px;cursor:pointer}
+button.pri{background:var(--pri);border-color:var(--pri);color:#fff}
+button:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
+.liste button{width:100%;text-align:left;margin-top:6px}
+.liste button.an{background:var(--pri-soft);border-color:var(--pri)}
+input[type=range]{width:100%;accent-color:var(--pri)}
+.hinweis{background:var(--warn-bg);color:var(--warn);border-radius:6px;padding:10px 12px;margin-top:12px;font-size:.9rem}
+#meldung{min-height:1.4em;margin-top:8px;font-size:.9rem;color:var(--pri)}
+</style></head><body><div class="wrap">
+<h1 id="titel">Bedienung an Bord</h1>
+<div class="muted" id="laeuft">Lade …</div>
+<div class="hinweis" id="anmelden" hidden>Bitte zuerst auf der <a href="/">Geräteseite</a> anmelden, dann diese Seite neu laden.</div>
+<div class="card">
+  <h2>Wiedergabe</h2>
+  <div class="reihe">
+    <button onclick="befehl('zurueck')" aria-label="Zurück">◀◀</button>
+    <button onclick="steuer({paused:true})">❚❚ Pause</button>
+    <button onclick="befehl('vor')" aria-label="Weiter">▶▶</button>
+    <button class="pri" onclick="senden({art:'zeitplan'})">Zurück zum Zeitplan</button>
+  </div>
+  <label class="muted" for="vol" style="display:block;margin-top:12px">Lautstärke <span id="volwert"></span></label>
+  <input id="vol" type="range" min="0" max="100" step="5" onchange="befehl('lautstaerke', +this.value)">
+</div>
+<div class="card" id="plKarte" hidden><h2>Playlist wählen</h2><div class="liste" id="playlisten"></div></div>
+<div class="card" id="evKarte" hidden><h2>Ereignis starten</h2><div class="liste" id="ereignisse"></div></div>
+<div id="meldung"></div>
+<p class="muted">Diese Seite wirkt direkt auf dieses Gerät im Bord-Netz — auch ohne Verbindung zu KAI. Radio braucht Internet und ist ohne Netz nicht verfügbar.</p>
+</div>
+<script>
+var $=function(i){return document.getElementById(i)}
+function meldung(t){ $('meldung').textContent=t; setTimeout(function(){ $('meldung').textContent='' },2500) }
+function senden(b){
+  b.quelle='geraeteseite'
+  return fetch('/api/medien/befehl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})
+    .then(function(r){ if(r.status===401){ $('anmelden').hidden=false; throw new Error('Anmeldung nötig') } if(!r.ok) throw new Error('HTTP '+r.status); meldung('Gesendet') })
+    .catch(function(e){ meldung('Nicht gesendet: '+e.message) })
+}
+function befehl(cmd,value){ return senden({art:'befehl',cmd:cmd,value:value}) }
+function steuer(o){ return senden(Object.assign({art:'steuerung'},o)) }
+function laden(){
+  fetch('/api/medien/stand',{cache:'no-store'}).then(function(r){ if(r.status===401){ $('anmelden').hidden=false; throw 0 } return r.json() }).then(function(j){
+    $('titel').textContent=(j.rolle==='audio'?'Bordmusik':'Bildschirm')+' bedienen'
+    var s=j.stand||{}
+    $('laeuft').textContent=s.laeuft?('Läuft: '+s.laeuft):'Läuft gerade nichts'
+    if(s.volume!=null && document.activeElement!==$('vol')){ $('vol').value=s.volume; $('volwert').textContent=s.volume+' %' }
+    var pl=s.playlists||[], ev=s.ereignisse||[]
+    $('plKarte').hidden=!pl.length; $('evKarte').hidden=!ev.length
+    $('playlisten').innerHTML=''; pl.forEach(function(p){ var b=document.createElement('button'); b.textContent=p.name; if(s.playlist_id===p.id)b.className='an'; b.onclick=function(){ steuer({playlist_id:p.id}) }; $('playlisten').appendChild(b) })
+    $('ereignisse').innerHTML=''; ev.forEach(function(e){ var b=document.createElement('button'); b.textContent=e.name; b.onclick=function(){ senden({art:'ereignis',ereignis_id:e.id}) }; $('ereignisse').appendChild(b) })
+  }).catch(function(){})
+}
+laden(); setInterval(laden,3000)
+</script></body></html>

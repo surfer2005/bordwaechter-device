@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bordwächter</title>
+<title>KAI-Bordgerät</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%231F6E5C'/%3E%3Cg transform='translate(112,112) scale(12)' fill='none' stroke='%23fff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 18c2 1.4 4 1.4 6 0s4-1.4 6 0 4 1.4 6 0M5 18l1.2-8.4a1 1 0 0 1 1-.86H12V4l6 4-6 3.2'/%3E%3C/g%3E%3C/svg%3E">
 <style>
   :root{--bg:#F3F1EA;--panel:#FBFAF5;--panel2:#F1EDE3;--line:#E2DDD0;--ink:#121A17;--muted:#5C6B64;--faint:#8A978F;--teal:#1F6E5C;--teal2:#17493E;--amber:#B16A12;--red:#C4442E;--btnink:#fff;--radius:12px}
@@ -56,7 +56,7 @@ body.medienrolle .nur-bw{display:none!important}
 <body>
   <div id="login">
     <div class="box">
-      <h1><span class="d"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18c2 1.4 4 1.4 6 0s4-1.4 6 0 4 1.4 6 0M5 18l1.2-8.4a1 1 0 0 1 1-.86H12V4l6 4-6 3.2"/></svg></span> Bordwächter</h1>
+      <h1><span class="d"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18c2 1.4 4 1.4 6 0s4-1.4 6 0 4 1.4 6 0M5 18l1.2-8.4a1 1 0 0 1 1-.86H12V4l6 4-6 3.2"/></svg></span> KAI-Bordgerät</h1>
       <label>Benutzer</label><input id="l_user" value="admin" autocomplete="username">
       <label>Passwort</label><input id="l_pw" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
       <div class="err" id="l_err"></div>
@@ -68,7 +68,7 @@ body.medienrolle .nur-bw{display:none!important}
 
   <h1 class="topbar">
     <span class="d"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18c2 1.4 4 1.4 6 0s4-1.4 6 0 4 1.4 6 0M5 18l1.2-8.4a1 1 0 0 1 1-.86H12V4l6 4-6 3.2"/></svg></span>
-    <span class="brandtext"><span class="bname">Bordwächter</span><span class="bsub" id="ver">Konfiguration</span></span>
+    <span class="brandtext"><span class="bname">KAI-Bordgerät</span><span class="bsub" id="ver">Konfiguration</span></span>
     <button class="ghost logout" onclick="doLogout()">Abmelden</button>
   </h1>
 
@@ -338,7 +338,7 @@ function ask(msg){ return new Promise(function(res){
   g('askyes').onclick=function(){done(true)}; g('askno').onclick=function(){done(false)}
   document.onkeydown=function(e){ if(e.key==='Enter')done(true); if(e.key==='Escape')done(false) }
 }) }
-async function restartDev(){ if(!(await ask('Bordwächter-Dienst neu starten?')))return; g('saveMsg').textContent='Neustart läuft …'; await post('/api/restart'); setTimeout(()=>{g('saveMsg').textContent='';location.reload()},4000) }
+async function restartDev(){ if(!(await ask('Gerätedienst neu starten?')))return; g('saveMsg').textContent='Neustart läuft …'; await post('/api/restart'); setTimeout(()=>{g('saveMsg').textContent='';location.reload()},4000) }
 async function applyNet(){
   const body={mode:g('n_mode').value,interface:g('n_if').value,address:g('n_addr').value,gateway:g('n_gw').value,dns:g('n_dns').value}
   g('netMsg').textContent='Übernehme …'
@@ -382,7 +382,7 @@ async function checkUpdate(){
     const j=await r.json(); const b=g('updBadge')
     if(j.updateAvailable){ b.textContent='● Neue Version '+j.latest+' verfügbar'; b.style.display='inline-block'; b.title='Jetzt „Aktualisieren" drücken' }
     else b.style.display='none'
-    var cf=g('cfgfoot'); if(cf){ cf.innerHTML='Bordwächter v'+(j.current||'?')+(j.updateAvailable?(' · <span style="color:#b26a00;font-weight:700">neue Version '+j.latest+' verfügbar</span> — „Aktualisieren" drücken'):' · aktuell') }
+    var cf=g('cfgfoot'); if(cf){ cf.innerHTML='KAI-Bordgerät v'+(j.current||'?')+(j.updateAvailable?(' · <span style="color:#b26a00;font-weight:700">neue Version '+j.latest+' verfügbar</span> — „Aktualisieren" drücken'):' · aktuell') }
   }catch(e){ updChecked=false }
 }
 function fmt(n,u){ return (n==null||n===0&&u==='km'?'—':n)+(u?(' '+u):'') }

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.88"
+const version = "0.1.89"
 
 type App struct {
 	mu     sync.Mutex
@@ -337,7 +337,7 @@ func main() {
 		go app.heartbeatLoop()
 		go app.devlogLoop()
 		go app.releaseCheckLoop()
-		log.Printf("Gerätesoftware %s in der Rolle %s — lokale Oberfläche auf %s", version, cfg.Rolle, cfg.Listen)
+		log.Printf("KAI-Bordgerät %s in der Rolle %s — lokale Oberfläche auf %s", version, cfg.Rolle, cfg.Listen)
 		if err := http.ListenAndServe(cfg.Listen, app.routes()); err != nil {
 			log.Fatal(err)
 		}
@@ -360,7 +360,7 @@ func main() {
 	go app.netLoop()    // Streckennetz + Anlegestellen cachen (Standalone-/Offline-Navigation)
 	go app.kaiStartSync() // Einstellungen einmal mit KAI abgleichen (Stand kann sich offline geändert haben)
 
-	log.Printf("Bordwächter %s — lokale Oberfläche auf %s (GPS-Quelle: %s, GPIO: %s)",
+	log.Printf("KAI-Bordgerät %s, Rolle Bordwächter — lokale Oberfläche auf %s (GPS-Quelle: %s, GPIO: %s)",
 		version, cfg.Listen, cfg.GPS.Source, cfg.GPIO.Backend)
 	if err := http.ListenAndServe(cfg.Listen, app.routes()); err != nil {
 		log.Fatal(err)
