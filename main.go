@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.92"
+const version = "0.1.93"
 
 type App struct {
 	mu     sync.Mutex
@@ -349,6 +349,7 @@ func main() {
 		go app.devlogLoop()
 		go app.releaseCheckLoop()
 		go app.anzeigeAutomatischSpaeter() // Abspielseite am Monitor einrichten (einmalig)
+		go app.bordmusikLoop()             // Bordmusik ohne Monitor: Abspielseite unsichtbar im Hintergrund
 		log.Printf("KAI-Bordgerät %s in der Rolle %s — lokale Oberfläche auf %s", version, cfg.Rolle, cfg.Listen)
 		if err := http.ListenAndServe(cfg.Listen, app.routes()); err != nil {
 			log.Fatal(err)

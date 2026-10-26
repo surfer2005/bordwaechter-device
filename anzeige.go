@@ -51,6 +51,10 @@ func anzeigeZustand(c *Config) map[string]any {
 	if dreh == "" {
 		dreh = "normal"
 	}
+		if c.Rolle == "audio" && !monitorAngeschlossen() {
+		// Bordmusik ohne Monitor: die Abspielseite läuft unsichtbar (bordmusik.go) — das ist „eingerichtet“
+		return map[string]any{"monitor": false, "eingerichtet": true, "laeuft": bordmusikLaeuft(), "ansicht": "Abspielseite ohne Monitor", "drehung": dreh}
+	}
 	return map[string]any{"monitor": monitorAngeschlossen(), "eingerichtet": kioskEingerichtet(), "laeuft": browserLaeuft(), "ansicht": ansicht, "drehung": dreh}
 }
 

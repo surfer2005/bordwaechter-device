@@ -261,7 +261,12 @@ func (a *App) kaiStartSync() {
 
 // ausKaiGesteuert: gekoppelt und Einstellungen aus KAI übernommen → am Gerät nur KAI-Adresse und Netzwerk
 // änderbar (Festlegung 2026-10-24: Einstellungen werden in KAI gepflegt).
-func ausKaiGesteuert(c *Config) bool { return c != nil && c.EdgeToken != "" && c.KaiConfigRev > 0 }
+// Bildschirm/Bordmusik gelten ab der Kopplung als aus KAI gesteuert (sie haben keine KAI-Einstellungen, also nie
+// KaiConfigRev > 0) — sonst verwarf ein Speichern der Konfig-Seite ihre Rolle, und das Gerät lief als Bordwächter
+// weiter (MS-Lindau 2026-10-26).
+func ausKaiGesteuert(c *Config) bool {
+	return c != nil && c.EdgeToken != "" && (c.KaiConfigRev > 0 || istMedienRolle(c.Rolle))
+}
 
 // sperreAusKai: was von einer Speicherung der Konfig-Seite übernommen wird. Ist das Gerät aus KAI gesteuert,
 // nur KAI-Adresse und Netzwerk; der Rest (auch der Anzeige-Schlüssel) bleibt wie aus KAI übernommen. Rein, testbar.

@@ -93,6 +93,12 @@ func (a *App) medienAusHerzschlag(hr *HelloResp) {
 		a.mu.Lock()
 		a.cfg = &n
 		a.mu.Unlock()
+		// Rolle gewechselt (z. B. von KAI zurückgegeben, nachdem sie am Gerät verloren ging): neu starten,
+		// damit die passenden Teile laufen — sonst liefen GPS/SIFA weiter, ohne dass etwas abgespielt wird.
+		if n.Rolle != cfg.Rolle {
+			logEvent("info", "Rolle aus KAI: "+n.Rolle+" — Dienst startet neu")
+			reexecSoon()
+		}
 	}
 }
 

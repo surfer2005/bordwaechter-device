@@ -87,3 +87,18 @@ func TestHerzschlagUebernimmtAbspielseiteUndBordwaechter(t *testing.T) {
 		t.Fatal("ein Bordwächter bleibt Bordwächter")
 	}
 }
+
+func TestBordmusikArgs(t *testing.T) {
+	a := bordmusikArgs("https://kai-bsb.de/test/kiosk/medien/6?token=x", "/home/pi/.config/bordwaechter-bordmusik")
+	hat := func(s string) bool {
+		for _, x := range a {
+			if x == s {
+				return true
+			}
+		}
+		return false
+	}
+	if !hat("--headless=new") || !hat("--autoplay-policy=no-user-gesture-required") || a[len(a)-1] != "https://kai-bsb.de/test/kiosk/medien/6?token=x" {
+		t.Fatalf("Bordmusik ohne Monitor braucht unsichtbaren Browser mit Autoplay und die Abspielseite zuletzt: %v", a)
+	}
+}

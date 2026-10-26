@@ -65,3 +65,14 @@ func TestKonfigSeiteGesperrtWennAusKai(t *testing.T) {
 		t.Fatal("ohne KAI bleibt alles am Gerät änderbar")
 	}
 }
+
+func TestMedienRolleBleibtBeimSpeichern(t *testing.T) {
+	cur := defaultConfig()
+	cur.EdgeToken, cur.Rolle, cur.MedienPfad = "tok", "audio", "kiosk/medien/6?token=x"
+	neu := *defaultConfig()
+	neu.KaiBaseURL = "https://kai-bsb.de/test"
+	c, gesperrt := sperreAusKai(cur, neu)
+	if !gesperrt || c.Rolle != "audio" || c.MedienPfad == "" || c.EdgeToken != "tok" {
+		t.Fatalf("Rolle Bordmusik darf beim Speichern der Konfig-Seite nicht verloren gehen: %v %+v", gesperrt, c)
+	}
+}
