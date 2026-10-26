@@ -27,7 +27,7 @@ import (
 // Felder, die NIE aus KAI kommen: Verbindung zu KAI selbst, lokaler Port und Netzwerk (sonst käme das
 // Gerät nach einem Fehler nicht mehr ins Netz).
 var nurAmGeraet = map[string]bool{"kai_base_url": true, "edge_token": true, "listen": true, "network": true, "bundle_refresh_sec": true, "kai_config_rev": true,
-	"rolle": true, "medien_pfad": true, "bordwaechter": true, "bordwaechter_token": true}
+	"rolle": true, "medien_pfad": true, "medien_ton": true, "bordwaechter": true, "bordwaechter_token": true}
 
 type koppelAntwort struct {
 	OK        bool   `json:"ok"`

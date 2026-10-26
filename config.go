@@ -121,6 +121,7 @@ type Config struct {
 	// Koppeln aus KAI, ebenso Abspielseite und Adresse/Lese-Schlüssel des Bordwächters desselben Schiffs.
 	Rolle             string `json:"rolle"`
 	MedienPfad        string `json:"medien_pfad"`
+	MedienTon         string `json:"medien_ton,omitempty"` // Tonausgang aus KAI: hdmi | analog | aus
 	Bordwaechter      string `json:"bordwaechter"`
 	BordwaechterToken string `json:"bordwaechter_token"`
 }

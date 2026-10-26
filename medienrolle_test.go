@@ -65,9 +65,7 @@ func TestHerzschlagUebernimmtAbspielseiteUndBordwaechter(t *testing.T) {
 	defer os.Unsetenv("BORDWAECHTER_CONFIG")
 	a := &App{cfg: &Config{Rolle: "audio", MedienPfad: "kiosk/medien/4?token=x"}}
 	hr := &HelloResp{Rolle: "audio"}
-	hr.Medien = &struct {
-		Pfad string `json:"pfad"`
-	}{Pfad: "kiosk/medien/4?token=y"}
+	hr.Medien = &MedienInfo{Pfad: "kiosk/medien/4?token=y"}
 	hr.Bordwaechter = &struct {
 		URL   string `json:"url"`
 		Token string `json:"token"`
@@ -100,5 +98,36 @@ func TestBordmusikArgs(t *testing.T) {
 	}
 	if !hat("--headless=new") || !hat("--autoplay-policy=no-user-gesture-required") || a[len(a)-1] != "https://kai-bsb.de/test/kiosk/medien/6?token=x" {
 		t.Fatalf("Bordmusik ohne Monitor braucht unsichtbaren Browser mit Autoplay und die Abspielseite zuletzt: %v", a)
+	}
+}
+
+func TestSenkenUndAuswahl(t *testing.T) {
+	st := `PipeWire 'pipewire-0' [1.4.2, pi@kai, cookie:123]
+ └─ Clients:
+        33. WirePlumber
+
+Audio
+ ├─ Devices:
+ │      49. Built-in Audio                      [alsa]
+ │      50. Built-in Audio                      [alsa]
+ │
+ ├─ Sinks:
+ │  *   56. Built-in Audio Digital Stereo (HDMI) [vol: 0.40]
+ │      57. Built-in Audio Stereo               [vol: 1.00 MUTED]
+ │
+ ├─ Sources:
+ │      60. Mikrofon                            [vol: 1.00]
+ │
+ └─ Streams:
+
+Video
+ ├─ Devices:
+`
+	l := senken(st)
+	if len(l) != 2 || l[0].ID != "56" || !l[0].Standard || l[1].Name != "Built-in Audio Stereo" {
+		t.Fatalf("Tonausgänge falsch gelesen: %+v", l)
+	}
+	if passendeSenke(l, "analog") != "57" || passendeSenke(l, "hdmi") != "56" {
+		t.Fatal("Ausgang laut KAI falsch gewählt")
 	}
 }

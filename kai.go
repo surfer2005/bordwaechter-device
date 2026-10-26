@@ -207,9 +207,7 @@ type HelloResp struct {
 	ConfigRev          int    `json:"config_rev"`          // Stand der Einstellungen in KAI
 	BordToken          string `json:"bord_token"`          // Lese-Schlüssel für die Position im Bord-Netz
 	Rolle              string `json:"rolle"`               // Rolle aus KAI (bordwaechter | bildschirm | audio)
-	Medien             *struct {
-		Pfad string `json:"pfad"`
-	} `json:"medien"` // Bildschirm/Bordmusik: Abspielseite
+	Medien             *MedienInfo `json:"medien"` // Bildschirm/Bordmusik: Abspielseite
 	Bordwaechter *struct {
 		URL   string `json:"url"`
 		Token string `json:"token"`
@@ -335,4 +333,10 @@ func (k *KaiClient) PostEvent(kind, state, detail string, p Position, offM float
 		return fmt.Errorf("event http %d", code)
 	}
 	return nil
+}
+
+// MedienInfo: was KAI einem Bildschirm/einer Bordmusik im Herzschlag mitgibt.
+type MedienInfo struct {
+	Pfad string `json:"pfad"`
+	Ton  string `json:"ton"` // hdmi | analog | aus — Tonausgang laut KAI
 }

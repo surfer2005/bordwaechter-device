@@ -22,6 +22,17 @@ import (
 
 func istMedienRolle(r string) bool { return r == "bildschirm" || r == "audio" }
 
+// rolleName: Rolle in Worten für Protokoll und Anzeige (leer = Bordwächter).
+func rolleName(r string) string {
+	switch r {
+	case "bildschirm":
+		return "Bildschirm"
+	case "audio":
+		return "Bordmusik"
+	}
+	return "Bordwächter"
+}
+
 // rolleFuerKai: Art, die das Gerät im Herzschlag meldet.
 func rolleFuerKai(r string) string {
 	if istMedienRolle(r) {
@@ -81,11 +92,14 @@ func (a *App) medienAusHerzschlag(hr *HelloResp) {
 	if hr.Medien != nil && hr.Medien.Pfad != "" {
 		n.MedienPfad = hr.Medien.Pfad
 	}
+	if hr.Medien != nil && hr.Medien.Ton != "" {
+		n.MedienTon = hr.Medien.Ton
+	}
 	// leer = KAI kennt (gerade) keinen Bordwächter mit Adresse: den letzten bekannten behalten
 	if hr.Bordwaechter != nil && hr.Bordwaechter.URL != "" {
 		n.Bordwaechter, n.BordwaechterToken = hr.Bordwaechter.URL, hr.Bordwaechter.Token
 	}
-	if n.Rolle != cfg.Rolle || n.MedienPfad != cfg.MedienPfad || n.Bordwaechter != cfg.Bordwaechter || n.BordwaechterToken != cfg.BordwaechterToken {
+	if n.Rolle != cfg.Rolle || n.MedienPfad != cfg.MedienPfad || n.MedienTon != cfg.MedienTon || n.Bordwaechter != cfg.Bordwaechter || n.BordwaechterToken != cfg.BordwaechterToken {
 		if err := saveConfig(&n); err != nil {
 			log.Printf("medien: Stand aus KAI nicht gespeichert: %v", err)
 			return
@@ -96,7 +110,7 @@ func (a *App) medienAusHerzschlag(hr *HelloResp) {
 		// Rolle gewechselt (z. B. von KAI zurückgegeben, nachdem sie am Gerät verloren ging): neu starten,
 		// damit die passenden Teile laufen — sonst liefen GPS/SIFA weiter, ohne dass etwas abgespielt wird.
 		if n.Rolle != cfg.Rolle {
-			logEvent("info", "Rolle aus KAI: "+n.Rolle+" — Dienst startet neu")
+			logEvent("info", "Rolle aus KAI: "+rolleName(n.Rolle)+" — Dienst startet neu")
 			reexecSoon()
 		}
 	}

@@ -85,7 +85,7 @@ func logEvent(level, msg string) {
 // devlogLoop meldet die gepufferten Einträge an KAI, sobald erreichbar; gesendete werden entfernt.
 func (a *App) devlogLoop() {
 	loadLog()
-	logEvent("info", "Bordwächter gestartet, Version "+version)
+	logEvent("info", "KAI-Bordgerät gestartet als "+rolleName(a.getCfg().Rolle)+", Version "+version)
 	for {
 		k := a.getKai()
 		if k != nil && a.getCfg().EdgeToken != "" {
