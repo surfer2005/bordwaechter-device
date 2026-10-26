@@ -60,10 +60,43 @@ func bordmusikArgsSitzung(ziel, profil string) []string {
 		"--noerrdialogs", "--disable-features=TranslateUI,Translate", "--kiosk", "--app=" + ziel}
 }
 
+// anzeigeNachholen: Bildschirm mit Monitor, Anzeige eingerichtet, aber kein Browser (eingerichtet wird ohne Neustart,
+// der Autostart greift erst beim nächsten Hochfahren — MS-Lindau 2026-10-26): Kiosk in der laufenden Sitzung starten.
+var anzeigeVersucht time.Time
+
+func anzeigeNachholen(cfg *Config) {
+	if cfg.Rolle != "bildschirm" || !monitorAngeschlossen() || !kioskEingerichtet() || browserLaeuft() {
+		return
+	}
+	if time.Since(anzeigeVersucht) < 2*time.Minute {
+		return // dem Browser Zeit zum Starten lassen, nicht im Takt neu starten
+	}
+	u := desktopUser()
+	rt := "/run/user/" + strconv.Itoa(u.uid)
+	if _, err := os.Stat(rt + "/wayland-0"); err != nil {
+		return // keine Desktop-Sitzung — dann bleibt es beim Autostart
+	}
+	if _, err := os.Stat("/usr/local/bin/kiosk-browser.sh"); err != nil {
+		return
+	}
+	anzeigeVersucht = time.Now()
+	cmd := exec.Command("/usr/local/bin/kiosk-browser.sh")
+	cmd.Env = []string{"HOME=" + u.home, "USER=" + u.name, "PATH=/usr/local/bin:/usr/bin:/bin", "XDG_RUNTIME_DIR=" + rt,
+		"DBUS_SESSION_BUS_ADDRESS=unix:path=" + rt + "/bus", "WAYLAND_DISPLAY=wayland-0", "XDG_SESSION_TYPE=wayland"}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uint32(u.uid), Gid: uint32(u.gid)}, Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		logEvent("error", "Anzeige konnte nicht gestartet werden: "+err.Error())
+		return
+	}
+	go func() { _ = cmd.Wait() }()
+	logEvent("info", "Anzeige am Monitor gestartet (ohne Neustart)")
+}
+
 func (a *App) bordmusikLoop() {
 	time.Sleep(20 * time.Second) // Netz und Herzschlag zuerst
 	for {
 		cfg := a.getCfg()
+		anzeigeNachholen(cfg)
 		ziel := medienStartZiel(cfg)
 		soll := cfg.Rolle == "audio" && cfg.EdgeToken != "" && ziel != "" && !monitorAngeschlossen()
 		if !soll {
