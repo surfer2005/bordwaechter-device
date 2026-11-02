@@ -48,6 +48,7 @@ type frigateEvent struct {
 	Score     float64 `json:"score"`
 	StartTime float64 `json:"start_time"`
 	EndTime   *float64 `json:"end_time"` // nil = Objekt ist noch im Bild
+	Zones     []string `json:"zones"`    // Zonen, die das Objekt betreten hat (Frigate)
 	// Ab Frigate 0.14 steht die Sicherheit unter data.* (top_score/score oben sind dann leer) — vorher
 	// galt jeder Treffer als 0 % und wurde unter dem Mindest-Score verworfen (MS-Lindau 2026-11-02).
 	Data struct {
@@ -57,6 +58,15 @@ type frigateEvent struct {
 }
 
 // sicherheit: die beste verfügbare Angabe (neue Frigate-Versionen unter data.*, alte oben). Rein, testbar.
+func (e frigateEvent) imWasser() bool {
+	for _, z := range e.Zones {
+		if z == "wasser" {
+			return true
+		}
+	}
+	return false
+}
+
 func (e frigateEvent) sicherheit() float64 {
 	for _, v := range []float64{e.Data.TopScore, e.TopScore, e.Data.Score, e.Score} {
 		if v > 0 {
@@ -114,7 +124,8 @@ func (a *App) pollFrigate(cfg *Config, seen map[string]bool) {
 	}
 	// Kamera-Alarm: solange ein Objekt der eingestellten Art im Bild ist, gilt es als Kamera-Hinweis
 	// (wird bei jeder Abfrage aufgefrischt, die SIFA-Logik entscheidet mit Auslöser-Stufe und Hafen-Ruhe).
-	if alarmAusErkennung(events, cfg.Detect.AlarmLabels, cfg.Detect.MinScore) {
+	nurWasser := cfg.Detect.HorizontProzent > 0 || cfg.Detect.UntenProzent > 0
+	if alarmAusErkennung(events, cfg.Detect.AlarmLabels, cfg.Detect.MinScore, nurWasser) {
 		a.eng.CameraHazard()
 	}
 	// Frigate liefert neueste zuerst; chronologisch melden (älteste zuerst).
@@ -127,11 +138,18 @@ func (a *App) pollFrigate(cfg *Config, seen map[string]bool) {
 			seen[e.ID] = true // vor dem Start dieses Programms erkannt → schon gemeldet (kein Nachmelden nach Neustart)
 			continue
 		}
-		seen[e.ID] = true // ab jetzt als bearbeitet merken (auch wenn wir es unten verwerfen)
+		// Noch im Bild, aber (noch) nicht auf dem Wasser oder (noch) unter dem Mindest-Score: beim nächsten
+		// Abruf erneut prüfen — Sicherheit und Zone wachsen, solange Frigate das Objekt verfolgt. Erst ein
+		// beendetes Ereignis wird endgültig verworfen.
 		score := e.sicherheit()
-		if score < cfg.Detect.MinScore {
+		passt := score >= cfg.Detect.MinScore && (!nurWasser || e.imWasser())
+		if !passt {
+			if e.EndTime != nil {
+				seen[e.ID] = true
+			}
 			continue
 		}
+		seen[e.ID] = true // ab jetzt als gemeldet merken
 		snap := fetchSnapshotB64(fmt.Sprintf("%s/api/events/%s/snapshot.jpg", base, url.PathEscape(e.ID)))
 		detail := fmt.Sprintf("%s erkannt (%.0f%%)", labelDe(e.Label), score*100)
 		k := a.getKai()
@@ -153,7 +171,7 @@ func (a *App) pollFrigate(cfg *Config, seen map[string]bool) {
 
 // alarmAusErkennung: ist gerade ein Objekt einer Alarm-Art im Bild (laufendes Frigate-Ereignis, Sicherheit
 // mindestens minScore)? Leer oder „aus“ = nie (KAI braucht einen echten Wert, um zurückzuschalten). Rein, testbar.
-func alarmAusErkennung(events []frigateEvent, alarmLabels string, minScore float64) bool {
+func alarmAusErkennung(events []frigateEvent, alarmLabels string, minScore float64, nurWasser bool) bool {
 	arten := map[string]bool{}
 	for _, l := range strings.Split(alarmLabels, ",") {
 		if l = strings.TrimSpace(l); l != "" && l != "aus" {
@@ -164,7 +182,7 @@ func alarmAusErkennung(events []frigateEvent, alarmLabels string, minScore float
 		return false
 	}
 	for _, e := range events {
-		if e.EndTime == nil && arten[e.Label] && e.sicherheit() >= minScore {
+		if e.EndTime == nil && arten[e.Label] && e.sicherheit() >= minScore && (!nurWasser || e.imWasser()) {
 			return true
 		}
 	}

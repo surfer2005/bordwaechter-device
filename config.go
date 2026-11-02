@@ -94,6 +94,10 @@ type Config struct {
 		// Auflösung, mit der Frigate das Kamerabild auswertet ("1280x720" | "1920x1080" | "3840x2160").
 		// Mehr Bildpunkte = größere Reichweite, aber mehr Rechenlast (der Pi 5 entpackt H.264 per Prozessor).
 		Aufloesung string `json:"aufloesung"`
+		// Wasserfläche: gemeldet/alarmiert wird nur, was mit der Unterkante darin liegt. Horizont = Prozent der
+		// Bildhöhe von oben (darüber Himmel/Land), Unten = Prozent von unten ausnehmen (Bug/Deck). Beide 0 = Vollbild.
+		HorizontProzent int `json:"horizont_prozent"`
+		UntenProzent    int `json:"unten_prozent"`
 	} `json:"detect"`
 
 	// Wetter + Pegel in der Anzeige. Werte kommen aus denselben öffentlichen Quellen wie KAI
@@ -169,7 +173,7 @@ func defaultConfig() *Config {
 	c.Detect.Labels = "person,boat"
 	c.Detect.MinScore = 0.6
 	c.Detect.PollSec = 3
-	c.Detect.Aufloesung = "1920x1080"
+	c.Detect.Aufloesung = "1280x720" // 1080p ließ den Pi der MS-Lindau hängen (2026-11-02) — erst nach Prüfung höher
 	c.Info.Weather = true
 	c.Info.Pegel = true
 	c.Info.Lat = "47.66"

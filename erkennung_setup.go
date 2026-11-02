@@ -82,7 +82,29 @@ func erkennungsAufloesung(s string) (int, int) {
 	case "3840x2160":
 		return 3840, 2160
 	}
-	return 1920, 1080
+	return 1280, 720
+}
+
+// wasserZone: Ober-/Unterkante der Wasserfläche in Bildpunkten; ok=false, wenn Vollbild (keine Zone).
+// Werte werden auf 0..95 % begrenzt und müssen zusammen eine Fläche lassen. Rein, testbar.
+func wasserZone(horizont, unten, h int) (oben, unterkante int, ok bool) {
+	k := func(v int) int {
+		if v < 0 {
+			return 0
+		}
+		if v > 95 {
+			return 95
+		}
+		return v
+	}
+	horizont, unten = k(horizont), k(unten)
+	if horizont == 0 && unten == 0 {
+		return 0, h, false
+	}
+	if horizont+unten > 95 {
+		unten = 95 - horizont
+	}
+	return h * horizont / 100, h - h*unten/100, true
 }
 
 func rtspAusKamera(stream, snapshot, aufloesung string) string {
@@ -102,8 +124,12 @@ func rtspAusKamera(stream, snapshot, aufloesung string) string {
 }
 
 // frigateConfig: die Frigate-Konfiguration (YAML) für den Hailo und die Klassen aus KAI. Rein, testbar.
-func frigateConfig(rtsp, labels, aufloesung string) string {
+func frigateConfig(rtsp, labels, aufloesung string, horizont, unten int) string {
 	w, h := erkennungsAufloesung(aufloesung)
+	zone := ""
+	if o, u, ok := wasserZone(horizont, unten, h); ok {
+		zone = fmt.Sprintf("    zones:\n      wasser:\n        coordinates: 0,%d,%d,%d,%d,%d,0,%d\n", u, w, u, w, o, o)
+	}
 	var track []string
 	for _, l := range strings.Split(labels, ",") {
 		if l = strings.TrimSpace(l); l != "" {
@@ -145,7 +171,7 @@ cameras:
       bounding_box: true
     record:
       enabled: false
-`
+` + zone
 }
 
 // Frigate-Version fest (nicht „stable“): die Hailo-Bibliothek im Image muss zum Treiber am Gerät passen.
@@ -205,7 +231,7 @@ func schreibeFrigate(cfg *Config) (bool, error) {
 	}
 	_ = os.MkdirAll(filepath.Join(frigateDir, "storage"), 0o755)
 	_ = os.WriteFile(filepath.Join(frigateDir, "docker-compose.yml"), []byte(strings.Replace(frigateCompose, "__IMAGE__", frigateImage(hailoTreiberVersion()), 1)), 0o644)
-	neu := frigateConfig(rtsp, cfg.Detect.Labels, cfg.Detect.Aufloesung)
+	neu := frigateConfig(rtsp, cfg.Detect.Labels, cfg.Detect.Aufloesung, cfg.Detect.HorizontProzent, cfg.Detect.UntenProzent)
 	p := filepath.Join(frigateDir, "config", "config.yml")
 	// ⚠️ Frigate schreibt config.yml beim Start selbst um (Versions-Migration). Verglichen wird deshalb mit
 	// einer eigenen Kopie dessen, was WIR zuletzt geschrieben haben — sonst galt die Datei alle 5 Minuten
