@@ -120,6 +120,7 @@ cameras:
         - path: ` + string(q) + `
           roles: [detect]
     detect:
+      enabled: true
       width: 1280
       height: 720
       fps: 5

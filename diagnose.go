@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -36,6 +37,22 @@ func diagShell(cmd string) string {
 }
 
 func janein(b bool) *bool { return &b }
+
+var diagApp *App
+
+// kameraHost: Adresse der Kamera aus den Einstellungen (Livestream, sonst Standbild).
+func kameraHost() string {
+	if diagApp == nil {
+		return ""
+	}
+	cfg := diagApp.getCfg()
+	for _, u := range []string{cfg.Camera.StreamURL, cfg.Camera.SnapshotURL} {
+		if x, err := url.Parse(strings.TrimSpace(u)); err == nil && x.Hostname() != "" {
+			return x.Hostname()
+		}
+	}
+	return ""
+}
 
 // diagnoseLaufen sammelt die Prüfungen. Reihenfolge = Anzeige in KAI.
 func diagnoseLaufen() []diagPunkt {
@@ -68,6 +85,11 @@ func diagnoseLaufen() []diagPunkt {
 	add("Boot-Einstellungen PCIe", "grep -iE 'pcie|pciex1|nvme|hailo|dtoverlay|dtparam' /boot/firmware/config.txt", nil)
 	add("HAT-Kennung (EEPROM)", "cat /proc/device-tree/hat/product 2>/dev/null; echo; cat /proc/device-tree/hat/vendor 2>/dev/null", nil)
 
+	// Kamera: Port 554 (RTSP für Frigate) und 80 (Standbild/Livestream für die Anzeige)
+	if h := kameraHost(); h != "" {
+		add("Kamera "+h+" (RTSP 554 / HTTP 80)", "for p in 554 80; do if timeout 4 bash -c \"</dev/tcp/"+h+"/$p\" 2>/dev/null; then echo \"Port $p offen\"; else echo \"Port $p NICHT erreichbar\"; fi; done; ping -c 2 -W 2 "+h+" | tail -2", nil)
+	}
+
 	// Docker / Frigate
 	add("Docker / Frigate", "docker ps -a --format '{{.Names}}  {{.Status}}  {{.Image}}' 2>&1", nil)
 	if _, err := os.Stat("/opt/frigate"); err == nil {
@@ -91,6 +113,7 @@ func diagnoseLaufen() []diagPunkt {
 }
 
 func (a *App) diagnoseSenden(n int) {
+	diagApp = a
 	k := a.getKai()
 	erg := diagnoseLaufen()
 	if k == nil {
