@@ -21,6 +21,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -122,7 +123,19 @@ func (k *KaiClient) PostConfigIst(rev int, cfg *Config) error {
 }
 
 func (k *KaiClient) BefehlErledigt(n int, ok bool, fehler string) {
-	_, _, _ = k.do("POST", "/api/edge/befehl-erledigt", map[string]any{"n": n, "ok": ok, "fehler": fehler})
+	_ = k.BefehlErledigtPruefen(n, ok, fehler)
+}
+
+// BefehlErledigtPruefen: wie BefehlErledigt, meldet aber, ob KAI die Quittung angenommen hat.
+func (k *KaiClient) BefehlErledigtPruefen(n int, ok bool, fehler string) error {
+	_, code, err := k.do("POST", "/api/edge/befehl-erledigt", map[string]any{"n": n, "ok": ok, "fehler": fehler})
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("HTTP %d", code)
+	}
+	return nil
 }
 
 func configAlsMap(c *Config) map[string]any {
@@ -219,6 +232,9 @@ func (a *App) kaiBefehl(b *kaiBefehlT) {
 		return
 	}
 	letzterBefehl = b.N
+	if a.geraetBefehl(b) {
+		return
+	}
 	k := a.getKai()
 	ok, fehler := true, ""
 	switch b.Cmd {
@@ -245,6 +261,41 @@ func (a *App) kaiBefehl(b *kaiBefehlT) {
 	if k != nil {
 		k.BefehlErledigt(b.N, ok, fehler)
 	}
+}
+
+// geraetBefehl: Neustart/Herunterfahren aus KAI (alle Gerätearten) und „Objekterkennung einrichten“.
+// Neustart/Herunterfahren erst, NACHDEM KAI den Befehl als erledigt verbucht hat — sonst holte das Gerät
+// ihn nach dem Hochfahren erneut ab und startete in einer Schleife neu.
+func (a *App) geraetBefehl(b *kaiBefehlT) bool {
+	k := a.getKai()
+	switch b.Cmd {
+	case "reboot", "shutdown":
+		if k == nil {
+			return true
+		}
+		if err := k.BefehlErledigtPruefen(b.N, true, ""); err != nil {
+			logEvent("warn", "Befehl "+b.Cmd+" nicht ausgeführt: Quittung an KAI fehlgeschlagen ("+err.Error()+")")
+			letzterBefehl = 0 // beim nächsten Abruf erneut versuchen
+			return true
+		}
+		wie, text := syscall.LINUX_REBOOT_CMD_RESTART, "Neustart"
+		if b.Cmd == "shutdown" {
+			wie, text = syscall.LINUX_REBOOT_CMD_POWER_OFF, "Herunterfahren"
+		}
+		logEvent("info", text+" aus KAI")
+		time.Sleep(2 * time.Second)
+		syscall.Sync()
+		_ = syscall.Reboot(wie)
+		return true
+	case "detect_setup":
+		go a.erkennungEinrichten()
+		if k != nil {
+			k.BefehlErledigt(b.N, true, "")
+		}
+		logEvent("info", "Objekterkennung einrichten: aus KAI angestoßen")
+		return true
+	}
+	return false
 }
 
 type kaiBefehlT struct {

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const version = "0.1.95"
+const version = "0.1.96"
 
 type App struct {
 	mu     sync.Mutex
@@ -360,6 +360,8 @@ func main() {
 	go app.gpsLoop()
 	go app.tickLoop()
 	go app.detectLoop()       // Objekterkennung (nur aktiv, wenn cfg.Detect.Enabled)
+	go app.erkennungPflege()  // Objekterkennung: Einrichtung nach Treiber-Neustart fortsetzen, Konfig nachziehen
+	erkennungMelden = app.erkennungZustand
 	go app.infoLoop()         // Wetter + Pegel für die Anzeige (nur aktiv, wenn cfg.Info.Weather/Pegel)
 	go app.sysLoop()          // Pi-Zustand (CPU-Temp/Last/RAM/Platte) für die HA-Integration
 	go app.auftragLoop()      // alle 10 s: wartet ein Auftrag (Speedtest)?

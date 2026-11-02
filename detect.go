@@ -20,6 +20,25 @@ import (
 
 var detectHTTP = &http.Client{Timeout: 10 * time.Second}
 
+var (
+	detectStart  = time.Now()
+	frigateLetzt *bool // zuletzt gemeldeter Zustand (nur Wechsel ins Geräte-Protokoll/KAI)
+)
+
+// frigateErreichbar schreibt nur WECHSEL ins Geräte-Protokoll (das nach KAI geht) — sonst sähe man in
+// KAI nie, dass die Brücke Frigate nicht erreicht (vorher stand das nur im Journal am Gerät).
+func frigateErreichbar(ok bool, grund string) {
+	if frigateLetzt != nil && *frigateLetzt == ok {
+		return
+	}
+	frigateLetzt = &ok
+	if ok {
+		logEvent("info", "Objekterkennung: Frigate erreichbar")
+	} else {
+		logEvent("warn", "Objekterkennung: Frigate nicht erreichbar ("+grund+")")
+	}
+}
+
 // Ein Ereignis, wie es Frigates /api/events liefert (nur die Felder, die wir brauchen).
 type frigateEvent struct {
 	ID        string  `json:"id"`
@@ -62,8 +81,10 @@ func (a *App) pollFrigate(cfg *Config, seen map[string]bool) {
 	resp, err := detectHTTP.Get(q)
 	if err != nil {
 		log.Printf("detect: Frigate nicht erreichbar: %v", err)
+		frigateErreichbar(false, err.Error())
 		return
 	}
+	frigateErreichbar(true, "")
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		log.Printf("detect: Frigate /api/events HTTP %d", resp.StatusCode)
@@ -78,6 +99,10 @@ func (a *App) pollFrigate(cfg *Config, seen map[string]bool) {
 	for i := len(events) - 1; i >= 0; i-- {
 		e := events[i]
 		if e.ID == "" || seen[e.ID] {
+			continue
+		}
+		if e.StartTime > 0 && e.StartTime < float64(detectStart.Unix()-60) {
+			seen[e.ID] = true // vor dem Start dieses Programms erkannt → schon gemeldet (kein Nachmelden nach Neustart)
 			continue
 		}
 		seen[e.ID] = true // ab jetzt als bearbeitet merken (auch wenn wir es unten verwerfen)
