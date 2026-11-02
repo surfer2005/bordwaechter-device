@@ -29,6 +29,7 @@
   .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px 14px}
   button{background:var(--teal);color:var(--btnink);border:0;border-radius:9px;padding:10px 16px;font:inherit;font-weight:800;cursor:pointer}
   button.ghost{background:transparent;color:var(--teal);border:1px solid var(--line)}
+  button.ghost.danger{color:var(--red);border-color:color-mix(in srgb,var(--red) 40%,var(--line))}
   a.ghost{display:inline-flex;align-items:center;background:transparent;color:var(--teal);border:1px solid var(--line);border-radius:9px;padding:10px 16px;font-weight:800;text-decoration:none;cursor:pointer}
   a.ghost:hover{border-color:var(--teal)}
   .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
@@ -302,8 +303,8 @@ body.medienrolle .nur-bw{display:none!important}
 
   <div class="card">
     <h2>Gerät</h2>
-    <div class="btns"><button class="ghost" onclick="restartDev()">Konfig-Dienst neu starten</button><button class="ghost" onclick="rebootPi()">Gerät (Pi) neu starten</button></div>
-    <p class="muted" style="margin-top:6px">Änderung von GPS-Quelle oder GPIO-Backend wirkt nach einem Neustart des <b>Dienstes</b>. „Gerät (Pi) neu starten" bootet den ganzen Raspberry — danach kommt (bei aktivem Kiosk) die Anzeige automatisch wieder hoch.</p>
+    <div class="btns"><button class="ghost" onclick="restartDev()">Konfig-Dienst neu starten</button><button class="ghost" onclick="rebootPi()">Gerät (Pi) neu starten</button><button class="ghost danger" onclick="shutdownPi()">Herunterfahren</button></div>
+    <p class="muted" style="margin-top:6px">Änderung von GPS-Quelle oder GPIO-Backend wirkt nach einem Neustart des <b>Dienstes</b>. „Gerät (Pi) neu starten" bootet den ganzen Raspberry — danach kommt (bei aktivem Kiosk) die Anzeige automatisch wieder hoch. „Herunterfahren" schaltet den Raspberry aus — er bleibt aus, bis der Strom kurz getrennt wird.</p>
   </div>
 
 <script>
@@ -356,6 +357,7 @@ async function applyNet(){
     g('netMsg').textContent='Gespeichert. Wirkt nach Geräte-Neustart.' }
   catch(e){ g('netMsg').textContent='Fehler: '+e }
 }
+async function shutdownPi(){ if(!(await ask('Das GERÄT (Raspberry) wirklich HERUNTERFAHREN? Es bleibt danach AUS und lässt sich weder hier noch aus KAI wieder einschalten — dafür muss jemand an Bord den Strom kurz trennen. SIFA/Totmann sind bis dahin aus.')))return; if(!(await ask('Ganz sicher? Jetzt herunterfahren.')))return; if(g('saveMsg'))g('saveMsg').textContent='Gerät fährt herunter …'; await post('/api/shutdown') }
 async function rebootPi(){ if(!(await ask('Das GERÄT (Raspberry) jetzt komplett neu starten? Der Pi bootet neu — bei aktivem Kiosk kommt die Anzeige danach von selbst wieder.')))return; var m='Gerät startet neu … (ca. 30–60 s)'; if(g('netMsg'))g('netMsg').textContent=m; if(g('saveMsg'))g('saveMsg').textContent=m; await post('/api/reboot') }
 function updateDispUrl(){
   const t=g('c_disptok').value.trim()

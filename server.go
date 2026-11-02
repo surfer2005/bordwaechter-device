@@ -649,6 +649,24 @@ func (a *App) routes() *http.ServeMux {
 		}()
 	}))
 
+	// Gerät herunterfahren (Sicherheitsabfrage auf der Seite) — bleibt aus, bis der Strom getrennt wird.
+	mux.HandleFunc("/api/shutdown", a.guardUI(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST", http.StatusMethodNotAllowed)
+			return
+		}
+		logEvent("info", "Herunterfahren auf der Geräteseite")
+		writeJSON(w, map[string]any{"ok": true})
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			syscall.Sync()
+			_ = syscall.Reboot(syscall.LINUX_REBOOT_CMD_POWER_OFF)
+		}()
+	}))
+
 	mux.HandleFunc("/api/ack", a.guard(func(w http.ResponseWriter, r *http.Request) {
 		a.eng.Ack()
 		writeJSON(w, map[string]any{"ok": true})
