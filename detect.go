@@ -47,6 +47,7 @@ type frigateEvent struct {
 	TopScore  float64 `json:"top_score"`
 	Score     float64 `json:"score"`
 	StartTime float64 `json:"start_time"`
+	EndTime   *float64 `json:"end_time"` // nil = Objekt ist noch im Bild
 	// Ab Frigate 0.14 steht die Sicherheit unter data.* (top_score/score oben sind dann leer) — vorher
 	// galt jeder Treffer als 0 % und wurde unter dem Mindest-Score verworfen (MS-Lindau 2026-11-02).
 	Data struct {
@@ -111,6 +112,11 @@ func (a *App) pollFrigate(cfg *Config, seen map[string]bool) {
 		log.Printf("detect: Antwort unlesbar: %v", err)
 		return
 	}
+	// Kamera-Alarm: solange ein Objekt der eingestellten Art im Bild ist, gilt es als Kamera-Hinweis
+	// (wird bei jeder Abfrage aufgefrischt, die SIFA-Logik entscheidet mit Auslöser-Stufe und Hafen-Ruhe).
+	if alarmAusErkennung(events, cfg.Detect.AlarmLabels, cfg.Detect.MinScore) {
+		a.eng.CameraHazard()
+	}
 	// Frigate liefert neueste zuerst; chronologisch melden (älteste zuerst).
 	for i := len(events) - 1; i >= 0; i-- {
 		e := events[i]
@@ -143,4 +149,24 @@ func (a *App) pollFrigate(cfg *Config, seen map[string]bool) {
 			delete(seen, id)
 		}
 	}
+}
+
+// alarmAusErkennung: ist gerade ein Objekt einer Alarm-Art im Bild (laufendes Frigate-Ereignis, Sicherheit
+// mindestens minScore)? Leer oder „aus“ = nie (KAI braucht einen echten Wert, um zurückzuschalten). Rein, testbar.
+func alarmAusErkennung(events []frigateEvent, alarmLabels string, minScore float64) bool {
+	arten := map[string]bool{}
+	for _, l := range strings.Split(alarmLabels, ",") {
+		if l = strings.TrimSpace(l); l != "" && l != "aus" {
+			arten[l] = true
+		}
+	}
+	if len(arten) == 0 {
+		return false
+	}
+	for _, e := range events {
+		if e.EndTime == nil && arten[e.Label] && e.sicherheit() >= minScore {
+			return true
+		}
+	}
+	return false
 }

@@ -87,6 +87,10 @@ type Config struct {
 		Labels     string  `json:"labels"`      // Komma-getrennt, z. B. "person,boat"
 		MinScore   float64 `json:"min_score"`   // Mindest-Score 0..1, darunter wird nicht gemeldet
 		PollSec    int     `json:"poll_sec"`    // Abfrageintervall der Frigate-API
+		// Welche Erkennungen als KAMERA-HINWEIS für die SIFA zählen ("" = nur melden, kein Alarm;
+		// "person" | "boat" | "person,boat"). Dann gelten Auslöser-Stufe (Kamera / GPS und Kamera / GPS oder
+		// Kamera) und die Ruhe im Hafen genauso wie beim Ereignis der AXIS-Kamera.
+		AlarmLabels string `json:"alarm_labels"`
 	} `json:"detect"`
 
 	// Wetter + Pegel in der Anzeige. Werte kommen aus denselben öffentlichen Quellen wie KAI

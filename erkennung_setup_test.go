@@ -56,3 +56,21 @@ func TestFrigateSicherheit(t *testing.T) {
 		t.Fatalf("alte Form: %v", alt.sicherheit())
 	}
 }
+
+func TestAlarmAusErkennung(t *testing.T) {
+	ende := 1.0
+	ev := []frigateEvent{{Label: "person", EndTime: &ende}, {Label: "boat"}}
+	ev[1].Data.TopScore = 0.8
+	if alarmAusErkennung(ev, "", 0.6) || alarmAusErkennung(ev, "aus", 0.6) {
+		t.Fatal("ohne Alarm-Arten nie Alarm")
+	}
+	if alarmAusErkennung(ev, "person", 0.6) {
+		t.Fatal("beendete Person darf keinen Alarm auslösen")
+	}
+	if !alarmAusErkennung(ev, "person,boat", 0.6) {
+		t.Fatal("laufendes Boot muss auslösen")
+	}
+	if alarmAusErkennung(ev, "boat", 0.9) {
+		t.Fatal("unter dem Mindest-Score kein Alarm")
+	}
+}
