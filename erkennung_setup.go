@@ -74,13 +74,25 @@ func hailoDa() bool { _, err := os.Stat("/dev/hailo0"); return err == nil }
 
 // rtspAusKamera bildet aus der Kamera-Adresse in KAI (http://user:pass@host/…) den RTSP-Stream der AXIS.
 // Rein, testbar. Leer, wenn keine Adresse gepflegt ist.
-func rtspAusKamera(stream, snapshot string) string {
+// erkennungsAufloesung: Breite/Höhe aus der Einstellung, Vorgabe 1920x1080. Rein, testbar.
+func erkennungsAufloesung(s string) (int, int) {
+	switch strings.TrimSpace(s) {
+	case "1280x720":
+		return 1280, 720
+	case "3840x2160":
+		return 3840, 2160
+	}
+	return 1920, 1080
+}
+
+func rtspAusKamera(stream, snapshot, aufloesung string) string {
+	w, h := erkennungsAufloesung(aufloesung)
 	for _, roh := range []string{stream, snapshot} {
 		u, err := url.Parse(strings.TrimSpace(roh))
 		if err != nil || u.Host == "" {
 			continue
 		}
-		r := url.URL{Scheme: "rtsp", Host: u.Hostname(), Path: "/axis-media/media.amp", RawQuery: "resolution=1280x720&fps=5"}
+		r := url.URL{Scheme: "rtsp", Host: u.Hostname(), Path: "/axis-media/media.amp", RawQuery: fmt.Sprintf("resolution=%dx%d&fps=5", w, h)}
 		if u.User != nil {
 			r.User = u.User
 		}
@@ -90,7 +102,8 @@ func rtspAusKamera(stream, snapshot string) string {
 }
 
 // frigateConfig: die Frigate-Konfiguration (YAML) für den Hailo und die Klassen aus KAI. Rein, testbar.
-func frigateConfig(rtsp, labels string) string {
+func frigateConfig(rtsp, labels, aufloesung string) string {
+	w, h := erkennungsAufloesung(aufloesung)
 	var track []string
 	for _, l := range strings.Split(labels, ",") {
 		if l = strings.TrimSpace(l); l != "" {
@@ -121,8 +134,8 @@ cameras:
           roles: [detect]
     detect:
       enabled: true
-      width: 1280
-      height: 720
+      width: ` + fmt.Sprint(w) + `
+      height: ` + fmt.Sprint(h) + `
       fps: 5
     objects:
       track: [` + strings.Join(track, ", ") + `]
@@ -183,7 +196,7 @@ func lauf(timeout time.Duration, name string, args ...string) error {
 
 // schreibeFrigate legt Konfiguration + Compose-Datei ab; true, wenn sich die Konfiguration geändert hat.
 func schreibeFrigate(cfg *Config) (bool, error) {
-	rtsp := rtspAusKamera(cfg.Camera.StreamURL, cfg.Camera.SnapshotURL)
+	rtsp := rtspAusKamera(cfg.Camera.StreamURL, cfg.Camera.SnapshotURL, cfg.Detect.Aufloesung)
 	if rtsp == "" {
 		return false, fmt.Errorf("in KAI ist keine Kamera-Adresse gepflegt (Kamera → Livestream/Standbild)")
 	}
@@ -192,7 +205,7 @@ func schreibeFrigate(cfg *Config) (bool, error) {
 	}
 	_ = os.MkdirAll(filepath.Join(frigateDir, "storage"), 0o755)
 	_ = os.WriteFile(filepath.Join(frigateDir, "docker-compose.yml"), []byte(strings.Replace(frigateCompose, "__IMAGE__", frigateImage(hailoTreiberVersion()), 1)), 0o644)
-	neu := frigateConfig(rtsp, cfg.Detect.Labels)
+	neu := frigateConfig(rtsp, cfg.Detect.Labels, cfg.Detect.Aufloesung)
 	p := filepath.Join(frigateDir, "config", "config.yml")
 	// ⚠️ Frigate schreibt config.yml beim Start selbst um (Versions-Migration). Verglichen wird deshalb mit
 	// einer eigenen Kopie dessen, was WIR zuletzt geschrieben haben — sonst galt die Datei alle 5 Minuten

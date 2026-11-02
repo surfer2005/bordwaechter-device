@@ -91,6 +91,9 @@ type Config struct {
 		// "person" | "boat" | "person,boat"). Dann gelten Auslöser-Stufe (Kamera / GPS und Kamera / GPS oder
 		// Kamera) und die Ruhe im Hafen genauso wie beim Ereignis der AXIS-Kamera.
 		AlarmLabels string `json:"alarm_labels"`
+		// Auflösung, mit der Frigate das Kamerabild auswertet ("1280x720" | "1920x1080" | "3840x2160").
+		// Mehr Bildpunkte = größere Reichweite, aber mehr Rechenlast (der Pi 5 entpackt H.264 per Prozessor).
+		Aufloesung string `json:"aufloesung"`
 	} `json:"detect"`
 
 	// Wetter + Pegel in der Anzeige. Werte kommen aus denselben öffentlichen Quellen wie KAI
@@ -166,6 +169,7 @@ func defaultConfig() *Config {
 	c.Detect.Labels = "person,boat"
 	c.Detect.MinScore = 0.6
 	c.Detect.PollSec = 3
+	c.Detect.Aufloesung = "1920x1080"
 	c.Info.Weather = true
 	c.Info.Pegel = true
 	c.Info.Lat = "47.66"
