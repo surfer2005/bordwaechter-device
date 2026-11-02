@@ -193,9 +193,16 @@ func schreibeFrigate(cfg *Config) (bool, error) {
 	_ = os.WriteFile(filepath.Join(frigateDir, "docker-compose.yml"), []byte(strings.Replace(frigateCompose, "__IMAGE__", frigateImage(hailoTreiberVersion()), 1)), 0o644)
 	neu := frigateConfig(rtsp, cfg.Detect.Labels)
 	p := filepath.Join(frigateDir, "config", "config.yml")
-	alt, _ := os.ReadFile(p)
-	if string(alt) == neu {
+	// ⚠️ Frigate schreibt config.yml beim Start selbst um (Versions-Migration). Verglichen wird deshalb mit
+	// einer eigenen Kopie dessen, was WIR zuletzt geschrieben haben — sonst galt die Datei alle 5 Minuten
+	// als geändert und Frigate startete jedes Mal neu (MS-Lindau 2026-11-02).
+	merk := filepath.Join(frigateDir, "kai-config.yml")
+	alt, _ := os.ReadFile(merk)
+	if _, err := os.Stat(p); err == nil && string(alt) == neu {
 		return false, nil
+	}
+	if err := os.WriteFile(merk, []byte(neu), 0o600); err != nil {
+		return false, err
 	}
 	return true, os.WriteFile(p, []byte(neu), 0o600) // enthält das Kamera-Passwort
 }

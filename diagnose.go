@@ -71,7 +71,10 @@ func diagnoseLaufen() []diagPunkt {
 	// Docker / Frigate
 	add("Docker / Frigate", "docker ps -a --format '{{.Names}}  {{.Status}}  {{.Image}}' 2>&1", nil)
 	if _, err := os.Stat("/opt/frigate"); err == nil {
-		add("Frigate-Protokoll (letzte Zeilen)", "docker logs --tail 40 frigate 2>&1", nil)
+		add("Frigate-Werte (Kamera, Bewegung, Erkennung)", "curl -s http://127.0.0.1:5000/api/stats | python3 -c 'import json,sys; s=json.load(sys.stdin); print(json.dumps({\"cameras\": s.get(\"cameras\"), \"detectors\": s.get(\"detectors\")}, indent=1))' 2>&1 | head -60", nil)
+		add("Frigate-Treffer (letzte 10, auch unter dem Mindest-Score)", "curl -s 'http://127.0.0.1:5000/api/events?limit=10&include_thumbnails=0' | python3 -c 'import json,sys,datetime; [print(datetime.datetime.fromtimestamp(e[\"start_time\"]).strftime(\"%d.%m. %H:%M:%S\"), e[\"label\"], round(e.get(\"top_score\") or e.get(\"score\") or 0,2)) for e in json.load(sys.stdin)]' 2>&1", nil)
+		add("Frigate-Neustarts", "docker inspect -f 'gestartet {{.State.StartedAt}} · Neustarts {{.RestartCount}}' frigate 2>&1", nil)
+		add("Frigate-Protokoll (letzte Zeilen, ohne Webserver-Rauschen)", "docker logs --tail 400 frigate 2>&1 | grep -v -e go2rtc_stream_proxy -e 'GET /api/' | tail -40", nil)
 	}
 
 	// SSH
