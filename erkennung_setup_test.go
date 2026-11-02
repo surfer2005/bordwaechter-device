@@ -31,3 +31,12 @@ func TestFrigateConfig(t *testing.T) {
 		t.Fatal("Vorgabe-Klassen fehlen")
 	}
 }
+
+func TestFrigateImage(t *testing.T) {
+	if frigateImage("") != frigateBasis || frigateImage(frigateHailoRT) != frigateBasis {
+		t.Fatal("bei passendem/unbekanntem Treiber das Original-Image erwartet")
+	}
+	if frigateImage("4.23.0") != "kai-frigate:hailort-4.23.0" {
+		t.Fatal(frigateImage("4.23.0"))
+	}
+}

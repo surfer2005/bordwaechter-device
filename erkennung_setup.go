@@ -30,6 +30,7 @@ type erkennungStand struct {
 	Schritt  string `json:"schritt"`  // lesbarer Schritt
 	Meldung  string `json:"meldung"`  // Fehlertext (bei fehler)
 	Neustart int    `json:"neustart"` // Treiber-Neustarts in diesem Lauf (gegen Neustart-Schleifen)
+	Treiber  string `json:"treiber"`  // Hailo-Treiberversion, für die Frigate eingerichtet wurde
 	Seit     string `json:"seit"`
 	Am       string `json:"am"`
 }
@@ -133,9 +134,16 @@ cameras:
 `
 }
 
+// Frigate-Version fest (nicht „stable“): die Hailo-Bibliothek im Image muss zum Treiber am Gerät passen.
+// Frigate 0.17/0.18 bringen HailoRT 4.21.0 mit; Raspberry Pi OS liefert mit hailo-all einen neueren Treiber
+// (MS-Lindau 2026-11-02: 4.23.0 → Frigate stürzte mit HAILO_INVALID_DRIVER_VERSION ab). Weicht der Treiber ab,
+// baut das Gerät ein eigenes Image mit der passenden HailoRT-Version (Builds von frigate-nvr/hailort).
+const frigateBasis = "ghcr.io/blakeblackshear/frigate:0.18.2"
+const frigateHailoRT = "4.21.0"
+
 const frigateCompose = `services:
   frigate:
-    image: ghcr.io/blakeblackshear/frigate:stable
+    image: __IMAGE__
     container_name: frigate
     restart: unless-stopped
     privileged: true
@@ -182,7 +190,7 @@ func schreibeFrigate(cfg *Config) (bool, error) {
 		return false, err
 	}
 	_ = os.MkdirAll(filepath.Join(frigateDir, "storage"), 0o755)
-	_ = os.WriteFile(filepath.Join(frigateDir, "docker-compose.yml"), []byte(frigateCompose), 0o644)
+	_ = os.WriteFile(filepath.Join(frigateDir, "docker-compose.yml"), []byte(strings.Replace(frigateCompose, "__IMAGE__", frigateImage(hailoTreiberVersion()), 1)), 0o644)
 	neu := frigateConfig(rtsp, cfg.Detect.Labels)
 	p := filepath.Join(frigateDir, "config", "config.yml")
 	alt, _ := os.ReadFile(p)
@@ -200,6 +208,74 @@ func frigateAntwortet(base string) bool {
 	}
 	r.Body.Close()
 	return r.StatusCode == 200
+}
+
+// hailoTreiberVersion: Version des geladenen Hailo-Treibers am Gerät ("" = unbekannt).
+func hailoTreiberVersion() string {
+	if b, err := os.ReadFile("/sys/module/hailo_pci/version"); err == nil {
+		return strings.TrimSpace(string(b))
+	}
+	out, err := exec.Command("modinfo", "-F", "version", "hailo_pci").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// frigateImage: das Image, das zum Treiber passt — das Original, wenn der Treiber zur mitgelieferten
+// HailoRT passt (oder unbekannt ist), sonst das am Gerät gebaute mit der Treiber-Version. Rein, testbar.
+func frigateImage(treiber string) string {
+	if treiber == "" || treiber == frigateHailoRT {
+		return frigateBasis
+	}
+	return "kai-frigate:hailort-" + treiber
+}
+
+// frigateImageBauen: Frigate-Image mit der HailoRT-Version des Treibers (Bibliothek + Python-Modul aus den
+// Builds des Frigate-Projekts). Ohne pip: das Rad ist ein Zip und wird über das alte Modul gelegt.
+func frigateImageBauen(treiber string) error {
+	dir := filepath.Join(frigateDir, "build")
+	_ = os.RemoveAll(dir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	rel := "https://github.com/frigate-nvr/hailort/releases/download/v" + treiber + "/"
+	rad := "hailort-" + treiber + "-cp311-cp311-linux_aarch64.whl"
+	for _, f := range []string{"hailort-debian12-arm64.tar.gz", rad} {
+		if err := lauf(15*time.Minute, "curl", "-fsSL", "-o", filepath.Join(dir, f), rel+f); err != nil {
+			return fmt.Errorf("HailoRT %s für Frigate nicht verfügbar (%s): %v", treiber, f, err)
+		}
+	}
+	df := "FROM " + frigateBasis + "\n" +
+		"COPY hailort-debian12-arm64.tar.gz " + rad + " /tmp/hailort/\n" +
+		"RUN tar -C / -xzf /tmp/hailort/hailort-debian12-arm64.tar.gz && \\\n" +
+		"    rm -rf /usr/local/lib/python3.11/dist-packages/hailo_platform* && \\\n" +
+		"    python3 -c \"import zipfile; zipfile.ZipFile('/tmp/hailort/" + rad + "').extractall('/usr/local/lib/python3.11/dist-packages')\" && \\\n" +
+		"    ldconfig && rm -rf /tmp/hailort\n"
+	if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte(df), 0o644); err != nil {
+		return err
+	}
+	return lauf(60*time.Minute, "docker", "build", "-t", frigateImage(treiber), dir)
+}
+
+// frigateKiOK: Frigate antwortet UND der KI-Beschleuniger rechnet (Inferenzzeit > 0). Die API allein reicht
+// nicht — bei falschem Treiber antwortet sie zwischen zwei Abstürzen des Detektors trotzdem.
+func frigateKiOK(base string) bool {
+	st := frigateStats(base)
+	if st == nil {
+		return false
+	}
+	v, _ := st["inferenz_ms"].(float64)
+	return v > 0
+}
+
+func frigateFehlerZeile() string {
+	out, _ := exec.Command("sh", "-c", "docker logs --tail 80 frigate 2>&1 | grep -iE 'error|exception' | tail -2").Output()
+	t := strings.TrimSpace(string(out))
+	if len(t) > 300 {
+		t = t[len(t)-300:]
+	}
+	return t
 }
 
 // erkennungEinrichten: der eigentliche Lauf (im Hintergrund, nie zweimal gleichzeitig).
@@ -266,10 +342,19 @@ func (a *App) erkennungEinrichten() {
 		fehler(err)
 		return
 	}
+	treiber := hailoTreiberVersion()
+	s.Treiber = treiber
 	schritt("Frigate laden (rund 1 GB, das dauert)")
-	if err := lauf(60*time.Minute, "docker", "compose", "-f", filepath.Join(frigateDir, "docker-compose.yml"), "pull"); err != nil {
+	if err := lauf(60*time.Minute, "docker", "pull", frigateBasis); err != nil {
 		fehler(err)
 		return
+	}
+	if frigateImage(treiber) != frigateBasis {
+		schritt("Frigate an den Hailo-Treiber " + treiber + " anpassen")
+		if err := frigateImageBauen(treiber); err != nil {
+			fehler(err)
+			return
+		}
 	}
 	schritt("Frigate starten")
 	if err := lauf(5*time.Minute, "docker", "compose", "-f", filepath.Join(frigateDir, "docker-compose.yml"), "up", "-d"); err != nil {
@@ -284,7 +369,15 @@ func (a *App) erkennungEinrichten() {
 		time.Sleep(5 * time.Second)
 	}
 	if !frigateAntwortet(base) {
-		fehler(fmt.Errorf("Frigate startet nicht – Protokoll am Gerät: sudo docker logs frigate"))
+		fehler(fmt.Errorf("Frigate startet nicht – %s", frigateFehlerZeile()))
+		return
+	}
+	schritt("Prüfen, ob der KI-Beschleuniger rechnet")
+	for i := 0; i < 36 && !frigateKiOK(base); i++ {
+		time.Sleep(5 * time.Second)
+	}
+	if !frigateKiOK(base) {
+		fehler(fmt.Errorf("Frigate läuft, aber der KI-Beschleuniger startet nicht (Treiber %s) – %s", treiber, frigateFehlerZeile()))
 		return
 	}
 	s.Phase, s.Schritt, s.Meldung = "fertig", "eingerichtet", ""
@@ -301,6 +394,13 @@ func (a *App) erkennungPflege() {
 	}
 	for {
 		if s := ladeErkennung(); s.Phase == "fertig" {
+			// Treiber geändert (z. B. Systemaktualisierung von hailo-all) → Frigate passend neu einrichten
+			if t := hailoTreiberVersion(); t != "" && s.Treiber != "" && t != s.Treiber {
+				logEvent("info", "Objekterkennung: Hailo-Treiber "+s.Treiber+" → "+t+", Frigate wird angepasst")
+				go a.erkennungEinrichten()
+				time.Sleep(5 * time.Minute)
+				continue
+			}
 			if geaendert, err := schreibeFrigate(a.getCfg()); err == nil && geaendert {
 				if err := lauf(2*time.Minute, "docker", "restart", "frigate"); err == nil {
 					logEvent("info", "Objekterkennung: geänderte Einstellungen aus KAI in Frigate übernommen")
@@ -317,7 +417,7 @@ func (a *App) erkennungZustand() map[string]any {
 	cfg := a.getCfg()
 	pi5, modell := istPi5()
 	z := map[string]any{"phase": s.Phase, "schritt": s.Schritt, "meldung": s.Meldung, "seit": s.Seit, "am": s.Am,
-		"pi5": pi5, "modell": modell, "hailo": hailoDa(), "aktiv": cfg.Detect.Enabled}
+		"pi5": pi5, "modell": modell, "hailo": hailoDa(), "aktiv": cfg.Detect.Enabled, "treiber": hailoTreiberVersion()}
 	base := cfg.Detect.FrigateURL
 	if base == "" {
 		base = "http://127.0.0.1:5000"
