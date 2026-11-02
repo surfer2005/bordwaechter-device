@@ -233,6 +233,7 @@ func frigateImage(treiber string) string {
 
 // frigateImageBauen: Frigate-Image mit der HailoRT-Version des Treibers (Bibliothek + Python-Modul aus den
 // Builds des Frigate-Projekts). Ohne pip: das Rad ist ein Zip und wird über das alte Modul gelegt.
+// ⚠️ Das tar.gz trägt alles unter „rootfs/“ — ohne --strip-components=1 landet die Bibliothek in /rootfs/usr/local/lib.
 func frigateImageBauen(treiber string) error {
 	dir := filepath.Join(frigateDir, "build")
 	_ = os.RemoveAll(dir)
@@ -248,7 +249,7 @@ func frigateImageBauen(treiber string) error {
 	}
 	df := "FROM " + frigateBasis + "\n" +
 		"COPY hailort-debian12-arm64.tar.gz " + rad + " /tmp/hailort/\n" +
-		"RUN tar -C / -xzf /tmp/hailort/hailort-debian12-arm64.tar.gz && \\\n" +
+		"RUN tar -C / --strip-components=1 -xzf /tmp/hailort/hailort-debian12-arm64.tar.gz && \\\n" +
 		"    rm -rf /usr/local/lib/python3.11/dist-packages/hailo_platform* && \\\n" +
 		"    python3 -c \"import zipfile; zipfile.ZipFile('/tmp/hailort/" + rad + "').extractall('/usr/local/lib/python3.11/dist-packages')\" && \\\n" +
 		"    ldconfig && rm -rf /tmp/hailort\n"
