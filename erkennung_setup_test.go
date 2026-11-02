@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -38,5 +39,20 @@ func TestFrigateImage(t *testing.T) {
 	}
 	if frigateImage("4.23.0") != "kai-frigate:hailort-4.23.0" {
 		t.Fatal(frigateImage("4.23.0"))
+	}
+}
+
+func TestFrigateSicherheit(t *testing.T) {
+	var e frigateEvent
+	if err := json.Unmarshal([]byte(`{"id":"1","label":"person","top_score":null,"score":null,"data":{"top_score":0.83,"score":0.71}}`), &e); err != nil {
+		t.Fatal(err)
+	}
+	if e.sicherheit() != 0.83 {
+		t.Fatalf("neue Frigate-Form: %v", e.sicherheit())
+	}
+	var alt frigateEvent
+	_ = json.Unmarshal([]byte(`{"id":"2","label":"boat","top_score":0.77}`), &alt)
+	if alt.sicherheit() != 0.77 {
+		t.Fatalf("alte Form: %v", alt.sicherheit())
 	}
 }

@@ -47,6 +47,22 @@ type frigateEvent struct {
 	TopScore  float64 `json:"top_score"`
 	Score     float64 `json:"score"`
 	StartTime float64 `json:"start_time"`
+	// Ab Frigate 0.14 steht die Sicherheit unter data.* (top_score/score oben sind dann leer) — vorher
+	// galt jeder Treffer als 0 % und wurde unter dem Mindest-Score verworfen (MS-Lindau 2026-11-02).
+	Data struct {
+		TopScore float64 `json:"top_score"`
+		Score    float64 `json:"score"`
+	} `json:"data"`
+}
+
+// sicherheit: die beste verfügbare Angabe (neue Frigate-Versionen unter data.*, alte oben). Rein, testbar.
+func (e frigateEvent) sicherheit() float64 {
+	for _, v := range []float64{e.Data.TopScore, e.TopScore, e.Data.Score, e.Score} {
+		if v > 0 {
+			return v
+		}
+	}
+	return 0
 }
 
 func labelDe(l string) string {
@@ -106,10 +122,7 @@ func (a *App) pollFrigate(cfg *Config, seen map[string]bool) {
 			continue
 		}
 		seen[e.ID] = true // ab jetzt als bearbeitet merken (auch wenn wir es unten verwerfen)
-		score := e.TopScore
-		if score == 0 {
-			score = e.Score
-		}
+		score := e.sicherheit()
 		if score < cfg.Detect.MinScore {
 			continue
 		}
