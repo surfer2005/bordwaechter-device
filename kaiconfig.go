@@ -287,6 +287,12 @@ func (a *App) geraetBefehl(b *kaiBefehlT) bool {
 		syscall.Sync()
 		_ = syscall.Reboot(wie)
 		return true
+	case "diagnose":
+		if k != nil {
+			k.BefehlErledigt(b.N, true, "")
+		}
+		go a.diagnoseSenden(b.N)
+		return true
 	case "detect_setup":
 		go a.erkennungEinrichten()
 		if k != nil {
