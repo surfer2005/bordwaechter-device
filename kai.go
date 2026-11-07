@@ -206,6 +206,7 @@ type HelloResp struct {
 	UpdateRequested    bool   `json:"update_requested"`    // Aktualisierung aus KAI angefordert
 	ConfigRev          int    `json:"config_rev"`          // Stand der Einstellungen in KAI
 	BordToken          string `json:"bord_token"`          // Lese-Schlüssel für die Position im Bord-Netz
+	SSHPassword        string `json:"ssh_password"`        // ein SSH-Passwort für alle Bordgeräte, zentral aus KAI
 	Rolle              string `json:"rolle"`               // Rolle aus KAI (bordwaechter | bildschirm | audio)
 	Medien             *MedienInfo `json:"medien"` // Bildschirm/Bordmusik: Abspielseite
 	Bordwaechter *struct {

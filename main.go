@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const version = "0.1.108"
+const version = "0.1.109"
 
 // imAddon: läuft als Home-Assistant-Add-on (Übergang, z. B. MS-KONSTANZ 2026-11) — der Rechner gehört Home Assistant:
 // kein Hostname/SSH/VNC/Netzwerk/Kiosk setzen, keine Selbstaktualisierung (die macht Home Assistant).
@@ -53,6 +53,25 @@ func (a *App) getReportTeltonika() bool {
 	return true
 }
 func (a *App) setReportTeltonika(v bool) { a.mu.Lock(); a.telt = &v; a.mu.Unlock() }
+
+// sshAusKai übernimmt das zentrale SSH-Passwort aus dem Herzschlag (nur bei Änderung: speichern + setzen).
+func (a *App) sshAusKai(pw string) {
+	pw = strings.TrimSpace(pw)
+	if pw == "" || pw == a.getCfg().SSHPassword {
+		return
+	}
+	a.mu.Lock()
+	n := *a.cfg
+	n.SSHPassword = pw
+	a.cfg = &n
+	a.mu.Unlock()
+	if err := saveConfig(&n); err != nil {
+		logEvent("warn", "SSH-Passwort aus KAI nicht gespeichert: "+err.Error())
+		return
+	}
+	applySSHPassword(&n)
+	logEvent("info", "SSH-Passwort aus KAI übernommen")
+}
 
 // gpsHostForHello: die Router-/Modbus-Adresse, wenn GPS per Teltonika läuft (für die Teltonika-Übersicht).
 func (a *App) gpsHostForHello() (string, int) {
@@ -283,6 +302,7 @@ func (a *App) heartbeatLoop() {
 					go a.kaiSync(hr.ConfigRev, false)
 				}
 				setBordToken(hr.BordToken) // Position fürs Bord-Netz (Bildschirme/Bordmusik)
+				a.sshAusKai(hr.SSHPassword) // SSH-Passwort aus KAI (alle Rollen)
 				a.medienAusHerzschlag(hr)  // Bildschirm/Bordmusik: Abspielseite + Bordwächter-Adresse
 			}
 		}

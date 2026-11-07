@@ -99,14 +99,11 @@ func primaryIP() string {
 func sshInfo(cfg *Config) map[string]any {
 	hn := strings.TrimSpace(cfg.Hostname)
 	ip := primaryIP()
-	pw := strings.TrimSpace(cfg.SSHPassword)
-	if pw == "" {
-		pw = "kai-terminal" // Image-Standard, falls nichts eigenes gesetzt
-	}
+	// Das Passwort steht bewusst NICHT mehr auf der Geräteseite — es wird in KAI verwaltet.
 	host := ip
 	if hn != "" {
 		host = hn + ".local"
 	}
-	return map[string]any{"user": sshUser, "password": pw, "host": host, "ip": ip, "hostname": hn,
+	return map[string]any{"user": sshUser, "password_aus_kai": strings.TrimSpace(cfg.SSHPassword) != "", "host": host, "ip": ip, "hostname": hn,
 		"command": "ssh " + sshUser + "@" + host}
 }

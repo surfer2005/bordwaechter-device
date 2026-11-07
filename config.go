@@ -19,7 +19,7 @@ type Config struct {
 	UIPassword   string `json:"ui_password"`   // Schutz der lokalen Oberfläche (leer = offen im Bordnetz)
 	HAPassword   string `json:"ha_password"`   // eigenes Passwort für Home Assistant (leer = HA nutzt UIPassword)
 	Hostname     string `json:"hostname"`      // Gerätename (hostnamectl + /etc/hosts); Gerät danach als <hostname>.local erreichbar
-	SSHPassword  string `json:"ssh_password"`  // Passwort des SSH-Benutzers "pi" (leer = unverändert / Image-Standard "kai-terminal")
+	SSHPassword  string `json:"ssh_password"`  // Passwort des SSH-Benutzers "pi" (leer = unverändert; kommt aus KAI)
 	VNCPassword  string `json:"vnc_password"`  // Passwort für den VNC-Fernzugriff (leer = unverändert)
 	DisplayToken string `json:"display_token"`  // Token für die Kiosk-Anzeige (/anzeige?token=…), leer = Anzeige aus
 	DisplayView  string `json:"display_view"`   // Startansicht des Geräte-Kiosks: "pilot" | "seekarte"
@@ -143,11 +143,9 @@ func defaultConfig() *Config {
 		Listen:           ":8090",
 		SendPosition:     true,
 		BundleRefreshSec: 300,
-		// Einheitliches SSH-Passwort für die Erstinstallation (Benutzer "pi"). Wird beim Start
-		// angewandt (remote.go applySSHPassword), damit man auf JEDES Gerät zuverlässig per SSH kommt —
-		// auch ohne/vor dem Flashen mit dem Image (das es ebenfalls setzt). Über die Konfig-Seite
-		// änderbar; der geänderte Wert wird gespeichert und bleibt dann erhalten.
-		SSHPassword: "kai-terminal",
+		// KEIN Standard-SSH-Passwort mehr (ab 0.1.109): der frühere feste Wert stand im öffentlichen
+		// Quelltext. Das Passwort kommt von KAI (ein Passwort für alle Bordgeräte, mit dem Herzschlag)
+		// oder wird vor der Kopplung auf der Geräteseite gesetzt.
 	}
 	c.GPS.Source = "manual"
 	c.GPS.Device = "/dev/ttyACM0"

@@ -168,7 +168,7 @@ body.medienrolle .nur-bw{display:none!important}
     </div>
     <div style="margin-top:12px">
       <label>Fernzugriff per SSH</label>
-      <div class="sshbox"><div>Befehl: <code id="sshCmd">ssh pi@bordwaechter.local</code></div><div style="margin-top:3px">Benutzer: <b>pi</b> &nbsp;·&nbsp; Passwort: <b id="sshPw">kai-terminal</b></div></div>
+      <div class="sshbox"><div>Befehl: <code id="sshCmd">ssh pi@bordwaechter.local</code></div><div style="margin-top:3px">Benutzer: <b>pi</b> &nbsp;·&nbsp; Passwort: <b id="sshPw">wird in KAI verwaltet</b></div></div>
     </div>
     <div class="row nur-lokal-pw" style="margin-top:12px">
       <div><label>SSH-Passwort ändern (leer = unverändert)</label><input id="c_sshpw" type="text" autocomplete="off" placeholder="leer = unverändert"></div>
@@ -444,7 +444,7 @@ async function refresh(){
 async function loadNetinfo(){
   try{ const r=await fetch('/api/netinfo'); if(!r.ok)return; const n=await r.json()
     if(g('sshCmd')) g('sshCmd').textContent=n.command||('ssh '+(n.user||'pi')+'@'+(n.host||''))
-    if(g('sshPw')) g('sshPw').textContent=n.password||''
+    if(g('sshPw')) g('sshPw').textContent=n.password_aus_kai?'gesetzt – steht in KAI (Monitoring → Schiffe & Landestellen → SSH-Zugang)':'noch nicht gesetzt (kommt nach der Kopplung aus KAI)'
     if(g('hostHint')) g('hostHint').textContent=(n.hostname||'bordwaechter')+'.local'
     if(g('haUrl')) g('haUrl').textContent=(n.hostname||'bordwaechter')+'.local:8090'
   }catch(e){}
