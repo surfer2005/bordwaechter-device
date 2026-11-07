@@ -99,8 +99,16 @@ type Engine struct {
 	// Test-Puls (Hupe/Lampe kurz schalten)
 	testHornUntil time.Time
 	testLampUntil time.Time
+	sensorLampe   bool // Grenzwert eines Sensors mit „Lampe an Bord“ verletzt (sensoren.go)
 
 	status Status
+}
+
+// SetSensorLampe: Sensoralarm (Grenzwert mit „Lampe an Bord“) hält die Lampe an, bis der Wert zurück ist.
+func (e *Engine) SetSensorLampe(an bool) {
+	e.mu.Lock()
+	e.sensorLampe = an
+	e.mu.Unlock()
 }
 
 // TestPulse: Ausgang für ein paar Sekunden erzwingen (Test-Knopf in der UI).
@@ -689,7 +697,7 @@ func (e *Engine) Tick(now time.Time) {
 	}
 
 	horn := eventHorn || deadmanHorn || now.Before(e.testHornUntil)
-	lamp := eventLamp || deadmanLamp || now.Before(e.testLampUntil) || now.Before(e.ackBlinkUntil)
+	lamp := eventLamp || deadmanLamp || now.Before(e.testLampUntil) || now.Before(e.ackBlinkUntil) || e.sensorLampe
 	st.Alarm = eventHorn
 	st.AlarmState = e.alarmState
 	st.Horn, st.Lamp = horn, lamp

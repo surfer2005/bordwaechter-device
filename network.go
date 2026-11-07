@@ -53,6 +53,9 @@ func splitDNS(s string) []string {
 
 // applyNetwork schreibt (static) bzw. entfernt (dhcp) das Keyfile. Wirkt nach Geräte-Neustart.
 func applyNetwork(cfg *Config) error {
+	if imAddon {
+		return nil // Netzwerk verwaltet Home Assistant
+	}
 	n := &struct{ Mode, Interface, Address, Gateway, DNS string }{
 		cfg.Network.Mode, cfg.Network.Interface, cfg.Network.Address, cfg.Network.Gateway, cfg.Network.DNS,
 	}

@@ -19,6 +19,9 @@ var hostnameOK = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])
 // applyHostname setzt den Gerätenamen (hostnamectl + /etc/hosts), wenn er sich geändert hat. Wirkt
 // vollständig nach einem Neustart; der mDNS-Name <hostname>.local folgt dem gesetzten Hostnamen.
 func applyHostname(cfg *Config) {
+	if imAddon {
+		return // im Home-Assistant-Add-on gehört der Rechner Home Assistant
+	}
 	hn := strings.TrimSpace(cfg.Hostname)
 	if hn == "" || !hostnameOK.MatchString(hn) {
 		return
@@ -53,6 +56,9 @@ func applyHostname(cfg *Config) {
 
 // applySSHPassword setzt das Passwort des Benutzers "pi" (einheitlicher SSH-Zugang). Leer = unverändert.
 func applySSHPassword(cfg *Config) {
+	if imAddon {
+		return
+	}
 	pw := strings.TrimSpace(cfg.SSHPassword)
 	if pw == "" {
 		return

@@ -22,6 +22,9 @@ import (
 // auf dem Stand des Programms — damit „Aktualisieren" allein reicht (das Autostart-Skript wird
 // sonst beim Update NICHT miterneuert, s. Keyring-Problem). Nur aktiv, wenn der Kiosk eingerichtet ist.
 func refreshKioskOnStartup() {
+	if imAddon {
+		return
+	}
 	u := desktopUser()
 	_, aErr := os.Stat(filepath.Join(u.home, ".config/autostart/bordwaechter-kiosk.desktop"))
 	_, sErr := os.Stat("/usr/local/bin/kiosk-browser.sh")

@@ -13,6 +13,9 @@ import (
 //   - Raspberry Pi OS (RealVNC): `vncpasswd -service`.
 //   - Fallback Debian/x11vnc: Passwortdatei schreiben.
 func applyVNC(cfg *Config) {
+	if imAddon {
+		return
+	}
 	pw := strings.TrimSpace(cfg.VNCPassword)
 	if pw == "" {
 		return

@@ -45,6 +45,9 @@ func reexecSoon() {
 // selfUpdate lädt die passende Release-Binärdatei und schiebt sie per Rename über die eigene Datei.
 // Rename ist atomar und funktioniert auch, während die alte Binärdatei noch läuft (neuer Inode).
 func selfUpdate() error {
+	if imAddon {
+		return fmt.Errorf("im Home-Assistant-Add-on wird über Home Assistant aktualisiert (Add-on → Aktualisieren)")
+	}
 	arch := runtime.GOARCH
 	if arch == "arm" {
 		arch = "armv7"
@@ -703,6 +706,8 @@ func (a *App) routes() *http.ServeMux {
 	// Bildschirm/Bordmusik: Position des Bordwächters für die Abspielseite (nur vom Gerät selbst)
 	mux.HandleFunc("/api/medien/position", a.handleMedienPosition)
 	a.medienRoutes(mux) // Bedienung ohne Netz: Befehle, Stand, Bedienseite /bedienen
+	a.lichtRoutes(mux)  // Licht (DALI) ohne Netz vom Schiffsterminal
+	a.sensorRoutes(mux) // Firmware für ESPHome-Sensoren im Bord-Netz
 
 	mux.HandleFunc("/api/position", a.guard(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()

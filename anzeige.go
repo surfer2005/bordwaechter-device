@@ -61,6 +61,9 @@ func anzeigeZustand(c *Config) map[string]any {
 // anzeigeAutomatisch richtet die Anzeige einmal selbst ein, wenn ein Monitor dranhängt. Kein Neustart —
 // an Bord läuft das Gerät womöglich gerade; wirksam wird es beim nächsten Hochfahren (KAI zeigt das an).
 func (a *App) anzeigeAutomatisch() {
+	if imAddon {
+		return // kein Monitor im Add-on
+	}
 	cfg := a.getCfg()
 	if !anzeigeGesteuert(cfg) || !monitorAngeschlossen() || kioskEingerichtet() {
 		return
