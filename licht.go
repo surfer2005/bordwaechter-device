@@ -66,6 +66,7 @@ type lichtConfig struct {
 }
 type leuchteStand struct {
 	A            int     `json:"a"`
+	Name         string  `json:"name,omitempty"` // am Display vergebener Name (Lunatone /devices „name“)
 	An           bool    `json:"an"`
 	Lvl          int     `json:"lvl"`
 	Typ          []int   `json:"typ"`
@@ -134,6 +135,7 @@ func standAusGeraeten(data []byte) ([]leuchteStand, error) {
 	var r struct {
 		Devices []struct {
 			ID        int                        `json:"id"`
+			Name      string                     `json:"name"`
 			Address   int                        `json:"address"`
 			Available bool                       `json:"available"`
 			Groups    []int                      `json:"groups"`
@@ -154,7 +156,7 @@ func standAusGeraeten(data []byte) ([]leuchteStand, error) {
 		}
 		an, _ := st("switchable")["status"].(bool)
 		lvl, _ := st("dimmable")["status"].(float64)
-		e := leuchteStand{A: d.Address, Typ: d.DaliTypes, Gruppen: d.Groups, Verfuegbar: d.Available, lunatoneID: d.ID,
+		e := leuchteStand{A: d.Address, Name: strings.TrimSpace(d.Name), Typ: d.DaliTypes, Gruppen: d.Groups, Verfuegbar: d.Available, lunatoneID: d.ID,
 			An: an && lvl > 0, Lvl: int(math.Round(lvl))}
 		if e.Typ == nil {
 			e.Typ = []int{}
@@ -214,6 +216,16 @@ func (l *Licht) infoHolen() {
 		for _, k := range []string{"name", "version", "descriptor", "device"} {
 			if v, ok := info[k]; ok {
 				g[k] = v
+			}
+		}
+		// Am Display vergebene Namen von Gruppen/Zonen (falls die Firmware die Abfragen kennt) roh mitschicken
+		for pfad, k := range map[string]string{"/zones": "zonen", "/groups": "gruppen"} {
+			if r2, err := l.hc.Get(l.gw(pfad)); err == nil {
+				var v any
+				if r2.StatusCode == 200 && json.NewDecoder(io.LimitReader(r2.Body, 256<<10)).Decode(&v) == nil {
+					g[k] = v
+				}
+				r2.Body.Close()
 			}
 		}
 		l.mu.Lock()
