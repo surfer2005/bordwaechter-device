@@ -707,6 +707,7 @@ func (a *App) routes() *http.ServeMux {
 	mux.HandleFunc("/api/medien/position", a.handleMedienPosition)
 	a.medienRoutes(mux) // Bedienung ohne Netz: Befehle, Stand, Bedienseite /bedienen
 	a.lichtRoutes(mux)  // Licht (DALI) ohne Netz vom Schiffsterminal
+	a.lichtSeiteRoutes(mux) // Lichtseite /licht (Schalten im Bord-Netz, angemeldet an der Geräteseite)
 	a.sensorRoutes(mux) // Firmware für ESPHome-Sensoren im Bord-Netz
 
 	mux.HandleFunc("/api/position", a.guard(func(w http.ResponseWriter, r *http.Request) {

@@ -9,6 +9,7 @@ package main
 //  - ohne Netz schaltet das Schiffsterminal direkt hier (/api/licht/*, Bedien-Schlüssel aus KAI).
 
 import (
+	_ "embed"
 	"bytes"
 	"crypto/subtle"
 	"encoding/json"
@@ -63,6 +64,18 @@ type lichtConfig struct {
 	Gruppen    []lichtGruppe    `json:"gruppen"`
 	Stimmungen []lichtStimmung  `json:"stimmungen"`
 	Plan       []lichtPlanZeile `json:"plan"`
+	// für die Lichtseite /licht (0.1.113): Leuchtennamen und Reiter wie im Schiffsterminal (kommen aus KAI)
+	Leuchten []struct {
+		A    int    `json:"a"`
+		Name string `json:"name"`
+	} `json:"leuchten"`
+	Reiter []struct {
+		Name     string `json:"name"`
+		Elemente []struct {
+			Art string `json:"art"`
+			ID  int    `json:"id"`
+		} `json:"elemente"`
+	} `json:"reiter"`
 }
 type leuchteStand struct {
 	A            int     `json:"a"`
@@ -630,9 +643,12 @@ func (a *App) lichtRoutes(mux *http.ServeMux) {
 			return
 		}
 		c := licht.config()
+		// An der Geräteseite angemeldet (Lichtseite /licht): alle Gruppen, Leuchten und Stimmungen. Mit dem
+		// Bedien-Schlüssel (Schiffsterminal ohne Netz): nur, was in KAI fürs Terminal freigegeben ist.
+		seite := a.authOK(r, true)
 		erlaubt := map[int]bool{}
 		for _, g := range c.Gruppen {
-			if g.ImTerminal {
+			if g.ImTerminal || seite {
 				erlaubt[g.G] = true
 			}
 		}
@@ -640,7 +656,7 @@ func (a *App) lichtRoutes(mux *http.ServeMux) {
 		if b.StimmungID > 0 {
 			aktionen = nil
 			for _, s := range c.Stimmungen {
-				if s.ID == b.StimmungID && s.ImTerminal {
+				if s.ID == b.StimmungID && (s.ImTerminal || seite) {
 					aktionen = s.Aktionen
 				}
 			}
@@ -650,7 +666,7 @@ func (a *App) lichtRoutes(mux *http.ServeMux) {
 			}
 		} else {
 			for _, x := range aktionen {
-				if x.Ziel == "leuchte" || (x.Ziel == "gruppe" && (x.ID == nil || !erlaubt[*x.ID])) {
+				if (x.Ziel == "leuchte" && !seite) || (x.Ziel == "gruppe" && (x.ID == nil || !erlaubt[*x.ID])) || (x.Ziel == "alle" && !seite) {
 					http.Error(w, "Gruppe nicht freigegeben", http.StatusForbidden)
 					return
 				}
@@ -665,7 +681,85 @@ func (a *App) lichtRoutes(mux *http.ServeMux) {
 			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 			return
 		}
-		logEvent("info", "Licht ohne Netz vom Schiffsterminal geschaltet")
+		if seite {
+			logEvent("info", "Licht über die Lichtseite am Gerät geschaltet")
+		} else {
+			logEvent("info", "Licht ohne Netz vom Schiffsterminal geschaltet")
+		}
 		writeJSON(w, map[string]any{"ok": true})
+	})
+}
+
+//go:embed licht.html
+var lichtHTML []byte
+
+// Lichtseite am Gerät (Peter 2026-11-08): DALI-Leuchten direkt im Bord-Netz schalten — auch ohne KAI/Internet, z. B. zum
+// Prüfen vor Ort. Sieht aus wie das Bordlicht im Schiffsterminal (Kacheln, Reiter, Stimmungen). Nur mit Anmeldung an der
+// Geräteseite. Belastung: liest nur den ohnehin abgefragten Stand aus dem Speicher; die Seite fragt höchstens alle 3 s.
+func (a *App) lichtSeiteRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/licht", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write(lichtHTML)
+	})
+	mux.HandleFunc("/api/licht/seite", func(w http.ResponseWriter, r *http.Request) {
+		if !a.authOK(r, true) {
+			http.Error(w, "Anmeldung nötig", http.StatusUnauthorized)
+			return
+		}
+		c := licht.config()
+		licht.mu.Lock()
+		stand := append([]leuchteStand(nil), licht.stand...)
+		licht.mu.Unlock()
+		sch := licht.schluesselZustand()
+		namen := map[int]string{}
+		for _, l := range c.Leuchten {
+			namen[l.A] = l.Name
+		}
+		hat := func(t []int, x int) bool {
+			for _, v := range t {
+				if v == x {
+					return true
+				}
+			}
+			return false
+		}
+		leuchten := []map[string]any{}
+		for _, s := range stand {
+			n := namen[s.A]
+			if n == "" {
+				n = s.Name
+			}
+			if n == "" {
+				n = fmt.Sprintf("Leuchte A%d", s.A)
+			}
+			leuchten = append(leuchten, map[string]any{"a": s.A, "name": n, "an": s.An && sch != "aus", "lvl": s.Lvl,
+				"farbe": hat(s.Typ, 8), "relais": hat(s.Typ, 7) && !hat(s.Typ, 6), "defekt": s.LampeDefekt || s.GeraetDefekt, "verfuegbar": s.Verfuegbar})
+		}
+		gruppen := []map[string]any{}
+		for _, g := range c.Gruppen {
+			n, summe, an, farbe := 0, 0, 0, false
+			for _, s := range stand {
+				if hat(s.Gruppen, g.G) {
+					n++
+					farbe = farbe || hat(s.Typ, 8)
+					if s.An {
+						an++
+						summe += s.Lvl
+					}
+				}
+			}
+			lvl := 0
+			if an > 0 {
+				lvl = summe / an
+			}
+			gruppen = append(gruppen, map[string]any{"g": g.G, "name": g.Name, "anzahl": n, "an": sch != "aus" && an > 0, "lvl": lvl, "farbe": farbe})
+		}
+		stimm := []map[string]any{}
+		for _, s := range c.Stimmungen {
+			stimm = append(stimm, map[string]any{"id": s.ID, "name": s.Name, "im_terminal": s.ImTerminal})
+		}
+		writeJSON(w, map[string]any{"aktiv": c.Aktiv, "schluessel": sch, "gruppen": gruppen, "leuchten": leuchten,
+			"stimmungen": stimm, "reiter": c.Reiter})
 	})
 }
