@@ -12,7 +12,7 @@
 h1{font-size:1.7rem;margin:2px 0 0}
 .schl{font-weight:600}
 .muted{color:var(--muted);font-size:.86rem}
-.reihe{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.reihe{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.reihe.alle{align-items:center}.reihe.alle .muted{font-size:.82rem}
 button.g{font:600 1rem system-ui,sans-serif;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:8px;padding:11px 16px;cursor:pointer}
 button.g.pri{background:var(--pri);border-color:var(--pri);color:var(--pri-c)}
 .reiter{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-top:18px}
@@ -39,7 +39,7 @@ input[type=range]{width:100%;accent-color:var(--pri)}
 <div class="hinweis" id="anmelden" hidden>Bitte zuerst auf der <a href="/">Geräteseite</a> anmelden, dann diese Seite neu laden.</div>
 <div class="hinweis" id="aus" hidden>Die Lichtsteuerung ist in KAI noch nicht eingerichtet (Gateway-Adresse fehlt).</div>
 <div class="ruhig" id="strom" hidden>Die Leuchten haben keinen Strom und sind deshalb aus. Schalten und Einstellen bleibt trotzdem möglich – die Einstellungen gelten, sobald der Schlüsselschalter eingeschaltet ist.</div>
-<div class="reihe"><button class="g pri" onclick="alle(true)">Alles ein</button><button class="g" onclick="alle(false)">Alles aus</button></div>
+<div class="reihe alle"><label class="sw" aria-label="Alle Leuchten ein/aus"><input type="checkbox" id="allesw" onchange="alle(this.checked)"><span></span></label><div><b>Alle Leuchten</b><div class="muted" id="allestat"></div></div></div>
 <div class="reihe" id="stimmOben"></div>
 <div class="reiter" id="reiter"></div>
 <div class="reihe" id="stimmReiter"></div>
@@ -93,6 +93,8 @@ function zeichnen(){
       +'<label>Farbe <input type="color" value="#ffb347" onchange="el(K['+i+'],{rgb:this.value},\'Farbe\')"></label></div>'
     return h+'</div>'
   }).join('')||'<p class="muted">Für diesen Bereich sind noch keine Leuchten eingerichtet.</p>'
+  var an=(D.leuchten||[]).filter(function(l){return l.an}).length, g=(D.leuchten||[]).length
+  var sw=$('allesw'); if(sw){sw.checked=an>0; $('allestat').textContent=!g?'':an===0?'alle aus':an===g?'alle an':an+' von '+g+' an'}
 }
 function laden(){
   if(document.hidden)return
