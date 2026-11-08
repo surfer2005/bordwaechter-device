@@ -257,6 +257,14 @@ func TestSchluesselAusSperrt(t *testing.T) {
 	if l.schluesselZustand() != "aus" {
 		t.Fatal("Schlüssel aus")
 	}
+	// Hängt das Web-IO auf „aus“, die Leuchten sind aber erreichbar: unklar, nicht sperren
+	l.stand = []leuchteStand{{A: 0, Verfuegbar: true}}
+	if l.schluesselZustand() != "unklar" {
+		t.Fatalf("erwartet unklar, bekam %q", l.schluesselZustand())
+	}
+	if err := l.ausfuehren([]lichtAktion{{Ziel: "alle", An: &an}}); err != nil && strings.Contains(err.Error(), "Schlüsselschalter") {
+		t.Fatalf("darf nicht sperren: %v", err)
+	}
 }
 
 func TestSonneUndPlan(t *testing.T) {

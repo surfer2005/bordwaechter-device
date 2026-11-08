@@ -293,19 +293,30 @@ func (l *Licht) schluesselZustand() string {
 	if !ok {
 		return ""
 	}
+	z := ""
 	switch x := v.(type) {
 	case bool:
-		if x {
-			return "ein"
-		}
-		return "aus"
+		z = map[bool]string{true: "ein", false: "aus"}[x]
 	case float64:
-		if x != 0 {
-			return "ein"
-		}
-		return "aus"
+		z = map[bool]string{true: "ein", false: "aus"}[x != 0]
 	}
-	return ""
+	// Sicherung gegen ein hängendes Web-IO (Peter 2026-11-07): „aus“ gilt nur, wenn das Gateway auch keine
+	// Leuchte mit Strom sieht. Sonst „unklar“ — dann wird NICHT gesperrt.
+	if z == "aus" && l.leuchtenMitStrom() {
+		return "unklar"
+	}
+	return z
+}
+
+func (l *Licht) leuchtenMitStrom() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, s := range l.stand {
+		if s.Verfuegbar {
+			return true
+		}
+	}
+	return false
 }
 
 func (l *Licht) ausfuehren(aktionen []lichtAktion) error {

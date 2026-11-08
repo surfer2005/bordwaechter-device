@@ -570,7 +570,7 @@ func (a *App) sensorLoop() {
 	s.defsLaden()
 	s.pufferLaden()
 	s.broker = neuerMQTTBroker(s.pruefeZugang, s.eingang)
-	port := os.Getenv("BORDWAECHTER_MQTT_PORT") // im Add-on z. B. 1884, solange der Mosquitto von Home Assistant 1883 belegt
+	port := os.Getenv("BORDWAECHTER_MQTT_PORT") // im Add-on 1885 (Mosquitto von Home Assistant belegt 1883 und 1884)
 	if port == "" {
 		port = "1883"
 	}
