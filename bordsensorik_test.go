@@ -251,8 +251,9 @@ func TestSchluesselAusSperrt(t *testing.T) {
 		Schluessel string `json:"schluessel"`
 	}{"BSBWEBIO000001", "input_1"}
 	an := true
-	if err := l.ausfuehren([]lichtAktion{{Ziel: "alle", An: &an}}); err == nil || !strings.Contains(err.Error(), "Schlüsselschalter") {
-		t.Fatalf("erwartet Sperre, bekam %v", err)
+	// nur Information: auch bei „aus“ wird nicht gesperrt (Peter 2026-11-08)
+	if err := l.ausfuehren([]lichtAktion{{Ziel: "alle", An: &an}}); err != nil && strings.Contains(err.Error(), "Schlüsselschalter") {
+		t.Fatalf("darf nicht sperren: %v", err)
 	}
 	if l.schluesselZustand() != "aus" {
 		t.Fatal("Schlüssel aus")

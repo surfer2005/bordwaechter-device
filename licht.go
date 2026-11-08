@@ -320,9 +320,8 @@ func (l *Licht) leuchtenMitStrom() bool {
 }
 
 func (l *Licht) ausfuehren(aktionen []lichtAktion) error {
-	if l.schluesselZustand() == "aus" {
-		return errors.New("Schlüsselschalter ist aus – die Leuchten sind stromlos")
-	}
+	// Der Schlüsselschalter ist nur eine Information (Peter 2026-11-08): auch bei „aus“ wird geschaltet —
+	// die Steuerung bleibt an, die Befehle gelten als Voreinstellung für die Leuchten.
 	fehler := []string{}
 	for _, a := range aktionen {
 		pfad, rumpfe, err := l.steuerSchritte(a)
