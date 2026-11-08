@@ -733,17 +733,20 @@ func (a *App) lichtSeiteRoutes(mux *http.ServeMux) {
 			if n == "" {
 				n = fmt.Sprintf("Leuchte A%d", s.A)
 			}
-			leuchten = append(leuchten, map[string]any{"a": s.A, "name": n, "an": s.An && sch != "aus", "lvl": s.Lvl,
-				"farbe": hat(s.Typ, 8), "relais": hat(s.Typ, 7) && !hat(s.Typ, 6), "defekt": s.LampeDefekt || s.GeraetDefekt, "verfuegbar": s.Verfuegbar})
+			// gleiche Regeln wie KAI (server/src/routes/bordsensorik.js, Schiffsterminal): an = an UND Helligkeit > 0,
+			// Farbe = DALI-Typ 8, Relais = Typ 7
+			leuchten = append(leuchten, map[string]any{"a": s.A, "name": n, "an": s.An && s.Lvl > 0 && sch != "aus", "lvl": s.Lvl,
+				"farbe": hat(s.Typ, 8), "relais": hat(s.Typ, 7), "defekt": s.LampeDefekt || s.GeraetDefekt, "verfuegbar": s.Verfuegbar})
 		}
 		gruppen := []map[string]any{}
 		for _, g := range c.Gruppen {
-			n, summe, an, farbe := 0, 0, 0, false
+			// wie gruppenZustand() in KAI: Farbe nur, wenn ALLE Leuchten der Gruppe Farbe können
+			n, summe, an, farbe := 0, 0, 0, true
 			for _, s := range stand {
 				if hat(s.Gruppen, g.G) {
 					n++
-					farbe = farbe || hat(s.Typ, 8)
-					if s.An {
+					farbe = farbe && hat(s.Typ, 8)
+					if s.An && s.Lvl > 0 {
 						an++
 						summe += s.Lvl
 					}
@@ -753,7 +756,7 @@ func (a *App) lichtSeiteRoutes(mux *http.ServeMux) {
 			if an > 0 {
 				lvl = summe / an
 			}
-			gruppen = append(gruppen, map[string]any{"g": g.G, "name": g.Name, "anzahl": n, "an": sch != "aus" && an > 0, "lvl": lvl, "farbe": farbe})
+			gruppen = append(gruppen, map[string]any{"g": g.G, "name": g.Name, "anzahl": n, "an": sch != "aus" && an > 0, "lvl": lvl, "farbe": n > 0 && farbe})
 		}
 		stimm := []map[string]any{}
 		for _, s := range c.Stimmungen {
