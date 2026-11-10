@@ -558,6 +558,26 @@ func (a *App) routes() *http.ServeMux {
 		writeJSON(w, map[string]any{"ok": true, "device": ant.Device, "ship_id": ant.ShipID, "rolle": rolleFuerKai(n.Rolle), "neustart": istMedienRolle(n.Rolle)})
 	}))
 
+	// Kopplung lösen: Token/Stand/Rolle am Gerät zurücksetzen, damit die Konfig-Seite wieder die
+	// Kopplungs-Eingabe zeigt und man mit einem neuen Code neu koppeln kann (z. B. wenn der Datensatz
+	// in KAI verloren ging). Netzwerk/Hostname und die lokalen Einstellungen bleiben erhalten.
+	mux.HandleFunc("/api/entkoppeln", a.guard(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "POST erwartet", 405)
+			return
+		}
+		cfg := *a.getCfg()
+		cfg.EdgeToken = ""
+		cfg.KaiConfigRev = 0
+		cfg.Rolle = ""
+		cfg.MedienPfad = ""
+		if err := a.applyConfig(&cfg); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	}))
+
 	// Fernzugriff-Infos für die Konfig-Seite: SSH-Benutzer/Passwort/Adresse + fertiger ssh-Befehl.
 	mux.HandleFunc("/api/netinfo", a.guard(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, sshInfo(a.getCfg()))

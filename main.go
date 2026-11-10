@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const version = "0.1.117"
+const version = "0.1.118"
 
 // imAddon: läuft als Home-Assistant-Add-on (Übergang, z. B. MS-KONSTANZ 2026-11) — der Rechner gehört Home Assistant:
 // kein Hostname/SSH/VNC/Netzwerk/Kiosk setzen, keine Selbstaktualisierung (die macht Home Assistant).
@@ -358,6 +358,7 @@ func main() {
 	cfg := loadConfig()
 	refreshKioskOnStartup() // Kiosk-Skript + Keyring beim Start auf den Programmstand bringen
 	applyHostname(cfg)      // Gerätename (hostnamectl + /etc/hosts) → erreichbar als <hostname>.local
+	applyKeyboard()         // Tastaturlayout Deutsch (Konsole + Kiosk), idempotent
 	applySSHPassword(cfg)   // einheitliches SSH-Passwort für Benutzer "pi"
 	manual := &ManualGPS{}
 	kai := newKaiClient(cfg.KaiBaseURL, cfg.EdgeToken)

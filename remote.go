@@ -9,6 +9,31 @@ import (
 	"strings"
 )
 
+// applyKeyboard setzt das Tastaturlayout auf Deutsch. Konsole und Kiosk (Chromium) lesen
+// /etc/default/keyboard; wirkt vollständig nach einem Neustart. Best effort, als root; nur schreiben,
+// wenn noch nicht "de", damit es bei jedem Start idempotent ist.
+func applyKeyboard() {
+	if imAddon {
+		return // im Home-Assistant-Add-on verwaltet HA das System
+	}
+	cur, _ := os.ReadFile("/etc/default/keyboard")
+	if strings.Contains(string(cur), `XKBLAYOUT="de"`) {
+		return
+	}
+	content := "XKBMODEL=\"pc105\"\nXKBLAYOUT=\"de\"\nXKBVARIANT=\"\"\nXKBOPTIONS=\"\"\nBACKSPACE=\"guess\"\n"
+	if err := os.WriteFile("/etc/default/keyboard", []byte(content), 0o644); err != nil {
+		log.Printf("tastatur: /etc/default/keyboard: %v", err)
+		return
+	}
+	if _, err := exec.LookPath("setupcon"); err == nil {
+		_ = exec.Command("setupcon", "--save", "--force").Run() // Konsole
+	}
+	if _, err := exec.LookPath("localectl"); err == nil {
+		_ = exec.Command("localectl", "set-x11-keymap", "de", "pc105").Run() // X/Wayland (Kiosk)
+	}
+	log.Printf("tastatur: Layout auf Deutsch gesetzt (voll wirksam nach Neustart)")
+}
+
 // Fernzugriff/Identität: Hostname und das SSH-Passwort des Benutzers "pi" werden aus der Konfig
 // angewandt (best effort, als root). So ist das Gerät als <hostname>.local erreichbar und der
 // SSH-Zugang ist einheitlich (Benutzer "pi"). Beide greifen beim Dienststart UND beim Speichern.

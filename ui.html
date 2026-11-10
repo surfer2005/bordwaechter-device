@@ -87,6 +87,8 @@ body.medienrolle .nur-bw{display:none!important}
     <div id="kop_ok" style="display:none">
       <p><b id="kop_text">Gekoppelt</b></p>
       <p class="muted" style="margin-top:6px">Die Einstellungen dieses Geräts werden in KAI gepflegt (Administration → Monitoring → Schiffe &amp; Landestellen) und hier automatisch übernommen. Hier geänderte Werte überschreibt KAI beim nächsten Abgleich – am Gerät bleiben nur KAI-Adresse und Netzwerk.</p>
+      <div class="btns" style="margin-top:8px"><button class="ghost" onclick="entkoppeln()">Kopplung lösen</button><span id="kop_loes_msg" class="muted" style="align-self:center"></span></div>
+      <p class="muted" style="margin-top:6px">„Kopplung lösen“ trennt das Gerät von KAI – danach kannst du es mit einem neuen Code neu koppeln (z. B. wenn der Datensatz in KAI fehlt). Netzwerk und die lokalen Einstellungen bleiben erhalten.</p>
     </div>
     <div id="kop_form">
       <div class="row">
@@ -462,6 +464,14 @@ async function koppeln(){
   }
   m.textContent='Gekoppelt als '+j.device+' – Einstellungen werden aus KAI geholt …'
   setTimeout(loadCfg,4000)
+}
+async function entkoppeln(){
+  if(!(await ask('Kopplung zu KAI lösen? Das Gerät trennt sich von KAI – danach kannst du es mit einem neuen Code neu koppeln. Netzwerk und die lokalen Einstellungen (GPS, SIFA …) bleiben erhalten.')))return
+  const m=g('kop_loes_msg'); m.textContent='Löse Kopplung …'
+  try{ const r=await fetch('/api/entkoppeln',{method:'POST'}); const j=await r.json(); if(!j.ok){ m.textContent='Fehler: '+(j.error||'Entkoppeln'); return } }
+  catch(e){ m.textContent='Fehler: '+e; return }
+  m.textContent='Kopplung gelöst – jetzt unten mit neuem Code koppeln.'
+  setTimeout(loadCfg,800)
 }
 async function loadCfg(){
   const rc=await fetch('/api/config')
