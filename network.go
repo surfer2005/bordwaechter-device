@@ -13,7 +13,7 @@ import (
 const (
 	nmDir     = "/etc/NetworkManager/system-connections"
 	nmFile    = nmDir + "/bordwaechter.nmconnection"
-	nmUUID    = "b07dwa3c-0000-4000-8000-626f726477ff" // fest: es gibt nur dieses eine Keyfile
+	nmUUID    = "b07d1a3c-0000-4000-8000-626f726477ff" // fest: es gibt nur dieses eine Keyfile (gültige Hex-UUID — das frühere „w“ war kein Hex, NetworkManager verwarf das Profil → feste IP griff nie)
 	nmPrioStr = "100"                                   // höhere Priorität als die Standardverbindung
 )
 

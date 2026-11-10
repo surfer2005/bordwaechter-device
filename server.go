@@ -614,7 +614,7 @@ func (a *App) routes() *http.ServeMux {
 			return
 		}
 		var in struct {
-			Mode, Interface, Address, Gateway, DNS string
+			Mode, Interface, Address, Gateway, DNS, Hostname string
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			http.Error(w, err.Error(), 400)
@@ -626,12 +626,19 @@ func (a *App) routes() *http.ServeMux {
 		a.cfg.Network.Address = in.Address
 		a.cfg.Network.Gateway = in.Gateway
 		a.cfg.Network.DNS = in.DNS
+		// Gerätename (Hostname) sitzt in der Netzwerk-Karte und wird mit „IP übernehmen" gespeichert —
+		// so lässt er sich auch bei Bildschirm/Audio setzen (dort ist „Speichern" an KAI gebunden). Leer =
+		// unverändert. Beide (IP + Hostname) werden am Gerät gepflegt (Festlegung 2026-11-10).
+		if strings.TrimSpace(in.Hostname) != "" {
+			a.cfg.Hostname = strings.TrimSpace(in.Hostname)
+		}
 		cfg := a.cfg
 		a.mu.Unlock()
 		if err := applyNetwork(cfg); err != nil {
 			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 			return
 		}
+		applyHostname(cfg)
 		if err := saveConfig(cfg); err != nil {
 			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
 			return

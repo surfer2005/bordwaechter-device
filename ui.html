@@ -144,7 +144,7 @@ body.medienrolle .nur-bw{display:none!important}
       <div><label>DNS (Komma)</label><input id="n_dns" placeholder="192.168.1.1,1.1.1.1"></div>
     </div>
     <div class="btns" style="margin-top:8px"><button onclick="applyNet()">IP übernehmen</button><button class="ghost" onclick="rebootPi()">Gerät neu starten (Pi)</button><span id="netMsg" class="muted"></span></div>
-    <p class="muted" style="margin-top:6px">Der <b>Gerätename</b> wird mit „Speichern" übernommen und nach einem Neustart wirksam — das Gerät ist dann als <code id="hostHint">bordwaechter.local</code> erreichbar. Feste IP/DHCP wirkt ebenfalls erst nach einem <b>Neustart des Geräts</b>. Vorsicht: eine falsche IP/Gateway kann das Gerät im Netz unerreichbar machen.</p>
+    <p class="muted" style="margin-top:6px"><b>Gerätename</b>, feste IP und DHCP werden mit „IP übernehmen" gespeichert und nach einem <b>Neustart des Geräts</b> wirksam — das Gerät ist dann als <code id="hostHint">bordwaechter.local</code> erreichbar. Vorsicht: eine falsche IP/Gateway kann das Gerät im Netz unerreichbar machen.</p>
   </div>
 
   <div class="card nur-bw">
@@ -354,7 +354,7 @@ function ask(msg){ return new Promise(function(res){
 }) }
 async function restartDev(){ if(!(await ask('Gerätedienst neu starten?')))return; g('saveMsg').textContent='Neustart läuft …'; await post('/api/restart'); setTimeout(()=>{g('saveMsg').textContent='';location.reload()},4000) }
 async function applyNet(){
-  const body={mode:g('n_mode').value,interface:g('n_if').value,address:g('n_addr').value,gateway:g('n_gw').value,dns:g('n_dns').value}
+  const body={mode:g('n_mode').value,interface:g('n_if').value,address:g('n_addr').value,gateway:g('n_gw').value,dns:g('n_dns').value,hostname:g('c_host').value.trim()}
   g('netMsg').textContent='Übernehme …'
   try{ const r=await fetch('/api/network',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const j=await r.json()
     if(!j.ok){ g('netMsg').textContent='Fehler: '+(j.error||'Netzwerk'); return }
@@ -475,7 +475,7 @@ async function loadCfg(){
   if(!g('kop_base').value) g('kop_base').value=c.kai_base_url||''
   document.body.classList.toggle('medienrolle',!!rolle); window.__rolle=rolle||'Bordwächter'
   // Mit KAI gekoppelt: alles aus KAI ist hier gesperrt (nur Anzeige); frei bleiben KAI-Adresse, Netzwerk, Anzeige-Schlüssel
-  const ausKai=gek&&(c.kai_config_rev||0)>0, LOKAL=['c_base','n_mode','n_if','n_addr','n_gw','n_dns','kop_base','kop_code','m_lat','m_lng','m_sp']
+  const ausKai=gek&&(c.kai_config_rev||0)>0, LOKAL=['c_base','c_host','n_mode','n_if','n_addr','n_gw','n_dns','kop_base','kop_code','m_lat','m_lng','m_sp']
   g('ausKaiHinweis').style.display=ausKai?'block':'none'; document.body.classList.toggle('auskai',ausKai)
   document.querySelectorAll('.card input, .card select, .card textarea').forEach(function(e){ if(!LOKAL.includes(e.id)) e.disabled=ausKai })
   g('saveBtn').textContent=ausKai?'KAI-Adresse speichern':'Speichern'
