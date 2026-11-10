@@ -9,11 +9,13 @@ func TestMischeKaiConfig(t *testing.T) {
 	c.EdgeToken = "geheim"
 	c.Network.Mode = "static"
 	c.Network.Address = "192.168.62.159/24"
+	c.Hostname = "bordgeraet-kn"
 	c.Camera.SnapshotURL = "http://kamera/bild"
 	kai := map[string]any{
 		"gps":            map[string]any{"source": "teltonika", "host": "192.168.9.1", "lat_reg": 143.0},
 		"display_rotate": "left",
 		"network":        map[string]any{"mode": "dhcp"},
+		"hostname":       "falscher-name",
 		"kai_base_url":   "https://falsch",
 		"edge_token":     "falsch",
 	}
@@ -33,6 +35,9 @@ func TestMischeKaiConfig(t *testing.T) {
 	if n.Network.Mode != "static" || n.Network.Address != "192.168.62.159/24" {
 		t.Fatal("Netzwerk darf nie aus KAI kommen")
 	}
+	if n.Hostname != "bordgeraet-kn" {
+		t.Fatal("Hostname wird am Gerät gepflegt und darf nie aus KAI überschrieben werden")
+	}
 	if n.KaiBaseURL != "https://kai.example" || n.EdgeToken != "geheim" {
 		t.Fatal("KAI-Adresse/Schlüssel dürfen nie aus KAI überschrieben werden")
 	}
@@ -48,12 +53,13 @@ func TestKonfigSeiteGesperrtWennAusKai(t *testing.T) {
 	neu := *cur
 	neu.GPS.Host, neu.SIFA.DeadmanSec, neu.KaiBaseURL, neu.DisplayToken = "10.0.0.9", 5, "https://kai-bsb.de", "anz"
 	neu.Network.Mode = "static"
+	neu.Hostname = "neuer-name"
 	c, gesperrt := sperreAusKai(cur, neu)
 	if !gesperrt || c.GPS.Host != "192.168.2.1" || c.SIFA.DeadmanSec != 30 {
 		t.Fatalf("Einstellungen aus KAI dürfen am Gerät nicht änderbar sein: %v %s %d", gesperrt, c.GPS.Host, c.SIFA.DeadmanSec)
 	}
-	if c.KaiBaseURL != "https://kai-bsb.de" || c.Network.Mode != "static" {
-		t.Fatalf("KAI-Adresse und Netzwerk bleiben am Gerät änderbar: %+v", c)
+	if c.KaiBaseURL != "https://kai-bsb.de" || c.Network.Mode != "static" || c.Hostname != "neuer-name" {
+		t.Fatalf("KAI-Adresse, Netzwerk und Hostname bleiben am Gerät änderbar: %+v", c)
 	}
 	if c.DisplayToken == "anz" {
 		t.Fatal("der Anzeige-Schlüssel kommt aus KAI")
@@ -71,8 +77,12 @@ func TestMedienRolleBleibtBeimSpeichern(t *testing.T) {
 	cur.EdgeToken, cur.Rolle, cur.MedienPfad = "tok", "audio", "kiosk/medien/6?token=x"
 	neu := *defaultConfig()
 	neu.KaiBaseURL = "https://kai-bsb.de/test"
+	neu.Hostname = "audio-graf-zeppelin"
 	c, gesperrt := sperreAusKai(cur, neu)
 	if !gesperrt || c.Rolle != "audio" || c.MedienPfad == "" || c.EdgeToken != "tok" {
 		t.Fatalf("Rolle Bordmusik darf beim Speichern der Konfig-Seite nicht verloren gehen: %v %+v", gesperrt, c)
+	}
+	if c.Hostname != "audio-graf-zeppelin" {
+		t.Fatal("Hostname muss auch bei Audio/Bildschirm am Gerät änderbar sein")
 	}
 }

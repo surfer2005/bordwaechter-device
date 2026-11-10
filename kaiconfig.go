@@ -25,9 +25,10 @@ import (
 	"time"
 )
 
-// Felder, die NIE aus KAI kommen: Verbindung zu KAI selbst, lokaler Port und Netzwerk (sonst käme das
-// Gerät nach einem Fehler nicht mehr ins Netz).
-var nurAmGeraet = map[string]bool{"kai_base_url": true, "edge_token": true, "listen": true, "network": true, "bundle_refresh_sec": true, "kai_config_rev": true,
+// Felder, die NIE aus KAI kommen: Verbindung zu KAI selbst, lokaler Port, Netzwerk und Hostname (sonst
+// käme das Gerät nach einem Fehler nicht mehr ins Netz). IP UND Hostname werden am Gerät gepflegt
+// (Festlegung 2026-11-10) — KAI überschreibt beides nicht.
+var nurAmGeraet = map[string]bool{"kai_base_url": true, "edge_token": true, "listen": true, "network": true, "hostname": true, "bundle_refresh_sec": true, "kai_config_rev": true,
 	"rolle": true, "medien_pfad": true, "medien_ton": true, "bordwaechter": true, "bordwaechter_token": true}
 
 type koppelAntwort struct {
@@ -326,12 +327,13 @@ func ausKaiGesteuert(c *Config) bool {
 }
 
 // sperreAusKai: was von einer Speicherung der Konfig-Seite übernommen wird. Ist das Gerät aus KAI gesteuert,
-// nur KAI-Adresse und Netzwerk; der Rest (auch der Anzeige-Schlüssel) bleibt wie aus KAI übernommen. Rein, testbar.
+// nur KAI-Adresse, Netzwerk und Hostname (alle drei werden am Gerät gepflegt, auch bei Bildschirm/Bordmusik);
+// der Rest (auch der Anzeige-Schlüssel) bleibt wie aus KAI übernommen. Rein, testbar.
 func sperreAusKai(cur *Config, neu Config) (Config, bool) {
 	if !ausKaiGesteuert(cur) {
 		return neu, false
 	}
 	n := *cur
-	n.KaiBaseURL, n.Network = neu.KaiBaseURL, neu.Network
+	n.KaiBaseURL, n.Network, n.Hostname = neu.KaiBaseURL, neu.Network, neu.Hostname
 	return n, true
 }
