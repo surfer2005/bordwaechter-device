@@ -24,6 +24,8 @@ type smRegister struct {
 type smMeter struct {
 	Name      string       `json:"name"`
 	Slave     int          `json:"slave"`
+	Host      string       `json:"host"` // leer = Geräte-Host (sc.Host); gesetzt = eigener Modbus-Host (Zähler auf anderer IP)
+	Port      int          `json:"port"` // 0 = Geräte-Port (sc.Port)
 	Registers []smRegister `json:"registers"`
 }
 type smConfig struct {
@@ -76,7 +78,7 @@ func (a *App) smartmeterLoop() {
 		if k != nil && cfg.EdgeToken != "" {
 			if sc, err := k.GetSmartmeterConfig(); err != nil {
 				log.Printf("smartmeter: Konfig: %v", err)
-			} else if sc.Enabled && sc.Host != "" && len(sc.Meters) > 0 {
+			} else if sc.Enabled && len(sc.Meters) > 0 {
 				if sc.PushIntervalSec > 0 {
 					interval = time.Duration(sc.PushIntervalSec) * time.Second
 				}
@@ -95,14 +97,25 @@ func (a *App) smartmeterLoop() {
 // High-Word zuerst — wie HA; regsToFloat deckt das ab). Gemischte Typen (Teltonika) kommen separat.
 func readSmartmeter(sc *smConfig) []smReading {
 	var out []smReading
-	port := sc.Port
-	if port == 0 {
-		port = 502
-	}
 	to := 5 * time.Second
 	for _, m := range sc.Meters {
+		// Host/Port je Zähler (für Zähler auf eigener IP); leer/0 → Geräte-Host/-Port, sonst 502.
+		host := m.Host
+		if host == "" {
+			host = sc.Host
+		}
+		port := m.Port
+		if port == 0 {
+			port = sc.Port
+		}
+		if port == 0 {
+			port = 502
+		}
+		if host == "" {
+			continue // kein Host für diesen Zähler → überspringen
+		}
 		for _, r := range m.Registers {
-			regs, err := modbusReadHolding(sc.Host, port, m.Slave, r.Address, 2, to)
+			regs, err := modbusReadHolding(host, port, m.Slave, r.Address, 2, to)
 			if err != nil || len(regs) < 2 {
 				continue // einzelner Lesefehler: Zähler/Register überspringen
 			}
