@@ -481,12 +481,19 @@ type lichtAntwort struct {
 	} `json:"befehle"`
 }
 
-func (a *App) lichtMitKai(k *KaiClient, fehler string) {
+// lichtSyncMu serialisiert alle KAI-Abgleiche (langsamer Stand-Loop + schneller Befehls-Loop)
+// gegeneinander, damit sich die Quittungen zweier gleichzeitiger POSTs nicht überschneiden.
+var lichtSyncMu sync.Mutex
+
+// lichtPost: ein POST an KAI. sendStatus=true hängt den Leuchten-Stand/Fehler an (Statusmeldung),
+// fuehreAus=true führt die von KAI zurückgegebenen Schaltbefehle aus. Rückgabe: ob Befehle
+// ausgeführt wurden.
+func (a *App) lichtPost(k *KaiClient, fehler string, sendStatus, fuehreAus bool) bool {
 	l := licht
 	l.mu.Lock()
 	body := map[string]any{"rev": l.cfg.Rev, "erledigt": l.quittung}
 	sj, _ := json.Marshal(l.stand)
-	if l.cfg.Aktiv && (string(sj) != l.standJSON || time.Since(l.gemeldet) > 60*time.Second || fehler != l.fehler) {
+	if sendStatus && l.cfg.Aktiv && (string(sj) != l.standJSON || time.Since(l.gemeldet) > 60*time.Second || fehler != l.fehler) {
 		if fehler == "" && l.stand != nil {
 			body["stand"] = map[string]any{"leuchten": l.stand}
 			body["gateway"] = l.gateway
@@ -497,11 +504,11 @@ func (a *App) lichtMitKai(k *KaiClient, fehler string) {
 	l.mu.Unlock()
 	data, code, err := k.do("POST", "/api/edge/licht", body)
 	if err != nil || code != 200 {
-		return
+		return false
 	}
 	var r lichtAntwort
 	if json.Unmarshal(data, &r) != nil {
-		return
+		return false
 	}
 	l.mu.Lock()
 	l.quittung = l.quittung[len(quittungen):]
@@ -525,6 +532,9 @@ func (a *App) lichtMitKai(k *KaiClient, fehler string) {
 		l.sichern()
 		logEvent("info", fmt.Sprintf("Licht: Einstellungen aus KAI übernommen (Stand %d)", r.Rev))
 	}
+	if !fuehreAus {
+		return false
+	}
 	for _, b := range r.Befehle {
 		e := l.ausfuehren(b.Aktionen)
 		q := lichtQuittung{ID: b.ID, OK: e == nil}
@@ -534,6 +544,43 @@ func (a *App) lichtMitKai(k *KaiClient, fehler string) {
 		l.mu.Lock()
 		l.quittung = append(l.quittung, q)
 		l.mu.Unlock()
+	}
+	return len(r.Befehle) > 0
+}
+
+// lichtSync: ein Abgleich mit KAI (Befehle holen/ausführen; sendStatus zusätzlich Stand melden).
+// A (Sofort-Rückmeldung, Peter 2026-11-11): wurde ein Befehl ausgeführt, liest der Bordwächter den
+// Gateway-Stand sofort neu und meldet die neue Farbe/Helligkeit gleich zurück — statt erst beim
+// nächsten Poll-Takt. Serialisiert über lichtSyncMu, damit langsamer und schneller Loop sich nicht
+// in die Quere kommen.
+func (a *App) lichtSync(k *KaiClient, fehler string, sendStatus bool) {
+	lichtSyncMu.Lock()
+	defer lichtSyncMu.Unlock()
+	if a.lichtPost(k, fehler, sendStatus, true) {
+		time.Sleep(700 * time.Millisecond) // Gateway übernimmt den Befehl, dann frischen Stand holen
+		_ = licht.abfragen()
+		a.lichtPost(k, "", true, false) // frische Farbe + Quittung sofort an KAI
+	}
+}
+
+func (a *App) lichtMitKai(k *KaiClient, fehler string) {
+	a.lichtSync(k, fehler, true)
+}
+
+// lichtBefehlLoop: fragt KAI im kurzen Takt NUR nach Schaltbefehlen (B: schnelle Reaktion,
+// Peter 2026-11-11). Der volle Stand-Abgleich läuft weiter im langsameren lichtLoop (poll_sek).
+// Zusammen mit der Sofort-Rückmeldung (A) reagiert das Licht so in unter einer Sekunde statt erst
+// beim nächsten Poll-Takt. Nur bei aktivem Gateway, sonst kein Leerlauf-Verkehr.
+func (a *App) lichtBefehlLoop() {
+	time.Sleep(25 * time.Second) // kurz nach dem lichtLoop anlaufen
+	for {
+		c := licht.config()
+		if c.Aktiv && c.GatewayHost != "" {
+			if k := a.getKai(); k != nil && a.getCfg().EdgeToken != "" {
+				a.lichtSync(k, "", false)
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 

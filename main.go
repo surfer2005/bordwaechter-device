@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const version = "0.1.119"
+const version = "0.1.120"
 
 // imAddon: läuft als Home-Assistant-Add-on (Übergang, z. B. MS-KONSTANZ 2026-11) — der Rechner gehört Home Assistant:
 // kein Hostname/SSH/VNC/Netzwerk/Kiosk setzen, keine Selbstaktualisierung (die macht Home Assistant).
@@ -402,6 +402,7 @@ func main() {
 	go app.kaiStartSync()     // Einstellungen einmal mit KAI abgleichen (Stand kann sich offline geändert haben)
 	go app.sensorLoop()       // Sensoren (Shelly/ESPHome/Web-IO) über den MQTT-Empfänger auf Port 1883 → KAI
 	go app.lichtLoop()        // Licht über das DALI-Gateway im Bord-Netz (Befehle aus KAI, Lichtplan, Störungen)
+	go app.lichtBefehlLoop()  // schneller Befehls-Abruf (0,5 s) für zügige Reaktion beim Schalten
 
 	log.Printf("KAI-Bordgerät %s, Rolle Bordwächter — lokale Oberfläche auf %s (GPS-Quelle: %s, GPIO: %s)",
 		version, cfg.Listen, cfg.GPS.Source, cfg.GPIO.Backend)
