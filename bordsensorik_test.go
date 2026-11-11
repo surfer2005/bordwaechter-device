@@ -157,7 +157,7 @@ func TestWerteAusNachricht(t *testing.T) {
 }
 
 func TestSensorZugangUndLampe(t *testing.T) {
-	s := &Sensorik{defs: map[int]*sensorDef{}, aktuell: map[string]any{}, verletzt: map[string]time.Time{}, status: map[int]*sensorStatus{}, fwStand: map[int]string{}}
+	s := &Sensorik{defs: map[int]*sensorDef{}, aktuell: map[string]any{}, verletzt: map[string]time.Time{}, status: map[int]*sensorStatus{}, fwStand: map[int]string{}, fwForce: map[int]string{}, logs: map[int][]string{}}
 	h := sha256.Sum256([]byte("salz" + "kennwort"))
 	max := 7.0
 	s.defs[3] = &sensorDef{ID: 3, Art: "esphome", User: "kuehl", Salt: "salz", Hash: hex.EncodeToString(h[:]), Praefix: "kuehl",
@@ -243,7 +243,7 @@ func TestSteuerSchritteUndAusfuehren(t *testing.T) {
 }
 
 func TestSchluesselAusSperrt(t *testing.T) {
-	sensorik = &Sensorik{defs: map[int]*sensorDef{5: {ID: 5, Art: "webio", Praefix: "BSBWEBIO000001"}}, aktuell: map[string]any{"5|input_1": false}, verletzt: map[string]time.Time{}, status: map[int]*sensorStatus{}, fwStand: map[int]string{}}
+	sensorik = &Sensorik{defs: map[int]*sensorDef{5: {ID: 5, Art: "webio", Praefix: "BSBWEBIO000001"}}, aktuell: map[string]any{"5|input_1": false}, verletzt: map[string]time.Time{}, status: map[int]*sensorStatus{}, fwStand: map[int]string{}, fwForce: map[int]string{}, logs: map[int][]string{}}
 	l := &Licht{planLauf: map[string]string{}, hc: http.DefaultClient}
 	l.cfg = lichtConfig{Aktiv: true, GatewayHost: "127.0.0.1:1"}
 	l.cfg.Schluessel = &struct {

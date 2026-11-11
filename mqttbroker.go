@@ -20,7 +20,11 @@ import (
 type mqttZugang struct {
 	SensorID int
 	Praefix  string
+	Alle     bool // MQTT-B (HA-Modell): geteilter Broker-Zugang darf jedes Sensor-Thema
 }
+
+// zugangDarf: Pro-Sensor-Zugang nur unter seinem Thema; der geteilte Zugang (Alle) überall.
+func zugangDarf(z mqttZugang, thema string) bool { return z.Alle || darfThema(z.Praefix, thema) }
 
 // mqttAuth prüft Benutzer/Kennwort und liefert, unter welchem Thema der Client arbeiten darf.
 type mqttAuth func(user, pass string) (mqttZugang, bool)
@@ -299,7 +303,7 @@ func (b *MQTTBroker) bedienen(conn net.Conn) {
 				}
 				pid, rest = rest[:2], rest[2:]
 			}
-			if darfThema(c.zugang.Praefix, topic) {
+			if zugangDarf(c.zugang, topic) {
 				b.eingangMelden(c, topic, rest)
 				b.verteilen(c, topic, rest, retain)
 			}
@@ -326,7 +330,7 @@ func (b *MQTTBroker) bedienen(conn net.Conn) {
 					return
 				}
 				rest = r2[1:]
-				if darfThema(c.zugang.Praefix, f) { // Filter muss unter dem eigenen Thema liegen (Wildcards dahinter erlaubt)
+				if zugangDarf(c.zugang, f) { // Filter muss unter dem eigenen Thema liegen (Wildcards dahinter erlaubt)
 					b.mu.Lock()
 					c.subs[f] = 0
 					b.mu.Unlock()
@@ -434,7 +438,7 @@ func (c *mqttClient) connect(p []byte) (bool, int) {
 		return false, 0
 	}
 	c.zugang = z
-	if c.will != nil && !darfThema(z.Praefix, c.will.topic) {
+	if c.will != nil && !zugangDarf(z, c.will.topic) {
 		c.will = nil
 	}
 	_ = c.senden(0x20, []byte{0, 0})

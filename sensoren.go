@@ -38,6 +38,7 @@ type sensorFirmware struct {
 	Version string `json:"version"`
 	Pfad    string `json:"pfad"`
 	Chip    string `json:"chip"`
+	Force   string `json:"force"` // Token (Zeitstempel) aus KAI: neuer Wert = OTA erzwingen, auch bei gleicher Version
 }
 type sensorDef struct {
 	ID       int             `json:"id"`
@@ -74,13 +75,23 @@ type Sensorik struct {
 	verletzt  map[string]time.Time // seit wann eine Grenze mit Lampe verletzt ist
 	status    map[int]*sensorStatus
 	fwStand   map[int]string // installierte Firmware-Datei je Sensor (Version)
+	fwForce   map[int]string // zuletzt ausgeführtes OTA-Force-Token je Sensor (KAI-Knopf)
+	logs      map[int][]string // ESPHome-Log je Sensor (über MQTT <praefix>/debug), Ringpuffer → an KAI
 	broker    *MQTTBroker
+	gemeinsam *brokerZugang // MQTT-B: EIN geteilter Broker-Zugang je Bordwächter (HA-Modell), zusätzlich zu den Pro-Sensor-Zugängen
 	lampeAn   bool
 	gesendet  time.Time
 	geladenAm time.Time
 }
 
-var sensorik = &Sensorik{defs: map[int]*sensorDef{}, aktuell: map[string]any{}, verletzt: map[string]time.Time{}, status: map[int]*sensorStatus{}, fwStand: map[int]string{}}
+// brokerZugang: der geteilte MQTT-Zugang (HA-Modell). Das Gerät bekommt nur Benutzer + Salt + Hash.
+type brokerZugang struct {
+	User string `json:"user"`
+	Salt string `json:"salt"`
+	Hash string `json:"hash"`
+}
+
+var sensorik = &Sensorik{defs: map[int]*sensorDef{}, aktuell: map[string]any{}, verletzt: map[string]time.Time{}, status: map[int]*sensorStatus{}, fwStand: map[int]string{}, fwForce: map[int]string{}, logs: map[int][]string{}}
 
 func sensorOrdner() string { return filepath.Join(filepath.Dir(configPath()), "sensoren") }
 
@@ -96,6 +107,13 @@ func (s *Sensorik) pruefeZugang(user, pass string) (mqttZugang, bool) {
 		h := sha256.Sum256([]byte(d.Salt + pass))
 		if subtle.ConstantTimeCompare([]byte(hex.EncodeToString(h[:])), []byte(d.Hash)) == 1 {
 			return mqttZugang{SensorID: d.ID, Praefix: d.Praefix}, true
+		}
+	}
+	// MQTT-B: geteilter Zugang (HA-Modell) — darf jedes Sensor-Thema. Zusätzlich zu den Pro-Sensor-Zugängen oben.
+	if g := s.gemeinsam; g != nil && g.User == user && g.Hash != "" {
+		h := sha256.Sum256([]byte(g.Salt + pass))
+		if subtle.ConstantTimeCompare([]byte(hex.EncodeToString(h[:])), []byte(g.Hash)) == 1 {
+			return mqttZugang{Alle: true}, true
 		}
 	}
 	return mqttZugang{}, false
@@ -273,6 +291,17 @@ func (s *Sensorik) eingang(z mqttZugang, topic string, payload []byte) {
 	if d == nil {
 		return
 	}
+	// ESPHome-Log über MQTT (<praefix>/debug) sammeln — für die Live-Anzeige in KAI, kein Messwert.
+	if strings.HasSuffix(topic, "/debug") {
+		zeile := strings.TrimRight(string(payload), "\r\n")
+		if zeile != "" {
+			s.logs[d.ID] = append(s.logs[d.ID], zeile)
+			if len(s.logs[d.ID]) > 100 {
+				s.logs[d.ID] = s.logs[d.ID][len(s.logs[d.ID])-100:]
+			}
+		}
+		return
+	}
 	st := s.status[d.ID]
 	if st == nil {
 		st = &sensorStatus{SensorID: d.ID}
@@ -403,25 +432,53 @@ func (s *Sensorik) defsLaden() {
 
 // ── KAI ─────────────────────────────────────────────────────────────────────────────────────────────
 
-func (k *KaiClient) GetSensorenConfig() ([]*sensorDef, error) {
+func (k *KaiClient) GetSensorenConfig() ([]*sensorDef, *brokerZugang, error) {
 	data, code, err := k.do("GET", "/api/edge/sensoren-config", nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if code != 200 {
-		return nil, fmt.Errorf("sensoren-config http %d", code)
+		return nil, nil, fmt.Errorf("sensoren-config http %d", code)
 	}
 	var r struct {
-		Sensoren []*sensorDef `json:"sensoren"`
+		Sensoren []*sensorDef  `json:"sensoren"`
+		Broker   *brokerZugang `json:"broker"`
 	}
 	if err := json.Unmarshal(data, &r); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return r.Sensoren, nil
+	return r.Sensoren, r.Broker, nil
 }
 
-func (k *KaiClient) PostSensorWerte(werte []sensorMessung, status []sensorStatus) error {
-	_, code, err := k.do("POST", "/api/edge/sensoren-werte", map[string]any{"werte": werte, "status": status})
+// MQTT-B: geteilten Zugang übernehmen + für den Offline-Betrieb auf die Platte sichern.
+func (s *Sensorik) gemeinsamUebernehmen(b *brokerZugang) {
+	s.mu.Lock()
+	s.gemeinsam = b
+	s.mu.Unlock()
+	daten, _ := json.Marshal(b)
+	_ = os.MkdirAll(sensorOrdner(), 0o700)
+	_ = os.WriteFile(filepath.Join(sensorOrdner(), "broker.json"), daten, 0o600)
+}
+func (s *Sensorik) gemeinsamLaden() {
+	b, err := os.ReadFile(filepath.Join(sensorOrdner(), "broker.json"))
+	if err != nil {
+		return
+	}
+	var g brokerZugang
+	if json.Unmarshal(b, &g) == nil && g.User != "" {
+		s.mu.Lock()
+		s.gemeinsam = &g
+		s.mu.Unlock()
+	}
+}
+
+type sensorLog struct {
+	SensorID int      `json:"sensor_id"`
+	Zeilen   []string `json:"zeilen"`
+}
+
+func (k *KaiClient) PostSensorWerte(werte []sensorMessung, status []sensorStatus, logs []sensorLog) error {
+	_, code, err := k.do("POST", "/api/edge/sensoren-werte", map[string]any{"werte": werte, "status": status, "logs": logs})
 	if err != nil {
 		return err
 	}
@@ -464,16 +521,29 @@ func (s *Sensorik) senden(k *KaiClient) {
 		}
 		status = append(status, c)
 	}
+	logs := []sensorLog{}
+	for id, zl := range s.logs {
+		if len(zl) > 0 {
+			logs = append(logs, sensorLog{SensorID: id, Zeilen: append([]string(nil), zl...)})
+		}
+	}
 	s.mu.Unlock()
-	if len(stueck) == 0 && len(status) == 0 {
+	if len(stueck) == 0 && len(status) == 0 && len(logs) == 0 {
 		return
 	}
-	if err := k.PostSensorWerte(stueck, status); err != nil {
+	if err := k.PostSensorWerte(stueck, status, logs); err != nil {
 		log.Printf("sensoren: senden: %v", err)
 		s.pufferSichern()
 		return
 	}
 	s.mu.Lock()
+	for _, l := range logs { // nur die gesendeten Zeilen vorne entfernen (zwischenzeitlich eingegangene bleiben)
+		if c := len(l.Zeilen); len(s.logs[l.SensorID]) >= c {
+			s.logs[l.SensorID] = s.logs[l.SensorID][c:]
+		} else {
+			s.logs[l.SensorID] = nil
+		}
+	}
 	s.puffer = s.puffer[len(stueck):]
 	s.gesendet = time.Now()
 	leer := len(s.puffer) == 0
@@ -488,19 +558,29 @@ func (s *Sensorik) senden(k *KaiClient) {
 func (s *Sensorik) firmwareHolen(k *KaiClient) {
 	s.mu.Lock()
 	ziele := []*sensorDef{}
+	forced := map[int]bool{}
 	for _, d := range s.defs {
-		if d.Firmware != nil && d.Firmware.Version != "" && s.fwStand[d.ID] != d.Firmware.Version {
+		if d.Firmware == nil || d.Firmware.Version == "" {
+			continue
+		}
+		erzwingen := d.Firmware.Force != "" && s.fwForce[d.ID] != d.Firmware.Force
+		if s.fwStand[d.ID] != d.Firmware.Version || erzwingen {
 			ziele = append(ziele, d)
+			forced[d.ID] = erzwingen
 		}
 	}
 	s.mu.Unlock()
 	for _, d := range ziele {
 		ordner := filepath.Join(sensorOrdner(), "fw", d.User)
-		if b, err := os.ReadFile(filepath.Join(ordner, "version")); err == nil && strings.TrimSpace(string(b)) == d.Firmware.Version {
-			s.mu.Lock()
-			s.fwStand[d.ID] = d.Firmware.Version
-			s.mu.Unlock()
-			continue
+		// Bei erzwungenem OTA (KAI-Knopf) NICHT über den Datei-Stand abkürzen — erneut aufspielen, auch bei gleicher Version.
+		if !forced[d.ID] {
+			if b, err := os.ReadFile(filepath.Join(ordner, "version")); err == nil && strings.TrimSpace(string(b)) == d.Firmware.Version {
+				s.mu.Lock()
+				s.fwStand[d.ID] = d.Firmware.Version
+				s.fwForce[d.ID] = d.Firmware.Force
+				s.mu.Unlock()
+				continue
+			}
 		}
 		data, code, err := k.do("GET", d.Firmware.Pfad, nil)
 		if err != nil || code != 200 || len(data) < 1024 {
@@ -519,9 +599,14 @@ func (s *Sensorik) firmwareHolen(k *KaiClient) {
 		_ = os.WriteFile(filepath.Join(ordner, "version"), []byte(d.Firmware.Version), 0o644)
 		s.mu.Lock()
 		s.fwStand[d.ID] = d.Firmware.Version
+		s.fwForce[d.ID] = d.Firmware.Force
 		b := s.broker
 		s.mu.Unlock()
-		logEvent("info", "Neue Firmware für Sensor "+d.Name+": "+d.Firmware.Version)
+		if forced[d.ID] {
+			logEvent("info", "OTA erzwungen für Sensor "+d.Name+" ("+d.Firmware.Version+")")
+		} else {
+			logEvent("info", "Neue Firmware für Sensor "+d.Name+": "+d.Firmware.Version)
+		}
 		if b != nil {
 			// ESPHome: Knopf „Firmware aktualisieren“ aus der KAI-Vorlage drücken
 			b.Senden(d.Praefix+"/button/firmware_aktualisieren/command", []byte("PRESS"), false)
@@ -568,6 +653,7 @@ func (a *App) sensorRoutes(mux interface {
 func (a *App) sensorLoop() {
 	s := sensorik
 	s.defsLaden()
+	s.gemeinsamLaden()
 	s.pufferLaden()
 	s.broker = neuerMQTTBroker(s.pruefeZugang, s.eingang)
 	port := os.Getenv("BORDWAECHTER_MQTT_PORT") // im Add-on 1885 (Mosquitto von Home Assistant belegt 1883 und 1884)
@@ -585,8 +671,9 @@ func (a *App) sensorLoop() {
 		cfg := a.getCfg()
 		if k != nil && cfg.EdgeToken != "" {
 			if time.Since(letzteConfig) > 60*time.Second {
-				if liste, err := k.GetSensorenConfig(); err == nil {
+				if liste, broker, err := k.GetSensorenConfig(); err == nil {
 					s.configUebernehmen(liste)
+					s.gemeinsamUebernehmen(broker)
 					letzteConfig = time.Now()
 					go s.firmwareHolen(k)
 				}
