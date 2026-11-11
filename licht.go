@@ -66,8 +66,9 @@ type lichtConfig struct {
 	Plan       []lichtPlanZeile `json:"plan"`
 	// für die Lichtseite /licht (0.1.113): Leuchtennamen und Reiter wie im Schiffsterminal (kommen aus KAI)
 	Leuchten []struct {
-		A    int    `json:"a"`
-		Name string `json:"name"`
+		A      int    `json:"a"`
+		Name   string `json:"name"`
+		NurRgb bool   `json:"nur_rgb"` // reine RGB-Leuchte ohne echten Weißton → Kelvin als RGB-Weißpunkt schalten
 	} `json:"leuchten"`
 	Reiter []struct {
 		Name     string `json:"name"`
@@ -258,6 +259,97 @@ func (l *Licht) leuchteID(adresse int) (int, bool) {
 	return 0, false
 }
 
+// kelvinZuRGB: Farbtemperatur (Kelvin) → sRGB-Weißpunkt (0..1), Näherung nach Tanner Helland.
+// Für reine RGB-Leuchten, die keinen echten Weißton-Kanal haben (warm ~2700 K, neutral ~4000 K, kalt ~6000 K).
+func kelvinZuRGB(kelvin int) map[string]float64 {
+	t := float64(kelvin) / 100.0
+	klemm := func(v float64) float64 {
+		if v < 0 {
+			return 0
+		}
+		if v > 255 {
+			return 255
+		}
+		return v
+	}
+	var r, g, b float64
+	if t <= 66 {
+		r = 255
+		g = klemm(99.4708025861*math.Log(t) - 161.1195681661)
+	} else {
+		r = klemm(329.698727446 * math.Pow(t-60, -0.1332047592))
+		g = klemm(288.1221695283 * math.Pow(t-60, -0.0755148492))
+	}
+	if t >= 66 {
+		b = 255
+	} else if t <= 19 {
+		b = 0
+	} else {
+		b = klemm(138.5177312231*math.Log(t-10) - 305.0447927307)
+	}
+	rnd := func(v float64) float64 { return math.Round(v/255*1000) / 1000 }
+	return map[string]float64{"r": rnd(r), "g": rnd(g), "b": rnd(b)}
+}
+
+// nurRgbLeuchte: true, wenn die Leuchte mit Adresse a in KAI als „nur RGB" (kein echter Weißton) markiert ist.
+func (l *Licht) nurRgbLeuchte(a int) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, le := range l.cfg.Leuchten {
+		if le.A == a {
+			return le.NurRgb
+		}
+	}
+	return false
+}
+
+// zielNurRgb: true, wenn das Ziel der Aktion ausschließlich „nur RGB"-Farbleuchten (DALI-Typ 8) betrifft.
+// Dann wird ein Kelvin-Befehl als RGB-Weißpunkt geschaltet. Bei gemischten/echten Weißton-Leuchten false.
+func (l *Licht) zielNurRgb(a lichtAktion) bool {
+	switch a.Ziel {
+	case "leuchte":
+		return a.ID != nil && l.nurRgbLeuchte(*a.ID)
+	case "gruppe", "alle":
+		l.mu.Lock()
+		stand := l.stand
+		l.mu.Unlock()
+		n := 0
+		for _, s := range stand {
+			farbe := false // nur echte Farbleuchten (DALI-Typ 8) zählen
+			for _, t := range s.Typ {
+				if t == 8 {
+					farbe = true
+					break
+				}
+			}
+			if !farbe {
+				continue
+			}
+			if a.Ziel == "gruppe" {
+				if a.ID == nil {
+					return false
+				}
+				drin := false
+				for _, g := range s.Gruppen {
+					if g == *a.ID {
+						drin = true
+						break
+					}
+				}
+				if !drin {
+					continue
+				}
+			}
+			if !l.nurRgbLeuchte(s.A) {
+				return false
+			}
+			n++
+		}
+		return n > 0
+	}
+	return false
+}
+
 // steuerSchritte: eine Aktion in die Lunatone-Aufrufe zerlegen (Pfad + Rumpf).
 func (l *Licht) steuerSchritte(a lichtAktion) (string, []map[string]any, error) {
 	pfad := ""
@@ -294,7 +386,13 @@ func (l *Licht) steuerSchritte(a lichtAktion) (string, []map[string]any, error) 
 		rumpfe = append(rumpfe, map[string]any{"colorRGB": map[string]float64{"r": v(1), "g": v(3), "b": v(5)}})
 	}
 	if a.Kelvin != nil {
-		rumpfe = append(rumpfe, map[string]any{"colorKelvin": *a.Kelvin})
+		// Reine RGB-Leuchten (in KAI als „nur RGB" markiert) haben keinen echten Weißton-Kanal — ein
+		// colorKelvin bliebe unsichtbar, solange sie im Farbmodus stehen. Darum als RGB-Weißpunkt schalten.
+		if l.zielNurRgb(a) {
+			rumpfe = append(rumpfe, map[string]any{"colorRGB": kelvinZuRGB(*a.Kelvin)})
+		} else {
+			rumpfe = append(rumpfe, map[string]any{"colorKelvin": *a.Kelvin})
+		}
 	}
 	if a.Lvl != nil {
 		if *a.Lvl == 0 {
