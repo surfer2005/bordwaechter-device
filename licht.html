@@ -28,8 +28,11 @@ input[type=range]{width:100%;accent-color:var(--pri)}
 .sw span{position:absolute;inset:0;background:var(--border);border-radius:16px;transition:.15s;cursor:pointer}
 .sw span:before{content:"";position:absolute;width:24px;height:24px;left:4px;top:4px;background:#fff;border-radius:50%;transition:.15s}
 .sw input:checked+span{background:var(--pri)}.sw input:checked+span:before{transform:translateX(26px)}
-.farbe{display:flex;gap:6px;flex-wrap:wrap}
-.farbe button,.farbe label{font:600 .9rem system-ui,sans-serif;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:8px;padding:8px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.farbe{display:flex;gap:6px;flex-wrap:wrap;align-items:stretch}
+.farbe button,.farbe label{font:600 .9rem system-ui,sans-serif;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:8px;padding:8px 10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px}
+.farbe.zwei{flex-wrap:nowrap}
+.farbe.zwei>*{flex:1 1 0;min-width:0}
+.farbe input[type=color]{width:28px;height:22px;padding:0;border:0;background:none}
 .pkt{width:10px;height:10px;border-radius:50%;border:1px solid var(--border)}
 .hinweis{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:10px 12px;margin-top:12px;font-size:.92rem}
 .ruhig{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px;font-size:.92rem;color:var(--muted)}
@@ -50,6 +53,7 @@ input[type=range]{width:100%;accent-color:var(--pri)}
 <script>
 var $=function(i){return document.getElementById(i)}, D=null, wahl=0, beschaeftigt=0
 var KELVIN=[['Warm',2700],['Neutral',4000],['Kalt',6000]]
+var WARM_RGB='#fc8803' // reine RGB-Leuchten: nur Warm als fester RGB-Weißpunkt
 function kf(k){return k<=3000?'#ffb347':k<=4500?'#fff1c1':'#cfe3ff'}
 function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 function meldung(t){$('meldung').textContent=t;clearTimeout(meldung.t);meldung.t=setTimeout(function(){$('meldung').textContent=''},3000)}
@@ -64,8 +68,8 @@ function el(k,x,t){var a={ziel:k.art,id:k.id};for(var p in x)a[p]=x[p];senden({a
 function stimmKnoepfe(liste){return liste.map(function(s){return '<button class="g" onclick="senden({stimmung_id:'+s.id+'},\''+esc(s.name).replace(/'/g,'')+'\')">'+esc(s.name)+'</button>'}).join('')}
 function kachel(e){
   var strom=D.schluessel==='aus'
-  if(e.art==='gruppe'){var g=(D.gruppen||[]).find(function(x){return x.g===e.id});if(!g)return null;return {art:'gruppe',id:g.g,name:g.name,an:g.an,lvl:g.lvl,farbe:g.farbe,strom:strom}}
-  if(e.art==='leuchte'){var l=(D.leuchten||[]).find(function(x){return x.a===e.id});if(!l)return null;return {art:'leuchte',id:l.a,name:l.name,an:l.an,lvl:l.lvl,farbe:l.farbe,relais:l.relais,defekt:l.defekt,strom:strom,zus:'einzelne Leuchte'}}
+  if(e.art==='gruppe'){var g=(D.gruppen||[]).find(function(x){return x.g===e.id});if(!g)return null;return {art:'gruppe',id:g.g,name:g.name,an:g.an,lvl:g.lvl,farbe:g.farbe,nur_rgb:g.nur_rgb,rgb:g.rgb,strom:strom}}
+  if(e.art==='leuchte'){var l=(D.leuchten||[]).find(function(x){return x.a===e.id});if(!l)return null;return {art:'leuchte',id:l.a,name:l.name,an:l.an,lvl:l.lvl,farbe:l.farbe,nur_rgb:l.nur_rgb,rgb:l.rgb,relais:l.relais,defekt:l.defekt,strom:strom,zus:'einzelne Leuchte'}}
   return null
 }
 var K=[]
@@ -89,8 +93,12 @@ function zeichnen(){
       +'<span class="zust">'+z+'</span>'
     if(k.relais)h+='<span class="zus">Relais – nur ein/aus</span>'
     else h+='<input type="range" min="5" max="100" step="5" value="'+(k.lvl||50)+'" aria-label="Helligkeit '+esc(k.name)+'" onchange="el(K['+i+'],{lvl:+this.value},this.value+\' %\')">'
-    if(k.farbe)h+='<div class="farbe">'+KELVIN.map(function(x){return '<button onclick="el(K['+i+'],{kelvin:'+x[1]+'},\''+x[0]+'\')"><span class="pkt" style="background:'+kf(x[1])+'"></span>'+x[0]+'</button>'}).join('')
-      +'<label>Farbe <input type="color" value="#ffb347" onchange="el(K['+i+'],{rgb:this.value},\'Farbe\')"></label></div>'
+    if(k.farbe){var cv=k.rgb||'#ffb347'
+      h+='<div class="farbe'+(k.nur_rgb?' zwei':'')+'">'
+        +(k.nur_rgb
+           ?'<button onclick="el(K['+i+'],{rgb:\''+WARM_RGB+'\'},\'Warm\')"><span class="pkt" style="background:'+WARM_RGB+'"></span>Warm</button>'
+           :KELVIN.map(function(x){return '<button onclick="el(K['+i+'],{kelvin:'+x[1]+'},\''+x[0]+'\')"><span class="pkt" style="background:'+kf(x[1])+'"></span>'+x[0]+'</button>'}).join(''))
+        +'<label>Farbe <input type="color" value="'+cv+'" onchange="el(K['+i+'],{rgb:this.value},\'Farbe\')"></label></div>'}
     return h+'</div>'
   }).join('')||'<p class="muted">Für diesen Bereich sind noch keine Leuchten eingerichtet.</p>'
   var an=(D.leuchten||[]).filter(function(l){return l.an}).length, g=(D.leuchten||[]).length

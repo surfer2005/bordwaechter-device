@@ -858,8 +858,10 @@ func (a *App) lichtSeiteRoutes(mux *http.ServeMux) {
 		licht.mu.Unlock()
 		sch := licht.schluesselZustand()
 		namen := map[int]string{}
+		nurRgb := map[int]bool{}
 		for _, l := range c.Leuchten {
 			namen[l.A] = l.Name
+			nurRgb[l.A] = l.NurRgb
 		}
 		hat := func(t []int, x int) bool {
 			for _, v := range t {
@@ -881,16 +883,21 @@ func (a *App) lichtSeiteRoutes(mux *http.ServeMux) {
 			// gleiche Regeln wie KAI (server/src/routes/bordsensorik.js, Schiffsterminal): an = an UND Helligkeit > 0,
 			// Farbe = DALI-Typ 8, Relais = Typ 7
 			leuchten = append(leuchten, map[string]any{"a": s.A, "name": n, "an": s.An && s.Lvl > 0 && sch != "aus", "lvl": s.Lvl,
-				"farbe": hat(s.Typ, 8), "relais": hat(s.Typ, 7), "defekt": s.LampeDefekt || s.GeraetDefekt, "verfuegbar": s.Verfuegbar})
+				"farbe": hat(s.Typ, 8), "relais": hat(s.Typ, 7), "nur_rgb": nurRgb[s.A], "rgb": s.RGB, "defekt": s.LampeDefekt || s.GeraetDefekt, "verfuegbar": s.Verfuegbar})
 		}
 		gruppen := []map[string]any{}
 		for _, g := range c.Gruppen {
 			// wie gruppenZustand() in KAI: Farbe nur, wenn ALLE Leuchten der Gruppe Farbe können
-			n, summe, an, farbe := 0, 0, 0, true
+			n, summe, an, farbe, allrgb := 0, 0, 0, true, true
+			var gRGB *string
 			for _, s := range stand {
 				if hat(s.Gruppen, g.G) {
 					n++
 					farbe = farbe && hat(s.Typ, 8)
+					allrgb = allrgb && nurRgb[s.A]
+					if hat(s.Typ, 8) && gRGB == nil {
+						gRGB = s.RGB
+					}
 					if s.An && s.Lvl > 0 {
 						an++
 						summe += s.Lvl
@@ -901,7 +908,7 @@ func (a *App) lichtSeiteRoutes(mux *http.ServeMux) {
 			if an > 0 {
 				lvl = summe / an
 			}
-			gruppen = append(gruppen, map[string]any{"g": g.G, "name": g.Name, "anzahl": n, "an": sch != "aus" && an > 0, "lvl": lvl, "farbe": n > 0 && farbe})
+			gruppen = append(gruppen, map[string]any{"g": g.G, "name": g.Name, "anzahl": n, "an": sch != "aus" && an > 0, "lvl": lvl, "farbe": n > 0 && farbe, "nur_rgb": n > 0 && farbe && allrgb, "rgb": gRGB})
 		}
 		stimm := []map[string]any{}
 		for _, s := range c.Stimmungen {
