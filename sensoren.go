@@ -516,9 +516,9 @@ func (s *Sensorik) senden(k *KaiClient) {
 	status := []sensorStatus{}
 	for id, st := range s.status {
 		c := *st
-		if verbunden[id] {
-			c.Online = true
-		}
+		// Ehrlicher Verbindungsstand: online = derzeit am Broker verbunden. So erkennt KAI einen Abbruch sofort
+		// (z. B. nach MQTT-Kennwortwechsel), statt „online" nach der ersten Nachricht dauerhaft true zu lassen.
+		c.Online = verbunden[id]
 		status = append(status, c)
 	}
 	logs := []sensorLog{}
