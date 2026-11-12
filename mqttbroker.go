@@ -434,7 +434,12 @@ func (c *mqttClient) connect(p []byte) (bool, int) {
 	z, ok := c.b.auth(user, pass)
 	if !ok {
 		_ = c.senden(0x20, []byte{0, 4}) // Benutzer/Kennwort falsch
-		logEvent("warn", "Sensor-Anmeldung abgelehnt: "+user)
+		// Client-ID (ESPHome = Node-Name) und IP mitloggen, damit ein fremdes Gerät im Bordnetz auffindbar ist.
+		addr := c.conn.RemoteAddr().String()
+		if host, _, e := net.SplitHostPort(addr); e == nil {
+			addr = host
+		}
+		logEvent("warn", "Sensor-Anmeldung abgelehnt: "+user+" (Client "+c.id+", "+addr+")")
 		return false, 0
 	}
 	c.zugang = z
