@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const version = "0.1.126"
+const version = "0.1.127"
 
 // imAddon: läuft als Home-Assistant-Add-on (Übergang, z. B. MS-KONSTANZ 2026-11) — der Rechner gehört Home Assistant:
 // kein Hostname/SSH/VNC/Netzwerk/Kiosk setzen, keine Selbstaktualisierung (die macht Home Assistant).
@@ -376,6 +376,8 @@ func main() {
 		go app.releaseCheckLoop()
 		go app.anzeigeAutomatischSpaeter() // Abspielseite am Monitor einrichten (einmalig)
 		go app.bordmusikLoop()             // Bordmusik ohne Monitor bzw. Bildschirm-Anzeige ohne Neustart
+		airplayMelden = app.airplayZustand // AirPlay-Stand (installiert/läuft/Name) in den Herzschlag
+		go app.airplayAnwenden()           // AirPlay-Empfänger an die KAI-Einstellung anpassen (meist: aus)
 		log.Printf("KAI-Bordgerät %s in der Rolle %s — lokale Oberfläche auf %s", version, cfg.Rolle, cfg.Listen)
 		if err := http.ListenAndServe(cfg.Listen, app.routes()); err != nil {
 			log.Fatal(err)

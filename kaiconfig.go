@@ -221,6 +221,7 @@ func (a *App) kaiSync(kaiRev int, erzwingen bool) {
 	}
 	logEvent("info", fmt.Sprintf("Einstellungen aus KAI übernommen (Stand %d)", kc.Rev))
 	go a.anzeigeAutomatisch()
+	go a.airplayAnwenden() // AirPlay-Empfänger an die (ggf. geänderte) Einstellung anpassen (Bildschirm/Bordmusik)
 	// 3) übernommenen Stand zurückmelden
 	_ = k.PostConfigIst(kc.Rev, a.getCfg())
 }
@@ -300,6 +301,13 @@ func (a *App) geraetBefehl(b *kaiBefehlT) bool {
 			k.BefehlErledigt(b.N, true, "")
 		}
 		logEvent("info", "Objekterkennung einrichten: aus KAI angestoßen")
+		return true
+	case "airplay_setup":
+		go a.airplayEinrichten()
+		if k != nil {
+			k.BefehlErledigt(b.N, true, "")
+		}
+		logEvent("info", "AirPlay einrichten: aus KAI angestoßen")
 		return true
 	}
 	return false

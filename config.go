@@ -100,6 +100,17 @@ type Config struct {
 		UntenProzent    int `json:"unten_prozent"`
 	} `json:"detect"`
 
+	// AirPlay-Empfänger (nur Rolle Bildschirm/Bordmusik, aus KAI gepflegt): Bildschirm spiegelt Bild über
+	// uxplay, Bordmusik nimmt Ton über shairport-sync. Aus KAI kommt nur, ob/PIN/Name — das Bild/der Ton
+	// geht direkt vom iPad ans Gerät. Vorgabe: aus (ein Flotten-Update ändert nichts).
+	Airplay struct {
+		An           bool   `json:"an"`            // Empfänger sichtbar/aktiv
+		PinVerlangen bool   `json:"pin_verlangen"` // PIN zum Verbinden nötig (Bildschirm empfohlen, Bordmusik oft aus)
+		Pin          string `json:"pin"`           // 4–8 Ziffern (nur wenn PinVerlangen)
+		Name         string `json:"name"`          // Anzeigename am Apple-Gerät (aus Schiff + Rolle vorbelegt)
+		AutoEndeMin  int    `json:"auto_ende_min"` // nach so vielen Minuten ohne Verbindung beenden (0 = nie)
+	} `json:"airplay"`
+
 	// Wetter + Pegel in der Anzeige. Werte kommen aus denselben öffentlichen Quellen wie KAI
 	// (Open-Meteo / PEGELONLINE) → identische Zahlen, ohne Eingriff ins Pilot-Bundle; läuft mit
 	// UND ohne KAI-Verbindung. Vorgabe: beides an, Bodensee/Konstanz.

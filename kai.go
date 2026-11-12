@@ -238,6 +238,11 @@ func (k *KaiClient) Hello(version, kind string, sys *SystemData, gpsHost string,
 	if erkennungMelden != nil {
 		body["erkennung"] = erkennungMelden() // Objekterkennung: Stand der Einrichtung + Frigate live
 	}
+	if airplayMelden != nil {
+		if ap := airplayMelden(); ap != nil {
+			body["airplay"] = ap // AirPlay-Empfänger: installiert/läuft/Name (Rolle Bildschirm/Bordmusik)
+		}
+	}
 	data, _, err := k.do("POST", "/api/edge/hello", body)
 	if err != nil {
 		return nil, err
