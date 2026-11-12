@@ -201,6 +201,7 @@ type HelloResp struct {
 	OK              bool `json:"ok"`
 	ReportScan      bool `json:"report_scan"`      // Netz-Scan-Schalter aus KAI (zentral umlegbar)
 	ReportTeltonika bool `json:"report_teltonika"` // Teltonika-Router-Diagnose an/aus (zentral)
+	ScanIntervalSec int  `json:"scan_interval_sec"` // Takt des Netz-Scans in Sekunden (KAI, Vorgabe 60) — Stufe-4-Ping
 	SpeedtestRequested bool `json:"speedtest_requested"` // im KAI-Monitoring angeforderter Speedtest
 	LatestVersion      string `json:"latest_version"`      // neueste Release-Version (KAI fragt GitHub zentral)
 	UpdateRequested    bool   `json:"update_requested"`    // Aktualisierung aus KAI angefordert
@@ -242,6 +243,12 @@ func (k *KaiClient) Hello(version, kind string, sys *SystemData, gpsHost string,
 		if ap := airplayMelden(); ap != nil {
 			body["airplay"] = ap // AirPlay-Empfänger: installiert/läuft/Name (Rolle Bildschirm/Bordmusik)
 		}
+	}
+	// Ping Bordwächter→KAI messen (ein günstiger GET je Herzschlag) — fortlaufende Reihe fürs
+	// Detail-Diagramm der Geräteübersicht (Stufe 4). Fehlschlag = kein Wert, nicht schlimm.
+	t0 := time.Now()
+	if _, code, perr := k.do("GET", "/api/edge/speedtest/ping", nil); perr == nil && code == 200 {
+		body["ping_ms"] = float64(time.Since(t0).Microseconds()) / 1000.0
 	}
 	data, _, err := k.do("POST", "/api/edge/hello", body)
 	if err != nil {

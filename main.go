@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const version = "0.1.127"
+const version = "0.1.128"
 
 // imAddon: läuft als Home-Assistant-Add-on (Übergang, z. B. MS-KONSTANZ 2026-11) — der Rechner gehört Home Assistant:
 // kein Hostname/SSH/VNC/Netzwerk/Kiosk setzen, keine Selbstaktualisierung (die macht Home Assistant).
@@ -29,7 +29,24 @@ type App struct {
 	net    *NetworkData
 	scan   *bool // Netz-Scan-Schalter aus KAI (hello-Antwort); nil = noch nicht gemeldet → cfg.ReportScan
 	telt   *bool // Teltonika-Router-Diagnose an/aus aus KAI; nil = noch nicht gemeldet → an (bei GPS=teltonika)
+	scanI  *int  // Netz-Scan-Takt in Sekunden aus KAI (hello-Antwort); nil = Vorgabe 60
 }
+
+// getScanInterval: Takt des Netz-Scans in Sekunden, aus KAI (hello-Antwort). Vorgabe 60 s, Untergrenze
+// 30 s (ein zu schneller Takt auf dem Mobilfunk-Netz bringt nichts und kostet nur). Stufe-4-Ping.
+func (a *App) getScanInterval() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	v := 60
+	if a.scanI != nil {
+		v = *a.scanI
+	}
+	if v < 30 {
+		v = 30
+	}
+	return v
+}
+func (a *App) setScanInterval(v int) { a.mu.Lock(); if v > 0 { a.scanI = &v }; a.mu.Unlock() }
 
 // getReportScan: maßgeblich ist der KAI-Schalter (hello-Antwort); solange KAI noch nichts gemeldet hat,
 // gilt der lokale Wert als Rückfall (autark).
@@ -168,6 +185,7 @@ func (a *App) bundleLoop() {
 			kaiReachable = true
 			a.setReportScan(hr.ReportScan)
 			a.setReportTeltonika(hr.ReportTeltonika)
+			a.setScanInterval(hr.ScanIntervalSec)
 		} else {
 			kaiReachable = false
 		}
@@ -289,6 +307,7 @@ func (a *App) heartbeatLoop() {
 				kaiReachable = true
 				a.setReportScan(hr.ReportScan)           // Netz-Scan-Schalter aus KAI
 				a.setReportTeltonika(hr.ReportTeltonika) // Teltonika-Schalter aus KAI
+				a.setScanInterval(hr.ScanIntervalSec)    // Netz-Scan-Takt aus KAI (Stufe-4-Ping)
 				if hr.SpeedtestRequested {
 					go a.runSpeedtest() // im KAI-Monitoring angefordert
 				}

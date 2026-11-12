@@ -20,11 +20,12 @@ import (
 )
 
 type connEntry struct {
-	Name     string `json:"name"`
-	EntityID string `json:"entity_id"`
-	Status   string `json:"status"`
-	IP       string `json:"ip,omitempty"`
-	Mac      string `json:"mac,omitempty"`
+	Name     string  `json:"name"`
+	EntityID string  `json:"entity_id"`
+	Status   string  `json:"status"`
+	IP       string  `json:"ip,omitempty"`
+	Mac      string  `json:"mac,omitempty"`
+	Ms       float64 `json:"ms,omitempty"` // Antwortzeit (RTT) des Pings — fürs Detail-Diagramm (Stufe 4)
 }
 
 func (a *App) netScanLoop() {
@@ -38,7 +39,7 @@ func (a *App) netScanLoop() {
 				log.Printf("netzscan: %v", err)
 			}
 		}
-		time.Sleep(5 * time.Minute)
+		time.Sleep(time.Duration(a.getScanInterval()) * time.Second) // Takt aus KAI (Vorgabe 60 s) — Stufe-4-Ping
 	}
 }
 
@@ -71,6 +72,7 @@ func discoverLocalHosts() []connEntry {
 		return nil
 	}
 	up := map[string]bool{}
+	rtt := map[string]float64{}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 48)
@@ -80,9 +82,12 @@ func discoverLocalHosts() []connEntry {
 		go func(ip string) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			if pingHost(ip) {
+			if ok, ms := pingHostMs(ip); ok {
 				mu.Lock()
 				up[ip] = true
+				if ms > 0 {
+					rtt[ip] = ms
+				}
 				mu.Unlock()
 			}
 		}(ip)
@@ -106,7 +111,7 @@ func discoverLocalHosts() []connEntry {
 		if name == "" {
 			name = ip
 		}
-		out = append(out, connEntry{Name: name, EntityID: "ping", Status: "on", IP: ip, Mac: arp[ip]})
+		out = append(out, connEntry{Name: name, EntityID: "ping", Status: "on", IP: ip, Mac: arp[ip], Ms: rtt[ip]})
 	}
 	return out
 }
@@ -234,7 +239,26 @@ func reverseName(ip string) string {
 
 // pingHost: ein ICMP-Paket, 1 s Timeout (iputils-ping, auf dem Pi/NUC vorhanden).
 func pingHost(ip string) bool {
-	return exec.Command("ping", "-c", "1", "-W", "1", ip).Run() == nil
+	ok, _ := pingHostMs(ip)
+	return ok
+}
+
+// pingHostMs pingt einen Host (ein Paket, 1 s Timeout) und liest die Antwortzeit aus der Ausgabe
+// (iputils-ping: „time=12.3 ms"). Rückgabe: erreichbar? + RTT in ms (0, wenn nicht ablesbar).
+func pingHostMs(ip string) (bool, float64) {
+	out, err := exec.Command("ping", "-c", "1", "-W", "1", ip).CombinedOutput()
+	if err != nil {
+		return false, 0
+	}
+	ms := 0.0
+	if i := strings.Index(string(out), "time="); i >= 0 {
+		rest := string(out)[i+5:]
+		var v float64
+		if _, e := fmt.Sscanf(rest, "%f", &v); e == nil {
+			ms = v
+		}
+	}
+	return true, ms
 }
 
 func normMacStr(s string) string {
