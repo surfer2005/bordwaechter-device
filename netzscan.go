@@ -120,6 +120,10 @@ func targetedPings(k *KaiClient) []connEntry {
 				if ms > 0 {
 					e.Ms = ms
 				}
+			} else if tcpAlive(ip) {
+				// Server/Firewalls blocken oft ICMP — ein offener TCP-Port beweist, dass das
+				// Gerät läuft (so hat es HA erkannt). RTT bleibt 0 (kein Ping-Wert).
+				e.Status = "on"
 			}
 			mu.Lock()
 			out = append(out, e)
@@ -326,6 +330,38 @@ func pingHostMs(ip string) (bool, float64) {
 		}
 	}
 	return true, ms
+}
+
+// tcpAlive prüft, ob ein Host lebt, auch wenn er ICMP-Ping blockt: ein TCP-Connect auf gängige Ports.
+// Antwortet EINER (offen ODER „connection refused" — beides beweist, dass der Host da ist und antwortet),
+// gilt das Gerät als online. Nur ein kurzer Timeout je Port, früher Abbruch beim ersten Treffer.
+func tcpAlive(ip string) bool {
+	ports := []string{"443", "80", "445", "22", "502", "3389", "8080"}
+	type res struct{ up bool }
+	ch := make(chan res, len(ports))
+	for _, p := range ports {
+		go func(p string) {
+			addr := net.JoinHostPort(ip, p)
+			c, err := net.DialTimeout("tcp", addr, 900*time.Millisecond)
+			if err == nil {
+				c.Close()
+				ch <- res{true}
+				return
+			}
+			// „connection refused" heißt: der Host IST da, nur dieser Port ist zu → lebt.
+			if strings.Contains(err.Error(), "refused") {
+				ch <- res{true}
+				return
+			}
+			ch <- res{false}
+		}(p)
+	}
+	for range ports {
+		if (<-ch).up {
+			return true
+		}
+	}
+	return false
 }
 
 func normMacStr(s string) string {
