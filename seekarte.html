@@ -445,6 +445,11 @@ function drawMap(s){
     var sel=document.getElementById('scalesel')
     if(sel){ try{sel.value=String(INITZOOM)}catch(e){} sel.onchange=function(){ setMassstab(parseInt(sel.value,10)) } }
     setTimeout(function(){if(kmap)kmap.invalidateSize()},150)
+    // Der Kartencontainer bekommt seine endgültige Größe erst nach dem Laden (Hochformat-Layout, Kamerabild,
+    // Displaydrehung). Ein einmaliges invalidateSize greift dann zu früh → Leaflets Mitte liegt neben der festen
+    // Bildmitte, das Fadenkreuz sitzt neben der Position. Deshalb bei JEDER Größenänderung neu vermessen + zentrieren.
+    try{ new ResizeObserver(function(){ if(kmap){ kmap.invalidateSize(); recenterMap(false) } }).observe(document.getElementById('map')) }
+    catch(e){ window.addEventListener('resize',function(){ if(kmap){ kmap.invalidateSize(); recenterMap(false) } }) }
   }
   klayer.clearLayers()
   var pts=[]

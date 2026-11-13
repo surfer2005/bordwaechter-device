@@ -348,6 +348,10 @@ function drawMap(s){
     var Z=L.Control.extend({options:{position:'topleft'},onAdd:function(){var d=L.DomUtil.create('div','leaflet-bar leaflet-control');var a=L.DomUtil.create('a','',d);a.href='#';a.title='Zentrieren';a.innerHTML='&#9678;';a.style.fontSize='18px';a.style.lineHeight='26px';a.style.textAlign='center';L.DomEvent.on(a,'click',function(e){L.DomEvent.stop(e);recenterMap();});return d;}})
     kmap.addControl(new Z())
     setTimeout(function(){if(kmap){kmap.invalidateSize();recenterMap()}},180)
+    // Container-Größe steht erst nach dem Laden fest (Hochformat, Kamerabild, Displaydrehung) → bei JEDER
+    // Größenänderung neu vermessen + zentrieren, sonst sitzt das Fadenkreuz neben der Position.
+    try{ new ResizeObserver(function(){ if(kmap){ kmap.invalidateSize(); recenterMap() } }).observe(document.getElementById('map')) }
+    catch(e){ window.addEventListener('resize',function(){ if(kmap){ kmap.invalidateSize(); recenterMap() } }) }
   }
   klayer.clearLayers()
   var pts=[]
