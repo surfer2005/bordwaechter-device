@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -49,7 +50,12 @@ func (a *App) netScanLoop() {
 // Online-Hosts. „Offline" entsteht in KAI aus dem Scan-Gedächtnis (zuvor gesehen, jetzt weg), nicht hier.
 // Die Zuordnung zum Schiff macht KAI über den Edge-Token des meldenden Geräts.
 func runNetScan(k *KaiClient) error {
+	// ZWEI Wege, eine Meldung (wie früher Home Assistant):
+	// 1) Entdeckung: wer ist in MEINEM lokalen Netz? (Ping-Sweep + ARP)
+	// 2) Gezielt: alle in KAI EINGETRAGENEN Geräte (scan-targets) anpingen — über den VPN-Tunnel auch
+	//    an anderen Standorten/Schiffen → on/off (nicht nur gefundene, auch nicht erreichbare = rot).
 	entries := discoverLocalHosts()
+	entries = append(entries, targetedPings(k)...)
 	if len(entries) == 0 {
 		return nil
 	}
@@ -61,6 +67,67 @@ func runNetScan(k *KaiClient) error {
 		return fmt.Errorf("ha-connectivity http %d", code)
 	}
 	return nil
+}
+
+type scanTarget struct {
+	Name            string   `json:"name"`
+	InventoryNumber string   `json:"inventory_number"`
+	IP              string   `json:"ip"`
+	Macs            []string `json:"macs"`
+}
+
+// targetedPings holt die in KAI eingetragenen Geräte (scan-targets) und pingt JEDE hinterlegte IP an —
+// über den VPN-Tunnel auch an anderen Standorten. Meldet on/off je Gerät (so wird ein eingetragenes,
+// aber nicht erreichbares Gerät rot statt zu verschwinden). Name = Asset-Name, damit KAI es direkt
+// dem Asset zuordnet. Best effort — ohne Scan-Ziele einfach leer.
+func targetedPings(k *KaiClient) []connEntry {
+	data, code, err := k.do("GET", "/api/asset-manager/scan-targets", nil)
+	if err != nil || code != 200 {
+		return nil
+	}
+	var resp struct {
+		Items []scanTarget `json:"items"`
+	}
+	if json.Unmarshal(data, &resp) != nil || len(resp.Items) == 0 {
+		return nil
+	}
+	out := make([]connEntry, 0, len(resp.Items))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 48)
+	for _, tg := range resp.Items {
+		ip := strings.TrimSpace(tg.IP)
+		if ip == "" {
+			continue
+		}
+		name := strings.TrimSpace(tg.Name)
+		if name == "" {
+			name = ip
+		}
+		mac := ""
+		if len(tg.Macs) > 0 {
+			mac = tg.Macs[0]
+		}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(ip, name, mac string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			ok, ms := pingHostMs(ip)
+			e := connEntry{Name: name, EntityID: "ping", Status: "off", IP: ip, Mac: mac}
+			if ok {
+				e.Status = "on"
+				if ms > 0 {
+					e.Ms = ms
+				}
+			}
+			mu.Lock()
+			out = append(out, e)
+			mu.Unlock()
+		}(ip, name, mac)
+	}
+	wg.Wait()
+	return out
 }
 
 // discoverLocalHosts durchsucht das lokale Subnetz des Bordwächters (Ping-Sweep, der zugleich die
