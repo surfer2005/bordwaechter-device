@@ -41,6 +41,8 @@ type mqttClient struct {
 	subs   map[string]byte
 	will   *mqttNachricht
 	b      *MQTTBroker
+	// gesehen: Sensoren, für die ein Client mit dem gemeinsamen Zugang schon gemeldet hat (Zuordnung über das Thema)
+	gesehen map[int]bool
 }
 
 type mqttNachricht struct {
@@ -57,6 +59,8 @@ type MQTTBroker struct {
 	eingang   mqttEingang
 	ln        net.Listener
 	verbunden map[int]time.Time // SensorID → letzte Verbindung
+	// zuordnen: Thema → SensorID (0 = keiner). Für den gemeinsamen Zugang, der nicht an einen Sensor gebunden ist.
+	zuordnen func(topic string) int
 }
 
 func neuerMQTTBroker(auth mqttAuth, eingang mqttEingang) *MQTTBroker {
@@ -103,6 +107,9 @@ func (b *MQTTBroker) Verbunden() map[int]bool {
 	out := map[int]bool{}
 	for c := range b.clients {
 		out[c.zugang.SensorID] = true
+		for id := range c.gesehen {
+			out[id] = true
+		}
 	}
 	return out
 }
@@ -304,6 +311,17 @@ func (b *MQTTBroker) bedienen(conn net.Conn) {
 				pid, rest = rest[:2], rest[2:]
 			}
 			if zugangDarf(c.zugang, topic) {
+				if c.zugang.Alle && b.zuordnen != nil {
+					if id := b.zuordnen(topic); id > 0 {
+						b.mu.Lock()
+						if c.gesehen == nil {
+							c.gesehen = map[int]bool{}
+						}
+						c.gesehen[id] = true
+						b.verbunden[id] = time.Now()
+						b.mu.Unlock()
+					}
+				}
 				b.eingangMelden(c, topic, rest)
 				b.verteilen(c, topic, rest, retain)
 			}

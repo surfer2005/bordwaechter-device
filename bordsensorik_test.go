@@ -291,3 +291,24 @@ func TestSonneUndPlan(t *testing.T) {
 	}
 	_ = json.Marshal
 }
+
+// Gemeinsamer Zugang (ein Kennwort je Bordwächter): Werte werden über das Thema dem richtigen Sensor zugeordnet.
+func TestGemeinsamerZugangOrdnetUeberThemaZu(t *testing.T) {
+	s := &Sensorik{
+		defs:    map[int]*sensorDef{8: {ID: 8, Art: "shelly", Praefix: "bw-temperatur"}, 9: {ID: 9, Art: "shelly", Praefix: "bw-temperatur-kuehl"}},
+		aktuell: map[string]any{}, verletzt: map[string]time.Time{}, status: map[int]*sensorStatus{}, logs: map[int][]string{},
+	}
+	nachricht := []byte(`{"method":"NotifyFullStatus","params":{"temperature:0":{"id":0,"tC":7.5},"humidity:0":{"id":0,"rh":55}}}`)
+	s.eingang(mqttZugang{Alle: true}, "bw-temperatur/events/rpc", nachricht)
+	if s.aktuell["8|temperatur"] != 7.5 {
+		t.Fatalf("Wert nicht Sensor 8 zugeordnet: %v", s.aktuell)
+	}
+	s.eingang(mqttZugang{Alle: true}, "bw-temperatur-kuehl/events/rpc", nachricht)
+	if s.aktuell["9|temperatur"] != 7.5 {
+		t.Fatalf("längster Präfix muss gewinnen: %v", s.aktuell)
+	}
+	s.eingang(mqttZugang{Alle: true}, "unbekannt/events/rpc", nachricht)
+	if len(s.puffer) != 4 {
+		t.Fatalf("unbekanntes Thema darf nichts puffern, Puffer=%d", len(s.puffer))
+	}
+}

@@ -183,6 +183,18 @@ func shellyKomponente(name string, obj map[string]any, st *sensorStatus) []abgel
 		if f, ok := zahl("apower"); ok {
 			out = append(out, abgeleitet{mitIndex("leistung", n), f})
 		}
+		// Power Strip/Plug: Zählerstand (Wh), Strom, Spannung je Kanal
+		if e, ok := obj["aenergy"].(map[string]any); ok {
+			if f, ok := e["total"].(float64); ok {
+				out = append(out, abgeleitet{mitIndex("energie", n), f})
+			}
+		}
+		if f, ok := zahl("current"); ok {
+			out = append(out, abgeleitet{mitIndex("strom", n), f})
+		}
+		if f, ok := zahl("voltage"); ok {
+			out = append(out, abgeleitet{mitIndex("spannung", n), f})
+		}
 	case "input":
 		if v, ok := obj["state"].(bool); ok {
 			out = append(out, abgeleitet{mitIndex("eingang", n), v})
@@ -288,6 +300,9 @@ func (s *Sensorik) eingang(z mqttZugang, topic string, payload []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	d := s.defs[z.SensorID]
+	if d == nil && z.Alle {
+		d = s.defFuerThema(topic) // gemeinsamer Zugang: Sensor über sein Thema finden
+	}
 	if d == nil {
 		return
 	}
@@ -320,6 +335,18 @@ func (s *Sensorik) eingang(z mqttZugang, topic string, payload []byte) {
 	if len(s.puffer) > 50000 {
 		s.puffer = s.puffer[len(s.puffer)-50000:]
 	}
+}
+
+// defFuerThema: Sensor, unter dessen Thema (Präfix) die Nachricht liegt; bei mehreren der längste Präfix.
+// Aufrufer hält s.mu.
+func (s *Sensorik) defFuerThema(topic string) *sensorDef {
+	var best *sensorDef
+	for _, d := range s.defs {
+		if darfThema(d.Praefix, topic) && (best == nil || len(d.Praefix) > len(best.Praefix)) {
+			best = d
+		}
+	}
+	return best
 }
 
 // WertVon: letzter Wert eines Sensors anhand seines Themas (für das Licht: Schlüsselschalter).
@@ -656,6 +683,14 @@ func (a *App) sensorLoop() {
 	s.gemeinsamLaden()
 	s.pufferLaden()
 	s.broker = neuerMQTTBroker(s.pruefeZugang, s.eingang)
+	s.broker.zuordnen = func(topic string) int {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if d := s.defFuerThema(topic); d != nil {
+			return d.ID
+		}
+		return 0
+	}
 	port := os.Getenv("BORDWAECHTER_MQTT_PORT") // im Add-on 1885 (Mosquitto von Home Assistant belegt 1883 und 1884)
 	if port == "" {
 		port = "1883"
