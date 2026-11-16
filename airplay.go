@@ -31,6 +31,7 @@ import (
 )
 
 const airplayUnit = "/etc/systemd/system/bordwaechter-airplay.service"
+const airplayAudioUnit = "/etc/systemd/system/bordwaechter-airplay-audio.service"
 
 type airplayStand struct {
 	Phase    string `json:"phase"`    // "" | laeuft | fertig | fehler
@@ -78,7 +79,7 @@ func airplayWerkzeug(rolle string) string {
 // airplayDienst: Name des systemd-Dienstes je Rolle (uxplay als eigener Dienst, shairport-sync bringt seinen mit).
 func airplayDienst(rolle string) string {
 	if rolle == "audio" {
-		return "shairport-sync"
+		return "bordwaechter-airplay-audio" // shairport-sync in der Desktop-Sitzung (PipeWire), nicht der Paket-Systemdienst
 	}
 	return "bordwaechter-airplay"
 }
@@ -142,6 +143,9 @@ func (a *App) airplayAnwenden() {
 	// Aus oder noch nicht installiert → Empfänger stoppen (schadet nicht, wenn es ihn nicht gibt).
 	if !ap.An || !airplayBinaer(cfg.Rolle) {
 		_ = lauf(30*time.Second, "systemctl", "disable", "--now", dienst)
+		if cfg.Rolle == "audio" {
+			_ = lauf(30*time.Second, "systemctl", "disable", "--now", "shairport-sync") // auch den alten Paket-Systemdienst aus
+		}
 		return
 	}
 	name := strings.TrimSpace(ap.Name)
@@ -150,7 +154,7 @@ func (a *App) airplayAnwenden() {
 	}
 	var err error
 	if cfg.Rolle == "audio" {
-		err = airplayShairport(name, ap.PinVerlangen, ap.Pin)
+		err = airplayShairport(name, ap.PinVerlangen, ap.Pin, cfg.MedienTon)
 	} else {
 		err = airplayUxplay(name, ap.PinVerlangen)
 	}
@@ -195,26 +199,52 @@ func airplayUxplay(name string, pinVerlangen bool) error {
 	return nil
 }
 
-// airplayShairport: shairport-sync (eigener Paket-Dienst) über /etc/shairport-sync.conf einstellen.
-// ⚠️ Tonausgang/Ducking zur Bordmusik am Gerät zu prüfen (s. Kopf).
-func airplayShairport(name string, pinVerlangen bool, pin string) error {
+// airplayShairport: shairport-sync in der DESKTOP-SITZUNG über PipeWire — denselben Weg wie die normale
+// Bordmusik (Chromium → PipeWire-Pulse). Der Paket-Systemdienst spielte auf den ALSA-Standard (oft HDMI) und
+// war auf der ELA still (live geprüft Friedrichshafen 2026-11-16: iPad verbindet, aber kein Ton). Wir legen
+// den Ausgang auf dieselbe Standard-Senke wie die Bordmusik (tonVorbereiten: „analog"/„hdmi" laut KAI) und
+// starten shairport als Desktop-Nutzer mit output_backend „pa".
+func airplayShairport(name string, pinVerlangen bool, pin, ton string) error {
+	if ton == "" {
+		ton = "analog"
+	}
+	tonVorbereiten(ton) // Standard-PipeWire-Senke wählen (analog/HDMI), entstummen, laut stellen
 	pw := ""
 	if pinVerlangen && pin != "" {
 		pw = "  password = " + shairportStr(pin) + ";\n"
 	}
-	conf := "// von KAI geschrieben (AirPlay-Einstellung des Bordgeräts) — nicht von Hand ändern\n" +
+	conf := "// von KAI geschrieben (AirPlay-Einstellung des Bordgeraets) -- nicht von Hand aendern\n" +
 		"general =\n{\n" +
 		"  name = " + shairportStr(name) + ";\n" +
+		"  output_backend = \"pa\";\n" + // über PipeWire-Pulse an die Standard-Senke der Desktop-Sitzung
 		pw +
 		"};\n"
 	if err := os.WriteFile("/etc/shairport-sync.conf", []byte(conf), 0o644); err != nil {
 		return fmt.Errorf("shairport-sync.conf schreiben: %w", err)
 	}
-	if err := lauf(30*time.Second, "systemctl", "enable", "--now", "shairport-sync"); err != nil {
+	// Alten Paket-Systemdienst (ALSA-Standard) abschalten — wir fahren shairport in der Sitzung.
+	_ = lauf(30*time.Second, "systemctl", "disable", "--now", "shairport-sync")
+	u := desktopUser()
+	rt := "/run/user/" + strconv.Itoa(u.uid)
+	unit := "[Unit]\n" +
+		"Description=KAI AirPlay-Empfaenger (shairport-sync, Bordmusik)\n" +
+		"After=network-online.target\n" +
+		"[Service]\n" +
+		"User=" + u.name + "\n" +
+		"Environment=XDG_RUNTIME_DIR=" + rt + "\n" +
+		"Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=" + rt + "/bus\n" +
+		"ExecStart=/usr/bin/shairport-sync -c /etc/shairport-sync.conf\n" +
+		"Restart=always\nRestartSec=5\n" +
+		"[Install]\nWantedBy=multi-user.target\n"
+	if err := os.WriteFile(airplayAudioUnit, []byte(unit), 0o644); err != nil {
+		return fmt.Errorf("Dienst schreiben: %w", err)
+	}
+	_ = lauf(30*time.Second, "systemctl", "daemon-reload")
+	if err := lauf(30*time.Second, "systemctl", "enable", "--now", "bordwaechter-airplay-audio"); err != nil {
 		return err
 	}
-	_ = lauf(30*time.Second, "systemctl", "restart", "shairport-sync")
-	logEvent("info", "AirPlay (Bordmusik): shairport-sync läuft als „"+name+"“")
+	_ = lauf(30*time.Second, "systemctl", "restart", "bordwaechter-airplay-audio")
+	logEvent("info", "AirPlay (Bordmusik): shairport-sync (PipeWire/"+ton+") läuft als „"+name+"“")
 	return nil
 }
 
