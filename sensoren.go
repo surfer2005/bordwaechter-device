@@ -41,15 +41,16 @@ type sensorFirmware struct {
 	Force   string `json:"force"` // Token (Zeitstempel) aus KAI: neuer Wert = OTA erzwingen, auch bei gleicher Version
 }
 type sensorDef struct {
-	ID       int             `json:"id"`
-	Art      string          `json:"art"`
-	Name     string          `json:"name"`
-	User     string          `json:"user"`
-	Salt     string          `json:"salt"`
-	Hash     string          `json:"hash"`
-	Praefix  string          `json:"praefix"`
-	Werte    []sensorWertDef `json:"werte"`
-	Firmware *sensorFirmware `json:"firmware"`
+	ID        int             `json:"id"`
+	Art       string          `json:"art"`
+	Name      string          `json:"name"`
+	User      string          `json:"user"`
+	Salt      string          `json:"salt"`
+	Hash      string          `json:"hash"`
+	Praefix   string          `json:"praefix"`
+	Werte     []sensorWertDef `json:"werte"`
+	Firmware  *sensorFirmware `json:"firmware"`
+	Schaltbar bool            `json:"schaltbar"` // Shelly mit Relais: aus KAI schaltbar (Steckdosen)
 }
 
 type sensorMessung struct {
@@ -74,8 +75,8 @@ type Sensorik struct {
 	aktuell   map[string]any       // "sensorID|schluessel" → letzter Wert
 	verletzt  map[string]time.Time // seit wann eine Grenze mit Lampe verletzt ist
 	status    map[int]*sensorStatus
-	fwStand   map[int]string // installierte Firmware-Datei je Sensor (Version)
-	fwForce   map[int]string // zuletzt ausgeführtes OTA-Force-Token je Sensor (KAI-Knopf)
+	fwStand   map[int]string   // installierte Firmware-Datei je Sensor (Version)
+	fwForce   map[int]string   // zuletzt ausgeführtes OTA-Force-Token je Sensor (KAI-Knopf)
 	logs      map[int][]string // ESPHome-Log je Sensor (über MQTT <praefix>/debug), Ringpuffer → an KAI
 	broker    *MQTTBroker
 	gemeinsam *brokerZugang // MQTT-B: EIN geteilter Broker-Zugang je Bordwächter (HA-Modell), zusätzlich zu den Pro-Sensor-Zugängen
@@ -527,7 +528,13 @@ func (s *Sensorik) configUebernehmen(liste []*sensorDef) {
 	s.defsSichern()
 }
 
+// sendenMu: senden läuft aus dem 10-s-Takt UND sofort nach einem Schaltbefehl — nie gleichzeitig,
+// sonst würde derselbe Pufferanfang zweimal geschickt und zweimal entfernt.
+var sendenMu sync.Mutex
+
 func (s *Sensorik) senden(k *KaiClient) {
+	sendenMu.Lock()
+	defer sendenMu.Unlock()
 	s.mu.Lock()
 	n := len(s.puffer)
 	if n > 2000 {
@@ -726,5 +733,99 @@ func (a *App) sensorLoop() {
 			logEvent("warn", "Sensor-Grenzwert verletzt – Lampe an")
 		}
 		time.Sleep(10 * time.Second)
+	}
+}
+
+// ── Steckdosen schalten (wie beim DALI-Licht) ──────────────────────────────────────────────────────
+
+type sensorBefehl struct {
+	ID       int    `json:"id"`
+	SensorID int    `json:"sensor_id"`
+	Praefix  string `json:"praefix"`
+	Kanal    int    `json:"kanal"`
+	An       bool   `json:"an"`
+}
+type sensorQuittung struct {
+	ID     int    `json:"id"`
+	OK     bool   `json:"ok"`
+	Fehler string `json:"fehler,omitempty"`
+}
+
+func (s *Sensorik) hatSchaltbare() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, d := range s.defs {
+		if d.Schaltbar {
+			return true
+		}
+	}
+	return false
+}
+
+// shellySchaltNachricht: RPC Switch.Set an "<praefix>/rpc" (Shelly Gen2+ abonniert das Thema, wenn
+// „MQTT-Steuerung" eingeschaltet ist). Die Antwort geht an "kai-bordwaechter/rpc" und wird verworfen —
+// den neuen Zustand meldet der Shelly ohnehin über status/… bzw. events/rpc.
+func shellySchaltNachricht(id, kanal int, an bool) []byte {
+	b, _ := json.Marshal(map[string]any{"id": id, "src": "kai-bordwaechter", "method": "Switch.Set", "params": map[string]any{"id": kanal, "on": an}})
+	return b
+}
+
+// schaltBefehle: einmal Befehle abholen (mit Quittungen) und ausführen. Rückgabe: ob geschaltet wurde.
+func (s *Sensorik) schaltBefehle(k *KaiClient, quittung *[]sensorQuittung) bool {
+	data, code, err := k.do("POST", "/api/edge/sensor-befehle", map[string]any{"erledigt": *quittung})
+	if err != nil || code != 200 {
+		return false
+	}
+	*quittung = nil
+	var r struct {
+		Befehle []sensorBefehl `json:"befehle"`
+	}
+	if json.Unmarshal(data, &r) != nil || len(r.Befehle) == 0 {
+		return false
+	}
+	verbunden := map[int]bool{}
+	if s.broker != nil {
+		verbunden = s.broker.Verbunden()
+	}
+	for _, b := range r.Befehle {
+		q := sensorQuittung{ID: b.ID, OK: true}
+		switch {
+		case s.broker == nil || b.Praefix == "":
+			q.OK, q.Fehler = false, "MQTT-Empfänger nicht bereit"
+		case !verbunden[b.SensorID]:
+			q.OK, q.Fehler = false, "Gerät ist nicht mit dem Bordwächter verbunden"
+		default:
+			s.broker.Senden(b.Praefix+"/rpc", shellySchaltNachricht(b.ID, b.Kanal, b.An), false)
+			zustand := "aus"
+			if b.An {
+				zustand = "ein"
+			}
+			logEvent("info", fmt.Sprintf("Steckdose geschaltet: %s Kanal %d %s", b.Praefix, b.Kanal, zustand))
+		}
+		*quittung = append(*quittung, q)
+	}
+	return true
+}
+
+// sensorBefehlLoop: fragt KAI im Halbsekundentakt nach Schaltbefehlen — nur, wenn es schaltbare Sensoren
+// gibt (sonst kein Leerlauf-Verkehr). Nach dem Schalten Quittung + frischen Stand sofort an KAI, statt
+// erst im 10-s-Takt (Peter 2026-11-16: „wie beim DALI, ganz schnell").
+func (a *App) sensorBefehlLoop() {
+	time.Sleep(30 * time.Second)
+	s := sensorik
+	var quittung []sensorQuittung
+	for {
+		if s.hatSchaltbare() || len(quittung) > 0 {
+			if k := a.getKai(); k != nil && a.getCfg().EdgeToken != "" {
+				if s.schaltBefehle(k, &quittung) {
+					time.Sleep(700 * time.Millisecond) // Shelly schaltet und meldet seinen Stand
+					s.schaltBefehle(k, &quittung)      // Quittung sofort abliefern
+					s.senden(k)
+				}
+			}
+			time.Sleep(500 * time.Millisecond)
+		} else {
+			time.Sleep(5 * time.Second)
+		}
 	}
 }

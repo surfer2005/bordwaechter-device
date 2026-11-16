@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const version = "0.1.133"
+const version = "0.1.134"
 
 // imAddon: läuft als Home-Assistant-Add-on (Übergang, z. B. MS-KONSTANZ 2026-11) — der Rechner gehört Home Assistant:
 // kein Hostname/SSH/VNC/Netzwerk/Kiosk setzen, keine Selbstaktualisierung (die macht Home Assistant).
@@ -46,7 +46,13 @@ func (a *App) getScanInterval() int {
 	}
 	return v
 }
-func (a *App) setScanInterval(v int) { a.mu.Lock(); if v > 0 { a.scanI = &v }; a.mu.Unlock() }
+func (a *App) setScanInterval(v int) {
+	a.mu.Lock()
+	if v > 0 {
+		a.scanI = &v
+	}
+	a.mu.Unlock()
+}
 
 // getReportScan: maßgeblich ist der KAI-Schalter (hello-Antwort); solange KAI noch nichts gemeldet hat,
 // gilt der lokale Wert als Rückfall (autark).
@@ -320,9 +326,9 @@ func (a *App) heartbeatLoop() {
 				if hr.ConfigRev > cfg.KaiConfigRev {
 					go a.kaiSync(hr.ConfigRev, false)
 				}
-				setBordToken(hr.BordToken) // Position fürs Bord-Netz (Bildschirme/Bordmusik)
+				setBordToken(hr.BordToken)  // Position fürs Bord-Netz (Bildschirme/Bordmusik)
 				a.sshAusKai(hr.SSHPassword) // SSH-Passwort aus KAI (alle Rollen)
-				a.medienAusHerzschlag(hr)  // Bildschirm/Bordmusik: Abspielseite + Bordwächter-Adresse
+				a.medienAusHerzschlag(hr)   // Bildschirm/Bordmusik: Abspielseite + Bordwächter-Adresse
 			}
 		}
 		time.Sleep(60 * time.Second)
@@ -406,8 +412,8 @@ func main() {
 	go app.bundleLoop()
 	go app.gpsLoop()
 	go app.tickLoop()
-	go app.detectLoop()       // Objekterkennung (nur aktiv, wenn cfg.Detect.Enabled)
-	go app.erkennungPflege()  // Objekterkennung: Einrichtung nach Treiber-Neustart fortsetzen, Konfig nachziehen
+	go app.detectLoop()      // Objekterkennung (nur aktiv, wenn cfg.Detect.Enabled)
+	go app.erkennungPflege() // Objekterkennung: Einrichtung nach Treiber-Neustart fortsetzen, Konfig nachziehen
 	erkennungMelden = app.erkennungZustand
 	go app.infoLoop()         // Wetter + Pegel für die Anzeige (nur aktiv, wenn cfg.Info.Weather/Pegel)
 	go app.sysLoop()          // Pi-Zustand (CPU-Temp/Last/RAM/Platte) für die HA-Integration
@@ -424,6 +430,7 @@ func main() {
 	go app.sensorLoop()       // Sensoren (Shelly/ESPHome/Web-IO) über den MQTT-Empfänger auf Port 1883 → KAI
 	go app.lichtLoop()        // Licht über das DALI-Gateway im Bord-Netz (Befehle aus KAI, Lichtplan, Störungen)
 	go app.lichtBefehlLoop()  // schneller Befehls-Abruf (0,5 s) für zügige Reaktion beim Schalten
+	go app.sensorBefehlLoop() // Steckdosen (Shelly-Relais) aus KAI schalten, 0,5-s-Abruf wie beim Licht
 
 	log.Printf("KAI-Bordgerät %s, Rolle Bordwächter — lokale Oberfläche auf %s (GPS-Quelle: %s, GPIO: %s)",
 		version, cfg.Listen, cfg.GPS.Source, cfg.GPIO.Backend)

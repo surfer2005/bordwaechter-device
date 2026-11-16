@@ -312,3 +312,19 @@ func TestGemeinsamerZugangOrdnetUeberThemaZu(t *testing.T) {
 		t.Fatalf("unbekanntes Thema darf nichts puffern, Puffer=%d", len(s.puffer))
 	}
 }
+
+func TestShellySchaltNachricht(t *testing.T) {
+	var m struct {
+		Method string `json:"method"`
+		Params struct {
+			ID int  `json:"id"`
+			On bool `json:"on"`
+		} `json:"params"`
+	}
+	if err := json.Unmarshal(shellySchaltNachricht(7, 2, true), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Method != "Switch.Set" || m.Params.ID != 2 || !m.Params.On {
+		t.Fatalf("falsche Nachricht: %+v", m)
+	}
+}
