@@ -57,26 +57,17 @@ func selfUpdate() error {
 	if err != nil {
 		return err
 	}
-	cl := &http.Client{Timeout: 120 * time.Second}
-	resp, err := cl.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("Download fehlgeschlagen (HTTP %d) von %s", resp.StatusCode, url)
-	}
 	tmp := exe + ".new"
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(f, resp.Body); err != nil {
-		f.Close()
+	// fortsetzbar und geduldig (laden.go): langsame Schiffsnetze brachen die alten 120 s ab
+	if err := ladeFortsetzbar(url, tmp, 20*time.Minute); err != nil {
 		os.Remove(tmp)
 		return err
 	}
-	f.Close()
+	if !istProgramm(tmp) {
+		os.Remove(tmp)
+		return fmt.Errorf("geladene Datei ist kein Programm — nicht übernommen")
+	}
+	_ = os.Chmod(tmp, 0o755)
 	if err := os.Rename(tmp, exe); err != nil {
 		os.Remove(tmp)
 		return err
