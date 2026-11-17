@@ -741,14 +741,31 @@ func (a *App) sensorLoop() {
 type sensorBefehl struct {
 	ID       int    `json:"id"`
 	SensorID int    `json:"sensor_id"`
+	Art      string `json:"art"` // "" / schalten = Switch.Set über MQTT · mqtt_steuerung = am Shelly per HTTP einschalten (0.1.138)
 	Praefix  string `json:"praefix"`
 	Kanal    int    `json:"kanal"`
 	An       bool   `json:"an"`
+	IP       string `json:"ip"`
+	Neustart bool   `json:"neustart"`
 }
 type sensorQuittung struct {
-	ID     int    `json:"id"`
-	OK     bool   `json:"ok"`
-	Fehler string `json:"fehler,omitempty"`
+	ID      int    `json:"id"`
+	OK      bool   `json:"ok"`
+	Fehler  string `json:"fehler,omitempty"`
+	Antwort string `json:"antwort,omitempty"`
+}
+
+// hatShelly: irgendein Shelly eingetragen — dann fragt der Bordwächter (seltener) auch nach Gerätebefehlen wie
+// „MQTT-Steuerung einschalten“, selbst wenn noch keine Steckdose als schaltbar gilt.
+func (s *Sensorik) hatShelly() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, d := range s.defs {
+		if d.Art == "shelly" {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Sensorik) hatSchaltbare() bool {
@@ -788,6 +805,14 @@ func (s *Sensorik) schaltBefehle(k *KaiClient, quittung *[]sensorQuittung) bool 
 		verbunden = s.broker.Verbunden()
 	}
 	for _, b := range r.Befehle {
+		if b.Art == "mqtt_steuerung" {
+			*quittung = append(*quittung, mqttSteuerungBefehl(b))
+			continue
+		}
+		if b.Art != "" && b.Art != "schalten" {
+			*quittung = append(*quittung, sensorQuittung{ID: b.ID, Fehler: "Befehl „" + b.Art + "“ kennt dieses Bordgerät nicht"})
+			continue
+		}
 		q := sensorQuittung{ID: b.ID, OK: true}
 		switch {
 		case s.broker == nil || b.Praefix == "":
@@ -814,8 +839,10 @@ func (a *App) sensorBefehlLoop() {
 	time.Sleep(30 * time.Second)
 	s := sensorik
 	var quittung []sensorQuittung
+	var letzteShellyFrage time.Time
 	for {
-		if s.hatSchaltbare() || len(quittung) > 0 {
+		if s.hatSchaltbare() || len(quittung) > 0 || (s.hatShelly() && time.Since(letzteShellyFrage) > 5*time.Second) {
+			letzteShellyFrage = time.Now()
 			if k := a.getKai(); k != nil && a.getCfg().EdgeToken != "" {
 				if s.schaltBefehle(k, &quittung) {
 					time.Sleep(700 * time.Millisecond) // Shelly schaltet und meldet seinen Stand
