@@ -33,6 +33,19 @@ var (
 	bmLetzterW time.Time // letzter Wachhund-Neustart
 )
 
+// bmFrischesProfil: beim nächsten Start mit frischem Browserprofil (vom Wachhund nach dem 2. Fehlschlag gesetzt).
+var bmFrischesProfil bool
+
+// profilEntsperren: Chromium sperrt sein Profil mit Rechnername+Prozessnummer (SingletonLock). Ändert KAI beim
+// Koppeln den Rechnernamen (z. B. auf BSBPC000240), hält Chromium das Profil danach für „auf einem anderen Computer
+// in Benutzung“ und startet nicht — ohne Monitor sieht niemand die Rückfrage. Vor dem Start ist kein eigener Browser
+// mehr am Laufen (bordmusikStop), die Sperre also immer veraltet.
+func profilEntsperren(profil string) {
+	for _, n := range []string{"SingletonLock", "SingletonSocket", "SingletonCookie"} {
+		_ = os.Remove(filepath.Join(profil, n))
+	}
+}
+
 // bmWachhund: so lange darf die Abspielseite nach dem Start schweigen (sie meldet sich sonst alle 5 s).
 const bmWachhund = 90 * time.Second
 
@@ -181,6 +194,7 @@ func bordmusikWachhundPruefen(ziel string) {
 	bordmusikStop()
 	bmMu.Lock()
 	bmZwang, bmWechsel, bmLetzterW = neu, wechsel+1, jetzt
+	bmFrischesProfil = wechsel >= 1 // schon die zweite Betriebsart schwieg → frisches Profil
 	bmMu.Unlock()
 	if err := bordmusikStart(ziel); err != nil {
 		logEvent("error", "Bordmusik ohne Monitor nicht gestartet: "+err.Error())
@@ -315,8 +329,20 @@ func bordmusikStart(ziel string) error {
 	writeChromiumPolicy() // Zugriff der Abspielseite auf den eigenen Gerätedienst (Position, lokale Befehle)
 	u := desktopUser()
 	profil := filepath.Join(u.home, ".config/bordwaechter-bordmusik")
+	bmMu.Lock()
+	frisch := bmFrischesProfil
+	bmFrischesProfil = false
+	bmMu.Unlock()
+	if frisch {
+		// Wachhund: auch die andere Betriebsart schwieg — Profil beiseitelegen, mit frischem starten
+		_ = os.RemoveAll(profil + ".alt")
+		if err := os.Rename(profil, profil+".alt"); err == nil {
+			logEvent("warn", "Bordmusik: Browserprofil zurückgesetzt (altes unter "+profil+".alt)")
+		}
+	}
 	_ = os.MkdirAll(profil, 0o755)
 	chownTo(profil, u)
+	profilEntsperren(profil)
 	rt := "/run/user/" + strconv.Itoa(u.uid)
 	// Läuft die Desktop-Sitzung (auch ohne Monitor), spielt ein normales Chromium-Fenster darin — mit dem echten
 	// Tonweg der Sitzung. Nur ohne Sitzung der unsichtbare (headless) Browser.

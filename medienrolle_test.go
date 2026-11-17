@@ -158,3 +158,21 @@ func TestBordmusikWachhund(t *testing.T) {
 		t.Fatal("Abstand nach erfolglosen Wechseln falsch")
 	}
 }
+
+// 0.1.137: veraltete Chromium-Profilsperre (anderer Rechnername nach dem Koppeln) wird vor dem Start entfernt.
+func TestProfilEntsperren(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.Symlink("alterName-1234", filepath.Join(dir, "SingletonLock"))
+	_ = os.WriteFile(filepath.Join(dir, "SingletonCookie"), []byte("x"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "Preferences"), []byte("{}"), 0o644)
+	profilEntsperren(dir)
+	if _, err := os.Lstat(filepath.Join(dir, "SingletonLock")); err == nil {
+		t.Fatal("SingletonLock muss weg sein")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "SingletonCookie")); err == nil {
+		t.Fatal("SingletonCookie muss weg sein")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "Preferences")); err != nil {
+		t.Fatal("übrige Profildateien bleiben")
+	}
+}
