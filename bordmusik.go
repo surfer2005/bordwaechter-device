@@ -23,7 +23,45 @@ var (
 	bmProz *exec.Cmd
 	bmZiel string
 	bmAn   bool // Prozess läuft (vom Wait-Goroutine zurückgesetzt)
+
+	// Selbstprüfung (0.1.136, live MS-ÜBERLINGEN + MS-GRAF ZEPPELIN 2026-11-17): der Browser in der
+	// Desktop-Sitzung lief, die Abspielseite rief aber KAI nie auf — ohne Monitor auf manchen Geräten.
+	bmStart    time.Time // wann der jetzige Browser gestartet wurde
+	bmModus    string    // "sitzung" | "unsichtbar" — so läuft der jetzige Browser
+	bmZwang    string    // vom Wachhund erzwungene Betriebsart ("" = automatisch)
+	bmWechsel  int       // Wachhund-Neustarts in Folge (für den Abstand)
+	bmLetzterW time.Time // letzter Wachhund-Neustart
 )
+
+// bmWachhund: so lange darf die Abspielseite nach dem Start schweigen (sie meldet sich sonst alle 5 s).
+const bmWachhund = 90 * time.Second
+
+// bordmusikHaengt: der Browser läuft seit mindestens bmWachhund, KAI ist erreichbar, aber die Abspielseite
+// hat sich so lange nicht beim Gerätedienst gemeldet (POST /api/medien/stand). Ist KAI nicht erreichbar,
+// kann die Seite ihren Plan nicht laden — dann hilft ein Neustart nicht, also nichts tun. Rein, testbar.
+func bordmusikHaengt(laeuft bool, start, standAt time.Time, kaiOk bool, jetzt time.Time) bool {
+	if !laeuft || !kaiOk || start.IsZero() || jetzt.Sub(start) < bmWachhund {
+		return false
+	}
+	return standAt.IsZero() || jetzt.Sub(standAt) >= bmWachhund
+}
+
+// bordmusikWachhundAbstand: nach zwei erfolglosen Wechseln nur noch alle 10 Minuten probieren. Rein, testbar.
+func bordmusikWachhundAbstand(wechsel int) time.Duration {
+	if wechsel >= 2 {
+		return 10 * time.Minute
+	}
+	return 0
+}
+
+// bordmusikAndererModus: in welche Betriebsart der Wachhund wechselt. Ohne Desktop-Sitzung gibt es nur
+// „unsichtbar“. Rein, testbar.
+func bordmusikAndererModus(jetzt string, sitzungDa bool) string {
+	if jetzt == "sitzung" || !sitzungDa {
+		return "unsichtbar"
+	}
+	return "sitzung"
+}
 
 func bordmusikLaeuft() bool {
 	bmMu.Lock()
@@ -44,6 +82,7 @@ func bordmusikStop() {
 		_ = syscall.Kill(-bmProz.Process.Pid, syscall.SIGKILL) // ganze Prozessgruppe (Chromium-Kinder)
 	}
 	bmProz, bmZiel, bmAn = nil, "", false
+	bmStart, bmModus = time.Time{}, ""
 }
 
 // bordmusikArgs: Aufruf für den unsichtbaren Browser (rein, testbar).
@@ -112,9 +151,47 @@ func (a *App) bordmusikLoop() {
 			} else {
 				logEvent("info", "Bordmusik ohne Monitor gestartet (Abspielseite im Hintergrund)")
 			}
+		} else {
+			bordmusikWachhundPruefen(ziel)
 		}
 		time.Sleep(15 * time.Second)
 	}
+}
+
+// bordmusikWachhundPruefen: meldet sich die Abspielseite nicht, den Browser in der anderen Betriebsart neu
+// starten (Desktop-Sitzung ↔ unsichtbar). Meldet sie sich, ist die jetzige Betriebsart die richtige.
+func bordmusikWachhundPruefen(ziel string) {
+	medMu.Lock()
+	standAt := medStandAt
+	medMu.Unlock()
+	bmMu.Lock()
+	start, modus, wechsel, letzter := bmStart, bmModus, bmWechsel, bmLetzterW
+	if !standAt.IsZero() && standAt.After(start) {
+		bmWechsel = 0 // Seite meldet sich — gut so
+	}
+	bmMu.Unlock()
+	jetzt := time.Now()
+	if !bordmusikHaengt(true, start, standAt, kaiReachable, jetzt) || jetzt.Sub(letzter) < bordmusikWachhundAbstand(wechsel) {
+		return
+	}
+	u := desktopUser()
+	_, err := os.Stat("/run/user/" + strconv.Itoa(u.uid) + "/wayland-0")
+	neu := bordmusikAndererModus(modus, err == nil)
+	logEvent("warn", "Bordmusik: Abspielseite meldet sich seit "+strconv.Itoa(int(bmWachhund.Seconds()))+" s nicht (Browser "+modusText(modus)+") — Neustart "+modusText(neu))
+	bordmusikStop()
+	bmMu.Lock()
+	bmZwang, bmWechsel, bmLetzterW = neu, wechsel+1, jetzt
+	bmMu.Unlock()
+	if err := bordmusikStart(ziel); err != nil {
+		logEvent("error", "Bordmusik ohne Monitor nicht gestartet: "+err.Error())
+	}
+}
+
+func modusText(m string) string {
+	if m == "sitzung" {
+		return "in der Desktop-Sitzung"
+	}
+	return "unsichtbar"
 }
 
 // alsNutzer führt einen Befehl als Desktop-Nutzer in dessen Sitzung aus (PipeWire gehört dem Nutzer, nicht root).
@@ -244,7 +321,10 @@ func bordmusikStart(ziel string) error {
 	// Läuft die Desktop-Sitzung (auch ohne Monitor), spielt ein normales Chromium-Fenster darin — mit dem echten
 	// Tonweg der Sitzung. Nur ohne Sitzung der unsichtbare (headless) Browser.
 	sitzung := ""
-	if _, err := os.Stat(rt + "/wayland-0"); err == nil {
+	bmMu.Lock()
+	zwang := bmZwang
+	bmMu.Unlock()
+	if _, err := os.Stat(rt + "/wayland-0"); err == nil && zwang != "unsichtbar" {
 		sitzung = "wayland-0"
 	}
 	args := bordmusikArgs(ziel, profil)
@@ -265,7 +345,8 @@ func bordmusikStart(ziel string) error {
 		return err
 	}
 	bmMu.Lock()
-	bmProz, bmZiel, bmAn = cmd, ziel, true
+	bmProz, bmZiel, bmAn, bmStart = cmd, ziel, true, time.Now()
+	bmModus = map[bool]string{true: "sitzung", false: "unsichtbar"}[sitzung != ""]
 	bmMu.Unlock()
 	go func() {
 		_ = cmd.Wait()

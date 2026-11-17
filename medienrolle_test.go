@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestMedienStartZiel(t *testing.T) {
@@ -129,5 +130,31 @@ Video
 	}
 	if passendeSenke(l, "analog") != "57" || passendeSenke(l, "hdmi") != "56" {
 		t.Fatal("Ausgang laut KAI falsch gewählt")
+	}
+}
+
+// Selbstprüfung Bordmusik (0.1.136): Browser lief, Abspielseite meldete sich nie (MS-ÜBERLINGEN, MS-GRAF ZEPPELIN).
+func TestBordmusikWachhund(t *testing.T) {
+	t0 := time.Date(2026, 11, 17, 9, 0, 0, 0, time.UTC)
+	if bordmusikHaengt(true, t0, time.Time{}, true, t0.Add(60*time.Second)) {
+		t.Fatal("vor Ablauf der 90 s darf nichts passieren")
+	}
+	if !bordmusikHaengt(true, t0, time.Time{}, true, t0.Add(91*time.Second)) {
+		t.Fatal("ohne jede Meldung nach 90 s muss neu gestartet werden")
+	}
+	if bordmusikHaengt(true, t0, t0.Add(80*time.Second), true, t0.Add(100*time.Second)) {
+		t.Fatal("Seite meldet sich — kein Neustart")
+	}
+	if bordmusikHaengt(true, t0, time.Time{}, false, t0.Add(10*time.Minute)) {
+		t.Fatal("ohne Verbindung zu KAI hilft ein Neustart nicht")
+	}
+	if !bordmusikHaengt(true, t0, t0.Add(20*time.Second), true, t0.Add(5*time.Minute)) {
+		t.Fatal("Seite hat sich gemeldet, schweigt aber seit Minuten — Neustart")
+	}
+	if bordmusikAndererModus("sitzung", true) != "unsichtbar" || bordmusikAndererModus("unsichtbar", true) != "sitzung" || bordmusikAndererModus("unsichtbar", false) != "unsichtbar" {
+		t.Fatal("Wechsel der Betriebsart falsch")
+	}
+	if bordmusikWachhundAbstand(0) != 0 || bordmusikWachhundAbstand(2) != 10*time.Minute {
+		t.Fatal("Abstand nach erfolglosen Wechseln falsch")
 	}
 }
