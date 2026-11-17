@@ -108,7 +108,7 @@ type Config struct {
 		PinVerlangen bool   `json:"pin_verlangen"` // PIN zum Verbinden nötig (Bildschirm empfohlen, Bordmusik oft aus)
 		Pin          string `json:"pin"`           // 4–8 Ziffern (nur wenn PinVerlangen)
 		Name         string `json:"name"`          // Anzeigename am Apple-Gerät (aus Schiff + Rolle vorbelegt)
-		AutoEndeMin  int    `json:"auto_ende_min"` // nach so vielen Minuten ohne Verbindung beenden (0 = nie)
+		AutoEndeMin  int    `json:"auto_ende_min"` // entfällt (KAI pflegt es seit 2026-11-16 nicht mehr, nie ausgewertet)
 	} `json:"airplay"`
 
 	// Wetter + Pegel in der Anzeige. Werte kommen aus denselben öffentlichen Quellen wie KAI

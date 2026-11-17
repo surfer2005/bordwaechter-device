@@ -11,6 +11,15 @@ package main
 // installiert das Gerät selbst, niemand tippt an Bord etwas). Anwenden (beim Start + nach jedem
 // Config-Abgleich): den Empfänger starten/stoppen, mit Name und PIN. Der Stand reist mit dem Herzschlag.
 //
+// Ab 0.1.135 (Klick-Dummy „Medienplayer-Bedienung v4“, Peter 2026-11-16): der Empfänger läuft nur noch, solange in
+// KAI (Medienplayer bzw. Schiffsterminal) AirPlay als QUELLE gewählt ist — „erlaubt“ allein reicht nicht mehr. KAI
+// meldet den Soll-Zustand mit Herzschlag und Auftrags-Nachfrage (airplay_soll + airplay_bis). Ende nur über die
+// beim Einschalten gewählte Dauer, „AirPlay beenden“ oder „Zurück zum Zeitplan“ — kein stiller Rückfall ohne
+// Verbindung (der letzte Stand wird gespeichert). Ältere KAI ohne Angabe: wie bisher, solange erlaubt.
+// Prüfrunde 1 (2026-11-17): fehlt die Angabe in einer späteren Antwort, wird der gespeicherte Stand verworfen
+// (er gilt nicht ewig weiter); „Zurück zum Zeitplan“/„AirPlay beenden“ an Bord OHNE Verbindung zu KAI schaltet
+// den Empfänger hier aus, bis KAI neu steuert (andere Steuerung oder AirPlay nicht mehr gewählt).
+//
 // ⚠️ AUF ECHTER HARDWARE ZU PRÜFEN/ABSTIMMEN (wie damals Frigate auf der MS-Lindau):
 //   (1) Bild-Übergabe: uxplay muss sich vor den Kiosk-Browser legen, wenn ein iPad verbindet, und ihn
 //       danach wieder freigeben. Die Display-Umgebung (Wayland/X) hängt am Geräte-Image.
@@ -38,6 +47,11 @@ type airplayStand struct {
 	Meldung  string `json:"meldung"`  // Fehlertext
 	Werkzeug string `json:"werkzeug"` // uxplay | shairport-sync
 	Am       string `json:"am"`
+	Soll     *bool  `json:"soll,omitempty"`      // zuletzt aus KAI: AirPlay als Quelle gewählt (nil = nie gemeldet)
+	Bis      string `json:"bis,omitempty"`       // Ende der gewählten Dauer (RFC 3339), leer = bis beendet
+	Ref      string `json:"ref,omitempty"`       // Steuerung in KAI, zu der Soll/Bis gehören
+	LokalAus bool   `json:"lokal_aus,omitempty"` // an Bord ohne KAI beendet — gilt, bis KAI neu steuert
+	LokalRef string `json:"lokal_ref,omitempty"` // Steuerung in KAI, die an Bord beendet wurde
 }
 
 var (
@@ -45,7 +59,150 @@ var (
 	airplayLauf bool
 	// airplayMelden: vom Herzschlag aufgerufen (nur in der Rolle Bildschirm/Bordmusik gesetzt).
 	airplayMelden func() map[string]any
+
+	apSollMu   sync.Mutex
+	apSoll     *bool     // nil = KAI meldet keinen Soll-Zustand → läuft, solange erlaubt (wie vor 0.1.135)
+	apBis      time.Time // Ende der gewählten Dauer; leer = bis beendet
+	apRef      string    // Steuerung in KAI, zu der apSoll gehört
+	apLokalAus bool      // an Bord ohne KAI beendet („Zurück zum Zeitplan“/„AirPlay beenden“)
+	apLokalRef string    // … und zwar diese Steuerung aus KAI
+	apAktiv    *bool     // zuletzt angewandt: Empfänger an/aus (nil = noch nie angewandt)
+	apAnwMu    sync.Mutex
 )
+
+// airplayGewaehlt: ist AirPlay in KAI als Quelle gewählt (und die gewählte Dauer noch nicht um)?
+func airplayGewaehlt(jetzt time.Time) bool {
+	apSollMu.Lock()
+	defer apSollMu.Unlock()
+	if apLokalAus {
+		return false
+	}
+	if apSoll == nil {
+		return true
+	}
+	return *apSoll && (apBis.IsZero() || jetzt.Before(apBis))
+}
+
+// airplaySollLaden: den zuletzt aus KAI gemeldeten Stand beim Start übernehmen (gilt auch ohne Netz weiter).
+func airplaySollLaden() {
+	s := ladeAirplayStand()
+	apSollMu.Lock()
+	defer apSollMu.Unlock()
+	apSoll, apRef = s.Soll, s.Ref
+	apLokalAus, apLokalRef = s.LokalAus && s.Soll != nil, s.LokalRef
+	apBis = time.Time{}
+	if t, err := time.Parse(time.RFC3339, s.Bis); err == nil {
+		apBis = t
+	}
+}
+
+// airplaySollSpeichern: den aktuellen Soll-Stand (samt „an Bord beendet“) in airplay.json festhalten.
+// Aufruf ohne apSollMu.
+func airplaySollSpeichern() {
+	apSollMu.Lock()
+	soll, bis, ref, la, lr := apSoll, apBis, apRef, apLokalAus, apLokalRef
+	apSollMu.Unlock()
+	airplayStandAendern(func(s *airplayStand) {
+		s.Soll, s.Ref, s.LokalAus, s.LokalRef = soll, ref, la, lr
+		s.Bis = ""
+		if !bis.IsZero() {
+			s.Bis = bis.UTC().Format(time.RFC3339)
+		}
+	})
+}
+
+// airplayLokalAus: an Bord ohne Verbindung zu KAI „Zurück zum Zeitplan“ bzw. „AirPlay beenden“ (oder eine andere
+// Quelle) gewählt → Empfänger aus, bis KAI neu steuert. Ohne gewähltes AirPlay ändert sich nichts.
+func (a *App) airplayLokalAus() {
+	if !airplayLokalAusMerken() {
+		return
+	}
+	airplaySollSpeichern()
+	logEvent("info", "AirPlay an Bord beendet (ohne KAI) — Empfänger aus, bis KAI neu steuert")
+	a.airplayPruefen()
+}
+
+// airplayLokalAusMerken (rein, testbar): true = AirPlay war gewählt und ist jetzt an Bord beendet.
+func airplayLokalAusMerken() bool {
+	apSollMu.Lock()
+	defer apSollMu.Unlock()
+	if apSoll == nil || !*apSoll || apLokalAus {
+		return false
+	}
+	apLokalAus, apLokalRef = true, apRef
+	return true
+}
+
+func airplayLokalBeendet() bool {
+	apSollMu.Lock()
+	defer apSollMu.Unlock()
+	return apLokalAus
+}
+
+// airplayLokalRef: welche Steuerung aus KAI an Bord beendet wurde — KAI hebt sie damit nach dem Wiederverbinden auf.
+func airplayLokalRef() string {
+	apSollMu.Lock()
+	defer apSollMu.Unlock()
+	if !apLokalAus {
+		return ""
+	}
+	return apLokalRef
+}
+
+// airplaySollSetzen: Soll-Zustand aus Herzschlag/Auftrags-Nachfrage übernehmen und, wenn sich der wirksame
+// Zustand ändert, den Empfänger an- bzw. abschalten. Fehlt die Angabe (nil, ältere KAI), wird der gespeicherte
+// Stand verworfen — er darf nicht ewig weiter gelten. Ein an Bord beendetes AirPlay bleibt aus, bis KAI neu
+// steuert: AirPlay nicht mehr gewählt oder eine andere Steuerung (ref).
+func (a *App) airplaySollSetzen(soll *bool, bis, ref string) {
+	if !istMedienRolle(a.getCfg().Rolle) {
+		return
+	}
+	if airplaySollUebernehmen(soll, bis, ref) {
+		airplaySollSpeichern()
+	}
+	a.airplayPruefen()
+}
+
+// airplaySollUebernehmen (rein, testbar): neuen Soll-Stand übernehmen; true = geändert (speichern).
+func airplaySollUebernehmen(soll *bool, bis, ref string) bool {
+	apSollMu.Lock()
+	defer apSollMu.Unlock()
+	if soll == nil {
+		neu := apSoll != nil || apLokalAus
+		apSoll, apBis, apRef, apLokalAus, apLokalRef = nil, time.Time{}, "", false, ""
+		return neu
+	}
+	var t time.Time
+	if p, err := time.Parse(time.RFC3339, bis); err == nil {
+		t = p
+	}
+	v := *soll
+	lokalWeg := apLokalAus && (!v || ref != apLokalRef)
+	if lokalWeg {
+		apLokalAus, apLokalRef = false, ""
+	}
+	neu := apSoll == nil || *apSoll != v || !apBis.Equal(t) || apRef != ref || lokalWeg
+	apSoll, apBis, apRef = &v, t, ref
+	return neu
+}
+
+// airplayPruefen: Empfänger an/aus schalten, wenn der wirksame Zustand (erlaubt UND gewählt) vom zuletzt
+// angewandten abweicht — auch, wenn die gewählte Dauer ohne Verbindung zu KAI abläuft.
+func (a *App) airplayPruefen() {
+	cfg := a.getCfg()
+	if !istMedienRolle(cfg.Rolle) {
+		return
+	}
+	// wie airplayAnwenden: erlaubt UND installiert UND gewählt — sonst stieße jede Nachfrage ein neues Anwenden an,
+	// solange das Werkzeug fehlt (Prüfrunde 1)
+	soll := cfg.Airplay.An && airplayBinaer(cfg.Rolle) && airplayGewaehlt(time.Now())
+	apSollMu.Lock()
+	anders := apAktiv == nil || *apAktiv != soll
+	apSollMu.Unlock()
+	if anders {
+		go a.airplayAnwenden()
+	}
+}
 
 func airplayPfad() string {
 	if _, err := os.Stat("/etc/bordwaechter"); err == nil {
@@ -60,6 +217,19 @@ func ladeAirplayStand() airplayStand {
 		_ = json.Unmarshal(b, &s)
 	}
 	return s
+}
+
+// airplayStandAendern: airplay.json frisch lesen, ändern, schreiben — unter einer gemeinsamen Sperre. Sonst schrieb
+// die minutenlange Einrichtung einen zu Beginn gelesenen Stand zurück und überschrieb Soll/Ref/„an Bord beendet“,
+// die der Herzschlag inzwischen gespeichert hatte (Prüfrunde 2, L4).
+var apDateiMu sync.Mutex
+
+func airplayStandAendern(f func(*airplayStand)) {
+	apDateiMu.Lock()
+	defer apDateiMu.Unlock()
+	s := ladeAirplayStand()
+	f(&s)
+	speichereAirplayStand(s)
 }
 
 func speichereAirplayStand(s airplayStand) {
@@ -110,38 +280,41 @@ func (a *App) airplayEinrichten() {
 		return
 	}
 	wz := airplayWerkzeug(cfg.Rolle)
-	s := airplayStand{Phase: "laeuft", Werkzeug: wz, Meldung: wz + " installieren"}
-	speichereAirplayStand(s)
+	airplayStandAendern(func(s *airplayStand) { s.Phase, s.Werkzeug, s.Meldung = "laeuft", wz, wz+" installieren" })
 	logEvent("info", "AirPlay einrichten: "+wz+" + avahi installieren")
 
 	if err := lauf(10*time.Minute, "apt-get", "update"); err != nil {
-		s.Phase, s.Meldung = "fehler", err.Error()
-		speichereAirplayStand(s)
+		airplayStandAendern(func(s *airplayStand) { s.Phase, s.Meldung = "fehler", err.Error() })
 		logEvent("error", "AirPlay: apt-get update fehlgeschlagen: "+err.Error())
 		return
 	}
 	if err := lauf(30*time.Minute, "apt-get", "install", "-y", "avahi-daemon", wz); err != nil {
-		s.Phase, s.Meldung = "fehler", err.Error()
-		speichereAirplayStand(s)
+		airplayStandAendern(func(s *airplayStand) { s.Phase, s.Meldung = "fehler", err.Error() })
 		logEvent("error", "AirPlay: Installation fehlgeschlagen: "+err.Error())
 		return
 	}
-	s.Phase, s.Meldung = "fertig", ""
-	speichereAirplayStand(s)
+	airplayStandAendern(func(s *airplayStand) { s.Phase, s.Meldung = "fertig", "" })
 	logEvent("info", "AirPlay: "+wz+" installiert")
 	a.airplayAnwenden()
 }
 
-// airplayAnwenden: Empfänger je Rolle + Einstellung starten/stoppen. Beim Start und nach jedem Config-Abgleich.
+// airplayAnwenden: Empfänger je Rolle + Einstellung starten/stoppen. Beim Start, nach jedem Config-Abgleich und
+// wenn sich die Wahl in KAI (AirPlay als Quelle) ändert.
 func (a *App) airplayAnwenden() {
+	apAnwMu.Lock()
+	defer apAnwMu.Unlock()
 	cfg := a.getCfg()
 	if !istMedienRolle(cfg.Rolle) {
 		return
 	}
 	dienst := airplayDienst(cfg.Rolle)
 	ap := cfg.Airplay
-	// Aus oder noch nicht installiert → Empfänger stoppen (schadet nicht, wenn es ihn nicht gibt).
-	if !ap.An || !airplayBinaer(cfg.Rolle) {
+	an := ap.An && airplayBinaer(cfg.Rolle) && airplayGewaehlt(time.Now())
+	apSollMu.Lock()
+	apAktiv = &an
+	apSollMu.Unlock()
+	// Nicht erlaubt, nicht gewählt oder noch nicht installiert → Empfänger stoppen (schadet nicht, wenn es ihn nicht gibt).
+	if !an {
 		_ = lauf(30*time.Second, "systemctl", "disable", "--now", dienst)
 		if cfg.Rolle == "audio" {
 			_ = lauf(30*time.Second, "systemctl", "disable", "--now", "shairport-sync") // auch den alten Paket-Systemdienst aus
@@ -159,9 +332,7 @@ func (a *App) airplayAnwenden() {
 		err = airplayUxplay(name, ap.PinVerlangen)
 	}
 	if err != nil {
-		s := ladeAirplayStand()
-		s.Phase, s.Meldung = "fehler", err.Error()
-		speichereAirplayStand(s)
+		airplayStandAendern(func(s *airplayStand) { s.Phase, s.Meldung = "fehler", err.Error() })
 		logEvent("error", "AirPlay anwenden fehlgeschlagen: "+err.Error())
 	}
 }
@@ -274,6 +445,9 @@ func (a *App) airplayZustand() map[string]any {
 		"aktiv":       false, // ob gerade ein iPad verbunden ist, meldet die erste Fassung noch nicht
 		"werkzeug":    wz,
 		"name":        strings.TrimSpace(cfg.Airplay.Name),
+		"gewaehlt":    airplayGewaehlt(time.Now()), // in KAI als Quelle gewählt (ab 0.1.135)
+		"lokal_aus":   airplayLokalBeendet(),       // an Bord ohne KAI beendet (bis KAI neu steuert)
+		"lokal_ref":   airplayLokalRef(),           // … und zwar diese Steuerung (KAI hebt sie auf)
 		"phase":       s.Phase,
 		"meldung":     s.Meldung,
 	}

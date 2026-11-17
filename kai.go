@@ -118,6 +118,10 @@ type Auftrag struct {
 	Update    bool `json:"update"` // Aktualisierung aus KAI angefordert
 	ConfigRev int         `json:"config_rev"` // Stand der Einstellungen in KAI (s. kaiconfig.go)
 	Befehl    *kaiBefehlT `json:"befehl"`     // Testschalter aus KAI (Hupe/Lampe/GPIO-Test/Quittieren)
+	// AirPlay als Quelle gewählt (Bildschirm/Bordmusik, KAI ab 2026-11-16): nil = KAI meldet nichts (ältere KAI)
+	AirplaySoll *bool  `json:"airplay_soll"`
+	AirplayBis  string `json:"airplay_bis"` // Ende der beim Einschalten gewählten Dauer (RFC 3339), leer = bis beendet
+	AirplayRef  string `json:"airplay_ref"` // Steuerung in KAI, auf die sich das bezieht (an Bord beendet → aus, bis KAI neu steuert)
 }
 
 func (k *KaiClient) GetAuftrag() (Auftrag, error) {
@@ -210,6 +214,9 @@ type HelloResp struct {
 	SSHPassword        string `json:"ssh_password"`        // ein SSH-Passwort für alle Bordgeräte, zentral aus KAI
 	Rolle              string `json:"rolle"`               // Rolle aus KAI (bordwaechter | bildschirm | audio)
 	Medien             *MedienInfo `json:"medien"` // Bildschirm/Bordmusik: Abspielseite
+	AirplaySoll        *bool       `json:"airplay_soll"` // AirPlay als Quelle gewählt (nil = ältere KAI)
+	AirplayBis         string      `json:"airplay_bis"`  // Ende der gewählten Dauer, leer = bis beendet
+	AirplayRef         string      `json:"airplay_ref"`  // Steuerung in KAI, auf die sich das bezieht
 	Bordwaechter *struct {
 		URL   string `json:"url"`
 		Token string `json:"token"`

@@ -55,6 +55,11 @@ func medienToken(c *Config) string {
 }
 
 var erlaubteArten = map[string]bool{"befehl": true, "steuerung": true, "zeitplan": true, "ereignis": true}
+
+// beendetAirplay: beendet dieser Befehl ein gewähltes AirPlay? Zurück zum Zeitplan oder eine andere Quelle
+// (Playlist/Pause) — vor/zurück/Lautstärke und Ereignisse nicht.
+func beendetAirplay(b medienBefehl) bool { return b.Art == "zeitplan" || b.Art == "steuerung" }
+
 var erlaubteCmds = map[string]bool{"vor": true, "zurueck": true, "anfang": true, "lautstaerke": true, "zufall": true, "schleife": true}
 
 // medienBefehlMerken prüft und speichert einen Befehl (rein, testbar).
@@ -137,6 +142,11 @@ func (a *App) medienRoutes(mux *http.ServeMux) {
 			return
 		}
 		logEvent("info", "Bedienung an Bord: "+nb.Art+" "+nb.Cmd+" ("+nb.Quelle+")")
+		// „Zurück zum Zeitplan“/„AirPlay beenden“ bzw. eine andere Quelle an Bord: der AirPlay-Empfänger geht aus,
+		// auch ohne Verbindung zu KAI — bis KAI neu steuert (Prüfrunde 1)
+		if beendetAirplay(nb) {
+			a.airplayLokalAus()
+		}
 		writeJSON(w, map[string]any{"ok": true, "n": nb.N})
 	})
 	// Stand fürs Terminal/die Bedienseite: was läuft, welche Playlisten/Ereignisse gibt es

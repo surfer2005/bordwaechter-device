@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const version = "0.1.134"
+const version = "0.1.135"
 
 // imAddon: läuft als Home-Assistant-Add-on (Übergang, z. B. MS-KONSTANZ 2026-11) — der Rechner gehört Home Assistant:
 // kein Hostname/SSH/VNC/Netzwerk/Kiosk setzen, keine Selbstaktualisierung (die macht Home Assistant).
@@ -270,11 +270,13 @@ func (a *App) auftragLoop() {
 	for {
 		time.Sleep(10 * time.Second)
 		cfg := a.getCfg()
+		a.airplayPruefen() // gewählte AirPlay-Dauer abgelaufen? (auch ohne Verbindung zu KAI)
 		if k := a.getKai(); k != nil && cfg.EdgeToken != "" {
 			if !istMedienRolle(cfg.Rolle) {
 				_ = k.SendSifa(a.sifaBlock()) // SIFA-Restzeit für KAI aktuell halten (ältere KAI antworten 404, harmlos)
 			}
 			if au, err := k.GetAuftrag(); err == nil {
+				a.airplaySollSetzen(au.AirplaySoll, au.AirplayBis, au.AirplayRef) // AirPlay als Quelle gewählt? (Bildschirm/Bordmusik)
 				if au.Speedtest {
 					go a.runSpeedtest()
 				}
@@ -329,6 +331,7 @@ func (a *App) heartbeatLoop() {
 				setBordToken(hr.BordToken)  // Position fürs Bord-Netz (Bildschirme/Bordmusik)
 				a.sshAusKai(hr.SSHPassword) // SSH-Passwort aus KAI (alle Rollen)
 				a.medienAusHerzschlag(hr)   // Bildschirm/Bordmusik: Abspielseite + Bordwächter-Adresse
+				a.airplaySollSetzen(hr.AirplaySoll, hr.AirplayBis, hr.AirplayRef)
 			}
 		}
 		time.Sleep(60 * time.Second)
@@ -394,6 +397,10 @@ func main() {
 	if istMedienRolle(cfg.Rolle) {
 		// Bildschirm/Bordmusik: nur Herzschlag, Protokoll, Aktualisierung und Gerätezustand — kein GPS,
 		// keine SIFA/Hupe, kein Smartmeter. Der Browser spielt die Abspielseite aus KAI.
+		// Gespeicherten AirPlay-Stand ZUERST laden (Prüfrunde 1): sonst könnte die erste Antwort von KAI aus
+		// Herzschlag/Auftrags-Nachfrage vom Laden des alten Stands wieder überschrieben werden.
+		airplaySollLaden()
+		airplayMelden = app.airplayZustand // AirPlay-Stand (installiert/läuft/Name) in den Herzschlag — vor dem ersten Herzschlag
 		go app.sysLoop()
 		go app.auftragLoop()
 		go app.heartbeatLoop()
@@ -401,8 +408,7 @@ func main() {
 		go app.releaseCheckLoop()
 		go app.anzeigeAutomatischSpaeter() // Abspielseite am Monitor einrichten (einmalig)
 		go app.bordmusikLoop()             // Bordmusik ohne Monitor bzw. Bildschirm-Anzeige ohne Neustart
-		airplayMelden = app.airplayZustand // AirPlay-Stand (installiert/läuft/Name) in den Herzschlag
-		go app.airplayAnwenden()           // AirPlay-Empfänger an die KAI-Einstellung anpassen (meist: aus)
+		go app.airplayAnwenden()         // AirPlay-Empfänger an die KAI-Einstellung anpassen (meist: aus)
 		log.Printf("KAI-Bordgerät %s in der Rolle %s — lokale Oberfläche auf %s", version, cfg.Rolle, cfg.Listen)
 		if err := http.ListenAndServe(cfg.Listen, app.routes()); err != nil {
 			log.Fatal(err)
