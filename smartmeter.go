@@ -9,6 +9,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -29,17 +32,19 @@ type smMeter struct {
 	Registers []smRegister `json:"registers"`
 }
 type smConfig struct {
-	Enabled         bool      `json:"enabled"`
-	Host            string    `json:"host"`
-	Port            int       `json:"port"`
-	PushIntervalSec int       `json:"push_interval_sec"`
-	Meters          []smMeter `json:"meters"`
+	Enabled            bool      `json:"enabled"`
+	Host               string    `json:"host"`
+	Port               int       `json:"port"`
+	PushIntervalSec    int       `json:"push_interval_sec"`
+	OfflineIntervalSec int       `json:"offline_interval_sec"` // ohne Netz nur alle N s einen Wert puffern (Vorgabe 300)
+	Meters             []smMeter `json:"meters"`
 }
 type smReading struct {
-	EntityID string  `json:"entity_id"`
-	Name     string  `json:"name"`
-	Unit     string  `json:"unit"`
-	Value    float64 `json:"value"`
+	EntityID   string  `json:"entity_id"`
+	Name       string  `json:"name"`
+	Unit       string  `json:"unit"`
+	Value      float64 `json:"value"`
+	RecordedAt string  `json:"recorded_at,omitempty"` // Messzeit (UTC) — damit KAI nachgelieferte Werte richtig einordnet
 }
 
 func (k *KaiClient) GetSmartmeterConfig() (*smConfig, error) {
@@ -68,26 +73,199 @@ func (k *KaiClient) PostTelemetry(readings []smReading) error {
 	return nil
 }
 
-// smartmeterLoop: Konfig holen → Register lesen → pushen, im von KAI vorgegebenen Takt.
+// ── Puffer ohne Netz (Peter 2026-11-18: „keine Verbindung zum Land → Werte bei sich speichern und nachliefern“) ──
+// Jeder gelesene Wert geht in eine Warteschlange und wird von vorne (älteste zuerst) an KAI geschickt; erst nach
+// dessen Bestätigung fällt er heraus. Ohne Netz wird nur alle offline_interval_sec (Vorgabe 5 min) ein Satz aufgenommen
+// — beim Verbrauch zählt die Differenz der Zählerstände, die Lücke dazwischen schadet nicht. Die Warteschlange liegt
+// auch auf der Platte (übersteht einen Neustart), höchstens smPufferMax Werte (danach fallen die ältesten heraus).
+const (
+	smPufferMax      = 120000 // ≈ 14 Tage bei 30 Werten alle 5 min
+	smPaket          = 500    // Werte je Sendung
+	smPaketeJeRunde  = 40     // höchstens so viele Pakete je Runde (Nachholen nach langer Pause in wenigen Minuten)
+	smOfflineVorgabe = 300 * time.Second
+)
+
+type smPuffer struct {
+	mu      sync.Mutex
+	werte   []smReading
+	letzte  time.Time // letzte Aufnahme
+	offline bool      // letzter Versand gescheitert
+}
+
+var smWarteschlange = &smPuffer{}
+
+func smOrdner() string { return filepath.Join(filepath.Dir(configPath()), "smartmeter") }
+
+// smZeit: Messzeit im selben Format wie KAI (ISO, ms, Z). Uhr offensichtlich falsch (vor 2024) → leer, KAI nimmt die Ankunft.
+func smZeit(t time.Time) string {
+	if t.Year() < 2024 {
+		return ""
+	}
+	return t.UTC().Format("2006-01-02T15:04:05.000Z")
+}
+
+// smAufnehmen (rein, testbar): neue Werte an die Warteschlange hängen. Online jedes Mal; offline nur, wenn seit der
+// letzten Aufnahme mindestens `intervall` vergangen ist. Über `max` fallen die ältesten heraus.
+func smAufnehmen(warte, neu []smReading, offline bool, letzte, jetzt time.Time, intervall time.Duration, max int) ([]smReading, bool) {
+	if len(neu) == 0 {
+		return warte, false
+	}
+	if offline && !letzte.IsZero() && jetzt.Sub(letzte) < intervall {
+		return warte, false
+	}
+	warte = append(warte, neu...)
+	if max > 0 && len(warte) > max {
+		warte = append([]smReading(nil), warte[len(warte)-max:]...)
+	}
+	return warte, true
+}
+
+func (p *smPuffer) aufnehmen(neu []smReading, intervall time.Duration) {
+	p.mu.Lock()
+	w, genommen := smAufnehmen(p.werte, neu, p.offline, p.letzte, time.Now(), intervall, smPufferMax)
+	p.werte = w
+	if genommen {
+		p.letzte = time.Now()
+	}
+	offline := p.offline
+	p.mu.Unlock()
+	if genommen && offline {
+		p.sichern() // ohne Netz: Stand auf die Platte (alle paar Minuten)
+	}
+}
+
+// senden: Pakete von vorne schicken, nach jeder Bestätigung vorne entfernen. Fehler → offline, Stand sichern.
+func (p *smPuffer) senden(k *KaiClient) {
+	for runde := 0; runde < smPaketeJeRunde; runde++ {
+		p.mu.Lock()
+		n := len(p.werte)
+		if n == 0 {
+			p.mu.Unlock()
+			break
+		}
+		if n > smPaket {
+			n = smPaket
+		}
+		stueck := append([]smReading(nil), p.werte[:n]...)
+		p.mu.Unlock()
+		if err := k.PostTelemetry(stueck); err != nil {
+			p.mu.Lock()
+			war := p.offline
+			p.offline = true
+			rest := len(p.werte)
+			p.mu.Unlock()
+			if !war {
+				log.Printf("smartmeter: keine Verbindung zu KAI (%v) — puffere, alle %v ein Satz", err, smOfflineVorgabe)
+				logEvent("warn", fmt.Sprintf("Smartmeter: keine Verbindung zu KAI — Werte werden gepuffert (%d im Puffer)", rest))
+			}
+			p.sichern()
+			return
+		}
+		p.mu.Lock()
+		p.werte = p.werte[len(stueck):]
+		war := p.offline
+		p.offline = false
+		rest := len(p.werte)
+		p.mu.Unlock()
+		if war {
+			logEvent("info", fmt.Sprintf("Smartmeter: Verbindung zu KAI wieder da — liefere gepufferte Werte nach (%d offen)", rest+len(stueck)))
+		}
+	}
+	p.mu.Lock()
+	leer := len(p.werte) == 0
+	p.mu.Unlock()
+	if leer {
+		_ = os.Remove(filepath.Join(smOrdner(), "puffer.json"))
+	} else {
+		p.sichern()
+	}
+}
+
+func (p *smPuffer) anzahl() int { p.mu.Lock(); defer p.mu.Unlock(); return len(p.werte) }
+
+func (p *smPuffer) sichern() {
+	p.mu.Lock()
+	daten, err := json.Marshal(p.werte)
+	p.mu.Unlock()
+	if err != nil {
+		return
+	}
+	_ = os.MkdirAll(smOrdner(), 0o700)
+	tmp := filepath.Join(smOrdner(), "puffer.json.tmp")
+	if os.WriteFile(tmp, daten, 0o600) == nil {
+		_ = os.Rename(tmp, filepath.Join(smOrdner(), "puffer.json"))
+	}
+}
+
+func (p *smPuffer) laden() {
+	b, err := os.ReadFile(filepath.Join(smOrdner(), "puffer.json"))
+	if err != nil {
+		return
+	}
+	var alt []smReading
+	if json.Unmarshal(b, &alt) == nil && len(alt) > 0 {
+		p.mu.Lock()
+		p.werte = append(alt, p.werte...)
+		p.offline = true // bis der erste Versand klappt
+		p.mu.Unlock()
+		log.Printf("smartmeter: %d gepufferte Werte von der Platte geladen", len(alt))
+	}
+}
+
+// Zuletzt bekannte Zähler-Einstellung auf der Platte: ohne Netz weiterlesen, statt gar nichts zu messen.
+func smKonfigSichern(c *smConfig) {
+	if daten, err := json.Marshal(c); err == nil {
+		_ = os.MkdirAll(smOrdner(), 0o700)
+		_ = os.WriteFile(filepath.Join(smOrdner(), "konfig.json"), daten, 0o600)
+	}
+}
+func smKonfigLaden() *smConfig {
+	b, err := os.ReadFile(filepath.Join(smOrdner(), "konfig.json"))
+	if err != nil {
+		return nil
+	}
+	var c smConfig
+	if json.Unmarshal(b, &c) != nil {
+		return nil
+	}
+	return &c
+}
+
+// smartmeterLoop: Konfig holen (ohne Netz: die zuletzt bekannte) → Register lesen → in die Warteschlange → nachliefern.
 func (a *App) smartmeterLoop() {
 	time.Sleep(25 * time.Second) // Netz/Token erst hochkommen lassen
+	p := smWarteschlange
+	p.laden()
+	merk := smKonfigLaden()
 	for {
 		interval := 30 * time.Second
 		cfg := a.getCfg()
 		k := a.getKai()
-		if k != nil && cfg.EdgeToken != "" {
-			if sc, err := k.GetSmartmeterConfig(); err != nil {
-				log.Printf("smartmeter: Konfig: %v", err)
-			} else if sc.Enabled && len(sc.Meters) > 0 {
-				if sc.PushIntervalSec > 0 {
-					interval = time.Duration(sc.PushIntervalSec) * time.Second
+		verbunden := k != nil && cfg.EdgeToken != ""
+		sc := merk
+		if verbunden {
+			if c, err := k.GetSmartmeterConfig(); err != nil {
+				if p.anzahl() == 0 && merk == nil {
+					log.Printf("smartmeter: Konfig: %v", err)
 				}
-				if readings := readSmartmeter(sc); len(readings) > 0 {
-					if err := k.PostTelemetry(readings); err != nil {
-						log.Printf("smartmeter: push: %v", err)
-					}
-				}
+			} else {
+				sc = c
+				merk = c
+				smKonfigSichern(c)
 			}
+		}
+		if sc != nil && sc.Enabled && len(sc.Meters) > 0 {
+			if sc.PushIntervalSec > 0 {
+				interval = time.Duration(sc.PushIntervalSec) * time.Second
+			}
+			offlineIv := smOfflineVorgabe
+			if sc.OfflineIntervalSec > 0 {
+				offlineIv = time.Duration(sc.OfflineIntervalSec) * time.Second
+			}
+			p.aufnehmen(readSmartmeter(sc), offlineIv)
+		}
+		if verbunden && p.anzahl() > 0 {
+			p.senden(k) // auch wenn der Smartmeter inzwischen aus ist: Gepuffertes noch abliefern
 		}
 		time.Sleep(interval)
 	}
@@ -121,7 +299,7 @@ func readSmartmeter(sc *smConfig) []smReading {
 			}
 			out = append(out, smReading{
 				EntityID: r.EntityID, Name: r.Name, Unit: r.Unit,
-				Value: regsToFloat(regs, "float32"),
+				Value: regsToFloat(regs, "float32"), RecordedAt: smZeit(time.Now()),
 			})
 		}
 	}
