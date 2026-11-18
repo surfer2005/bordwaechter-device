@@ -7,6 +7,12 @@ import (
 	"time"
 )
 
+// modbusAusnahme: der Teilnehmer HAT geantwortet, aber mit einer Modbus-Ausnahme (z. B. unbekanntes Register).
+// Davon zu unterscheiden ist „keine Antwort“ (Zeitüberschreitung, Verbindung abgelehnt/abgebrochen) — s. smKeineAntwort.
+type modbusAusnahme struct{ fc byte }
+
+func (e modbusAusnahme) Error() string { return fmt.Sprintf("modbus-fehler/ausnahme (fc=0x%02x)", e.fc) }
+
 // Minimaler Modbus-TCP-Client (nur Function Code 0x03 = Read Holding Registers), stdlib-only.
 // Reicht, um die GPS-Register eines Teltonika-Routers zu lesen.
 func modbusReadHolding(host string, port, unit, startReg, count int, timeout time.Duration) ([]uint16, error) {
@@ -30,7 +36,7 @@ func modbusReadHolding(host string, port, unit, startReg, count int, timeout tim
 		return nil, err
 	}
 	if head[7] != 0x03 {
-		return nil, fmt.Errorf("modbus-fehler/ausnahme (fc=0x%02x)", head[7])
+		return nil, modbusAusnahme{fc: head[7]}
 	}
 	bc := int(head[8])
 	data := make([]byte, bc)

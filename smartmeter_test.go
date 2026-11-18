@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -106,5 +108,130 @@ func TestSmPufferLiefertNachUndUebersteht(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(smOrdner(), "puffer.json")); !os.IsNotExist(err) {
 		t.Fatalf("leerer Puffer: Datei muss weg sein")
+	}
+}
+
+// Stummer Zähler (Peter 2026-11-18): antwortet die erste Anfrage nicht, wird der Zähler für diesen Durchgang
+// übersprungen statt je Register 5 s zu warten. Antwortende Zähler werden genau wie bisher gelesen.
+
+type smAnfrage struct {
+	host  string
+	slave int
+	reg   int
+}
+
+// smFalscheLeser liefert je Slave ein Verhalten: "ok", "stumm" (keine Antwort), "ausnahme" (Modbus-Ausnahme
+// beim ersten Register), "spaeter" (erstes Register ok, danach keine Antwort mehr).
+func smFalscheLeser(t *testing.T, verhalten map[int]string) *[]smAnfrage {
+	t.Helper()
+	alt := smLesen
+	smStumm = map[string]bool{}
+	t.Cleanup(func() { smLesen = alt; smStumm = map[string]bool{} })
+	protokoll := &[]smAnfrage{}
+	smLesen = func(host string, port, unit, startReg, count int, timeout time.Duration) ([]uint16, error) {
+		*protokoll = append(*protokoll, smAnfrage{host, unit, startReg})
+		switch verhalten[unit] {
+		case "stumm":
+			return nil, errors.New("read tcp 192.168.82.18:502: i/o timeout")
+		case "ausnahme":
+			if startReg == 1 {
+				return nil, modbusAusnahme{fc: 0x83}
+			}
+		case "spaeter":
+			if startReg > 1 {
+				return nil, errors.New("i/o timeout")
+			}
+		}
+		return []uint16{0x4120, 0x0000}, nil // 10.0 als float32
+	}
+	return protokoll
+}
+
+func smZaehler(name string, slave, n int) smMeter {
+	m := smMeter{Name: name, Slave: slave}
+	for i := 1; i <= n; i++ {
+		m.Registers = append(m.Registers, smRegister{Address: i, EntityID: fmt.Sprintf("sensor.test_%s_%d", name, i)})
+	}
+	return m
+}
+
+func smAnfragenAn(p *[]smAnfrage, slave int) int {
+	n := 0
+	for _, a := range *p {
+		if a.slave == slave {
+			n++
+		}
+	}
+	return n
+}
+
+func TestStummerZaehlerWirdNurEinmalGefragt(t *testing.T) {
+	p := smFalscheLeser(t, map[int]string{1: "ok", 2: "stumm", 3: "ok"})
+	sc := &smConfig{Enabled: true, Host: "192.168.82.18", Port: 502, Meters: []smMeter{
+		smZaehler("land_fn", 1, 11), smZaehler("land_ro", 2, 11), smZaehler("gastro", 3, 13)}}
+	out := readSmartmeter(sc)
+	if got := smAnfragenAn(p, 2); got != 1 {
+		t.Fatalf("stummer Zähler: %d Anfragen, erwartet genau 1", got)
+	}
+	if smAnfragenAn(p, 1) != 11 || smAnfragenAn(p, 3) != 13 {
+		t.Fatalf("antwortende Zähler nicht vollständig gelesen: FN %d, Gastro %d", smAnfragenAn(p, 1), smAnfragenAn(p, 3))
+	}
+	if len(out) != 24 {
+		t.Fatalf("%d Werte, erwartet 24 (11 + 13)", len(out))
+	}
+	// Nächster Durchgang: der stumme Zähler wird wieder gefragt (bleibt eingeschaltet).
+	*p = nil
+	readSmartmeter(sc)
+	if smAnfragenAn(p, 2) != 1 {
+		t.Fatal("stummer Zähler wird im nächsten Durchgang nicht mehr gefragt")
+	}
+}
+
+func TestStummerZaehlerAntwortetWieder(t *testing.T) {
+	verhalten := map[int]string{2: "stumm"}
+	smFalscheLeser(t, verhalten)
+	sc := &smConfig{Host: "h", Port: 502, Meters: []smMeter{smZaehler("land_ro", 2, 11)}}
+	if out := readSmartmeter(sc); len(out) != 0 || !smStumm["land_ro|h:502|2"] {
+		t.Fatal("stummer Zähler nicht vermerkt")
+	}
+	verhalten[2] = "ok"
+	if out := readSmartmeter(sc); len(out) != 11 {
+		t.Fatalf("wieder antwortender Zähler: %d Werte, erwartet 11", len(out))
+	}
+	if smStumm["land_ro|h:502|2"] {
+		t.Fatal("Vermerk „stumm“ nach Antwort nicht entfernt")
+	}
+}
+
+func TestAusnahmeIstEineAntwort(t *testing.T) {
+	// Modbus-Ausnahme beim ersten Register: der Zähler ist da → übrige Register weiter lesen.
+	p := smFalscheLeser(t, map[int]string{1: "ausnahme"})
+	out := readSmartmeter(&smConfig{Host: "h", Port: 502, Meters: []smMeter{smZaehler("land", 1, 11)}})
+	if smAnfragenAn(p, 1) != 11 || len(out) != 10 {
+		t.Fatalf("Ausnahme beim ersten Register: %d Anfragen / %d Werte, erwartet 11 / 10", smAnfragenAn(p, 1), len(out))
+	}
+}
+
+func TestSpaetererAusfallUeberspringtNurDasRegister(t *testing.T) {
+	// Erstes Register beantwortet, danach Zeitüberschreitungen: wie bisher je Register weiter versuchen.
+	p := smFalscheLeser(t, map[int]string{1: "spaeter"})
+	out := readSmartmeter(&smConfig{Host: "h", Port: 502, Meters: []smMeter{smZaehler("land", 1, 11)}})
+	if smAnfragenAn(p, 1) != 11 || len(out) != 1 {
+		t.Fatalf("späterer Ausfall: %d Anfragen / %d Werte, erwartet 11 / 1", smAnfragenAn(p, 1), len(out))
+	}
+}
+
+func TestKeineAntwortUnterscheidung(t *testing.T) {
+	if smKeineAntwort(nil) {
+		t.Fatal("kein Fehler gilt als keine Antwort")
+	}
+	if smKeineAntwort(modbusAusnahme{fc: 0x83}) || smKeineAntwort(fmt.Errorf("register 5: %w", modbusAusnahme{fc: 0x83})) {
+		t.Fatal("Modbus-Ausnahme gilt fälschlich als keine Antwort")
+	}
+	if !smKeineAntwort(errors.New("dial tcp 192.168.82.18:502: connect: connection refused")) {
+		t.Fatal("abgelehnte Verbindung gilt nicht als keine Antwort")
+	}
+	if got := (modbusAusnahme{fc: 0x83}).Error(); got != "modbus-fehler/ausnahme (fc=0x83)" {
+		t.Fatalf("Fehlertext geändert: %q", got)
 	}
 }

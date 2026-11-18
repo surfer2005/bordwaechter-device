@@ -7,6 +7,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -271,8 +272,34 @@ func (a *App) smartmeterLoop() {
 	}
 }
 
+// smLesen ist austauschbar, damit die Tests ohne echtes Gateway laufen.
+var smLesen = modbusReadHolding
+
+// smKeineAntwort: der Zähler hat gar nicht geantwortet (Zeitüberschreitung, Verbindung abgelehnt oder
+// abgebrochen). Eine Modbus-Ausnahme ist dagegen eine Antwort — der Zähler ist da, nur das Register nicht.
+func smKeineAntwort(err error) bool {
+	if err == nil {
+		return false
+	}
+	var a modbusAusnahme
+	return !errors.As(err, &a)
+}
+
+// smStumm merkt sich je Zähler, ob er im letzten Durchgang geschwiegen hat — nur für eine Log-Zeile beim
+// Wechsel (sonst stünde bei einem stromlosen Landzähler alle 30 s dieselbe Meldung im Protokoll).
+// readSmartmeter läuft nur in der einen smartmeterLoop-Goroutine, daher ohne Sperre.
+var smStumm = map[string]bool{}
+
 // readSmartmeter liest alle Register aller Zähler. Das Standard-Profil ist durchweg float32 (2 Register,
 // High-Word zuerst — wie HA; regsToFloat deckt das ab). Gemischte Typen (Teltonika) kommen separat.
+//
+// ⚠️ Stummer Zähler (Peter 2026-11-18): bekommt schon die ERSTE Anfrage an einen Zähler gar keine Antwort,
+// werden dessen übrige Register in diesem Durchgang ausgelassen. Vorher wartete der Bordwächter bei jedem der
+// 11–13 Register die volle Zeit (5 s) — ein stromloser oder abgeklemmter Zähler (MF-FRIEDRICHSHAFEN Land RO,
+// MS-LINDAU Landzähler in Fahrt) dehnte so den Takt des GANZEN Schiffs von 30 auf 90–155 s, auch für die Zähler,
+// die antworten. Der Zähler bleibt eingeschaltet und wird im nächsten Durchgang wieder gefragt. Antwortet ein
+// Zähler, ändert sich nichts: dieselben Anfragen in derselben Reihenfolge, ein späterer Einzelfehler überspringt
+// wie bisher nur sein Register.
 func readSmartmeter(sc *smConfig) []smReading {
 	var out []smReading
 	to := 5 * time.Second
@@ -292,15 +319,31 @@ func readSmartmeter(sc *smConfig) []smReading {
 		if host == "" {
 			continue // kein Host für diesen Zähler → überspringen
 		}
-		for _, r := range m.Registers {
-			regs, err := modbusReadHolding(host, port, m.Slave, r.Address, 2, to)
+		schluessel := fmt.Sprintf("%s|%s:%d|%d", m.Name, host, port, m.Slave)
+		geantwortet := false
+		for i, r := range m.Registers {
+			regs, err := smLesen(host, port, m.Slave, r.Address, 2, to)
+			if i == 0 && smKeineAntwort(err) {
+				if !smStumm[schluessel] {
+					log.Printf("smartmeter: Zähler %q (%s:%d, Slave %d) antwortet nicht (%v) — in diesem Durchgang übersprungen, wird weiter gefragt", m.Name, host, port, m.Slave, err)
+				}
+				smStumm[schluessel] = true
+				break
+			}
+			if !smKeineAntwort(err) {
+				geantwortet = true
+			}
 			if err != nil || len(regs) < 2 {
-				continue // einzelner Lesefehler: Zähler/Register überspringen
+				continue // einzelner Lesefehler: Register überspringen
 			}
 			out = append(out, smReading{
 				EntityID: r.EntityID, Name: r.Name, Unit: r.Unit,
 				Value: regsToFloat(regs, "float32"), RecordedAt: smZeit(time.Now()),
 			})
+		}
+		if geantwortet && smStumm[schluessel] {
+			log.Printf("smartmeter: Zähler %q (%s:%d, Slave %d) antwortet wieder", m.Name, host, port, m.Slave)
+			delete(smStumm, schluessel)
 		}
 	}
 	return out
