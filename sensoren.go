@@ -14,7 +14,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"net/http"
@@ -67,6 +66,9 @@ type sensorStatus struct {
 	FW        string   `json:"fw,omitempty"`
 	Batterie  *float64 `json:"batterie,omitempty"`
 	ZuletztAt string   `json:"zuletzt_at,omitempty"`
+	// OTA-Fortschritt: wie viel der Sensor von der angebotenen Firmware schon geladen hat (0.1.145, Peter 2026-11-19)
+	OtaProzent *int   `json:"ota_prozent,omitempty"`
+	OtaAt      string `json:"ota_at,omitempty"`
 }
 
 type Sensorik struct {
@@ -709,14 +711,83 @@ func (a *App) sensorRoutes(mux interface {
 			return
 		}
 		defer f.Close()
+		st, err := f.Stat()
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
 		if strings.HasSuffix(m[2], ".json") {
 			w.Header().Set("Content-Type", "application/json")
 		} else {
 			w.Header().Set("Content-Type", "application/octet-stream")
 		}
 		w.Header().Set("Cache-Control", "no-store")
-		_, _ = io.Copy(w, f)
+		// MIT Größenangabe (ServeContent setzt Content-Length): ein ESP8266 braucht sie VOR dem Schreiben, um den Platz
+		// für das neue Abbild zu löschen. io.Copy schickte große Dateien „chunked“ ohne Länge → Content-Length -1 →
+		// „Flash erase failed at 0x00100000“, kein OTA möglich (ESP-01S Büro FN, 19.11.2026). ESP32 kam damit zurecht.
+		if m[2] == "firmware.ota.bin" {
+			if id := sensorik.idVonUser(m[1]); id > 0 {
+				w = &otaZaehler{ResponseWriter: w, id: id, groesse: st.Size(), melde: func() {
+					if k := a.getKai(); k != nil {
+						go sensorik.senden(k)
+					}
+				}}
+			}
+		}
+		http.ServeContent(w, r, m[2], st.ModTime(), f)
 	})
+}
+
+// idVonUser: Sensor zu seiner Kennung (= Ordnername unter /fw/).
+func (s *Sensorik) idVonUser(user string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, d := range s.defs {
+		if d.User == user {
+			return d.ID
+		}
+	}
+	return 0
+}
+
+// otaZaehler zählt beim Ausliefern der Firmware mit und legt den Fortschritt in den Status des Sensors. Bei 0/25/50/75/100 %
+// geht der Status sofort an KAI (sonst erst im 10-s-Takt — ein ESP-01S lädt in wenigen Sekunden).
+type otaZaehler struct {
+	http.ResponseWriter
+	id      int
+	groesse int64
+	n       int64
+	stufe   int
+	melde   func()
+}
+
+func (z *otaZaehler) Write(p []byte) (int, error) {
+	n, err := z.ResponseWriter.Write(p)
+	z.n += int64(n)
+	if z.groesse > 0 {
+		pz := int(z.n * 100 / z.groesse)
+		sensorik.otaFortschritt(z.id, pz)
+		if st := pz / 25; st != z.stufe || z.n == int64(n) {
+			z.stufe = st
+			if z.melde != nil {
+				z.melde()
+			}
+		}
+	}
+	return n, err
+}
+
+func (s *Sensorik) otaFortschritt(id, prozent int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st := s.status[id]
+	if st == nil {
+		st = &sensorStatus{SensorID: id}
+		s.status[id] = st
+	}
+	p := prozent
+	st.OtaProzent = &p
+	st.OtaAt = time.Now().UTC().Format(time.RFC3339)
 }
 
 // sensorLoop: MQTT-Empfänger starten, Zugänge alle 60 s abgleichen, Werte alle 10 s senden, Lampe prüfen.
