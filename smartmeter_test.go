@@ -235,3 +235,19 @@ func TestKeineAntwortUnterscheidung(t *testing.T) {
 		t.Fatalf("Fehlertext geändert: %q", got)
 	}
 }
+
+// Nach einem Neustart ohne Zeitabgleich: keine Messzeit (KAI nimmt die Ankunft) — sonst trägt der Wert die
+// zuletzt gespeicherte Uhrzeit und erscheint in KAI als Rücksprung (Radolfzell 18.11.2026).
+func TestSmStempelNurMitAbgeglichenerUhr(t *testing.T) {
+	alt := uhrIstSynchron
+	defer func() { uhrIstSynchron = alt }()
+	t0 := time.Date(2026, 11, 18, 9, 45, 30, 780e6, time.UTC)
+	uhrIstSynchron = func() bool { return false }
+	if z := smStempel(t0); z != "" {
+		t.Fatalf("ohne Abgleich erwartet leer, bekommen %q", z)
+	}
+	uhrIstSynchron = func() bool { return true }
+	if z := smStempel(t0); z != "2026-11-18T09:45:30.780Z" {
+		t.Fatalf("mit Abgleich erwartet Messzeit, bekommen %q", z)
+	}
+}

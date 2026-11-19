@@ -13,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -103,6 +105,48 @@ func smZeit(t time.Time) string {
 		return ""
 	}
 	return t.UTC().Format("2006-01-02T15:04:05.000Z")
+}
+
+// uhrSynchron (ab 0.1.142): Der Raspberry hat keine eigene Uhr. Nach einem Neustart steht sie auf dem zuletzt
+// gespeicherten Stand, bis der Zeitabgleich übers Netz greift. Ein Messwert aus dieser Lücke trug am 18.11.2026 in
+// Radolfzell 10:45 statt 11:32 (Ortszeit) und erschien in KAI als Rücksprung des Zählerstands. Deshalb wird erst
+// gestempelt, wenn die Uhr seit dem Start einmal abgeglichen wurde; bis dahin bleibt die Messzeit leer und KAI nimmt
+// die Ankunft (wie bei „Uhr vor 2024“). Einmal abgeglichen bleibt es dabei — auch wenn das Schiff danach stundenlang
+// ohne Netz fährt (der Kern meldet nach ~9 h ohne Abgleich wieder „unsynchron“, die Uhr geht dann aber noch genau).
+var uhrAbgeglichen atomic.Bool
+
+func uhrSynchron() bool {
+	if uhrAbgeglichen.Load() {
+		return true
+	}
+	ja := imAddon // im Home-Assistant-Add-on hält das System die Uhr
+	if !ja {
+		if _, err := os.Stat("/run/systemd/timesync/synchronized"); err == nil { // systemd-timesyncd, seit dem Start
+			ja = true
+		}
+	}
+	if !ja {
+		var tx syscall.Timex
+		if st, err := syscall.Adjtimex(&tx); err == nil && st != 5 /* TIME_ERROR */ && tx.Status&0x40 == 0 /* STA_UNSYNC */ {
+			ja = true
+		}
+	}
+	if ja {
+		uhrAbgeglichen.Store(true)
+		log.Printf("smartmeter: Uhr abgeglichen — Messwerte tragen ab jetzt ihre Messzeit")
+	}
+	return ja
+}
+
+// uhrIstSynchron: in Tests ersetzbar.
+var uhrIstSynchron = uhrSynchron
+
+// smStempel: Messzeit für einen gerade gelesenen Wert — leer, solange die Uhr seit dem Start nicht abgeglichen ist.
+func smStempel(t time.Time) string {
+	if !uhrIstSynchron() {
+		return ""
+	}
+	return smZeit(t)
 }
 
 // smAufnehmen (rein, testbar): neue Werte an die Warteschlange hängen. Online jedes Mal; offline nur, wenn seit der
@@ -338,7 +382,7 @@ func readSmartmeter(sc *smConfig) []smReading {
 			}
 			out = append(out, smReading{
 				EntityID: r.EntityID, Name: r.Name, Unit: r.Unit,
-				Value: regsToFloat(regs, "float32"), RecordedAt: smZeit(time.Now()),
+				Value: regsToFloat(regs, "float32"), RecordedAt: smStempel(time.Now()),
 			})
 		}
 		if geantwortet && smStumm[schluessel] {

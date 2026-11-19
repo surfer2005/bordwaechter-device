@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math"
+	"strings"
 	"sync"
 	"time"
 )
@@ -72,6 +74,11 @@ func (t *TeltonikaGPS) Read() (Position, error) {
 	if err != nil {
 		return Position{}, err
 	}
+	if alter, fixText, ok := teltonikaFixAlter(g.Host, g.Port, g.Unit, to); ok && alter > gpsFixMaxAlter {
+		gpsFixMelden(true, fixText)
+		return Position{}, fmt.Errorf("GPS ohne aktuellen Fix seit %s UTC", fixText)
+	}
+	gpsFixMelden(false, "")
 	p := Position{Lat: regsToFloat(latR, g.Format), Lng: regsToFloat(lngR, g.Format), Valid: true, TS: time.Now()}
 	// Heading/Speed wie Lat/Lng als float32 (2 Register) im selben Format lesen, wenn ein Register
 	// gesetzt ist. ⚠️ Einheit/Skalierung an der echten Teltonika prüfen (Speed km/h vs. Knoten).
@@ -87,6 +94,71 @@ func (t *TeltonikaGPS) Read() (Position, error) {
 		}
 	}
 	return p, nil
+}
+
+// Fix-Alter (ab 0.1.142): Der Teltonika hält die letzte Koordinate in seinen Registern, auch wenn er seit Tagen
+// keinen Fix mehr hat (Prüfung 18.11.2026: KS-CONSTANZE seit 13.11., MS-SCHWABEN seit 12.11. — die Schwaben fuhr am
+// 14.11. laut Logmap 39 km, in KAI stand sie den ganzen Tag still). Deshalb die Fix-Zeit (Register 147,
+// „JJJJ-MM-TT hh:mm:ss“, UTC) gegen die Uhr des Routers (Register 378, „JJJJ-MM-TTThh:mm:ss+0000“) prüfen — beide
+// kommen vom Router, die Uhr des Pi spielt keine Rolle. Älter als gpsFixMaxAlter → keine Position (wie ein Lesefehler:
+// SIFA und Anzeige sehen die Position veralten). Register nicht lesbar oder Text unbekannt → keine Aussage, die
+// Position gilt wie bisher (andere Router, ältere Firmware). Dieselbe Grenze prüft KAI beim Eingang (gps-teltonika.js).
+const (
+	tRegFixZeit    = 147
+	tRegRouterUhr  = 378
+	gpsFixMaxAlter = 300 * time.Second
+)
+
+// teltonikaZeit: Zeittext des Routers → UTC. Ohne Zonenangabe gilt UTC (so liefert der Router die Fix-Zeit).
+func teltonikaZeit(s string) (time.Time, bool) {
+	s = strings.TrimSpace(s)
+	for _, f := range []string{"2006-01-02 15:04:05", "2006-01-02T15:04:05-0700", time.RFC3339, "2006-01-02T15:04:05"} {
+		if t, err := time.Parse(f, s); err == nil {
+			return t.UTC(), true
+		}
+	}
+	return time.Time{}, false
+}
+
+// fixAlter (rein, testbar): Alter des Fixes aus Fix-Zeit und Router-Uhr; ok=false = keine Aussage.
+func fixAlter(fixText, uhrText string) (time.Duration, bool) {
+	fix, ok1 := teltonikaZeit(fixText)
+	uhr, ok2 := teltonikaZeit(uhrText)
+	if !ok1 || !ok2 {
+		return 0, false
+	}
+	return uhr.Sub(fix), true
+}
+
+func teltonikaFixAlter(host string, port, unit int, to time.Duration) (time.Duration, string, bool) {
+	fr, err := modbusReadHolding(host, port, unit, tRegFixZeit, 16, to)
+	if err != nil {
+		return 0, "", false
+	}
+	ur, err := modbusReadHolding(host, port, unit, tRegRouterUhr, 12, to)
+	if err != nil {
+		return 0, "", false
+	}
+	fixText := regsToString(fr)
+	alter, ok := fixAlter(fixText, regsToString(ur))
+	return alter, fixText, ok
+}
+
+// gpsOhneFix merkt sich den letzten Stand — nur für eine Log-Zeile beim Wechsel, nicht bei jeder Abfrage.
+var (
+	gpsOhneFixMu sync.Mutex
+	gpsOhneFix   bool
+)
+
+func gpsFixMelden(ohne bool, fixText string) {
+	gpsOhneFixMu.Lock()
+	defer gpsOhneFixMu.Unlock()
+	if ohne && !gpsOhneFix {
+		log.Printf("gps: Router ohne aktuellen GPS-Fix (letzter Fix %s UTC) — Position wird nicht übernommen, bis der Fix wieder aktuell ist", fixText)
+	} else if !ohne && gpsOhneFix {
+		log.Printf("gps: GPS-Fix wieder aktuell")
+	}
+	gpsOhneFix = ohne
 }
 
 func buildGPS(cfg *Config, manual *ManualGPS) GPSSource {
