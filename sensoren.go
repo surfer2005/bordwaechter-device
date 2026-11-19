@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -129,10 +130,25 @@ type abgeleitet struct {
 
 var shellyKomp = regexp.MustCompile(`^([a-z]+):(\d+)$`)
 
+// endlicheZahl: Zahl aus einem MQTT-Text, aber nie NaN/±Inf. ESPHome meldet „nan“, wenn ein Fühler nicht liest
+// (z. B. DHT11), und strconv.ParseFloat nimmt das als Zahl an. JSON kennt kein NaN — die GANZE Sendung an KAI
+// ging leer raus (HTTP 400) und blieb im Puffer stecken, alle Sensoren dieses Bordwächters standen (Büro FN, 19.11.2026).
+func endlicheZahl(t string) (float64, bool) {
+	f, err := strconv.ParseFloat(strings.TrimSpace(t), 64)
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, false
+	}
+	return f, true
+}
+
+// zahlOderZustand: Zahl, ein/aus oder Text; nil bei „nan“/„inf“ (kein Messwert).
 func zahlOderZustand(s string) any {
 	t := strings.TrimSpace(s)
-	if f, err := strconv.ParseFloat(t, 64); err == nil {
+	if f, ok := endlicheZahl(t); ok {
 		return f
+	}
+	if _, err := strconv.ParseFloat(t, 64); err == nil {
+		return nil // nan/inf: der Fühler hat nichts geliefert
 	}
 	switch strings.ToUpper(t) {
 	case "ON", "TRUE", "OPEN":
@@ -269,7 +285,7 @@ func werteAusNachricht(art, praefix, topic string, payload []byte, st *sensorSta
 		if len(teile) == 3 && teile[2] == "state" {
 			switch teile[0] {
 			case "sensor":
-				if f, err := strconv.ParseFloat(text, 64); err == nil {
+				if f, ok := endlicheZahl(text); ok {
 					return []abgeleitet{{teile[1], f}}
 				}
 			case "binary_sensor", "switch":
@@ -286,7 +302,9 @@ func werteAusNachricht(art, praefix, topic string, payload []byte, st *sensorSta
 		}
 		teile := strings.Split(rest, "/")
 		if len(teile) == 3 && teile[0] == "get" {
-			return []abgeleitet{{teile[1] + "_" + teile[2], zahlOderZustand(text)}}
+			if v := zahlOderZustand(text); v != nil {
+				return []abgeleitet{{teile[1] + "_" + teile[2], v}}
+			}
 		}
 		return nil
 	}
@@ -294,7 +312,10 @@ func werteAusNachricht(art, praefix, topic string, payload []byte, st *sensorSta
 	if rest == "" || strings.HasSuffix(rest, "/set") || strings.Contains(rest, "/command") {
 		return nil
 	}
-	return []abgeleitet{{strings.ReplaceAll(rest, "/", "_"), zahlOderZustand(text)}}
+	if v := zahlOderZustand(text); v != nil {
+		return []abgeleitet{{strings.ReplaceAll(rest, "/", "_"), v}}
+	}
+	return nil
 }
 
 func (s *Sensorik) eingang(z mqttZugang, topic string, payload []byte) {
@@ -305,7 +326,9 @@ func (s *Sensorik) eingang(z mqttZugang, topic string, payload []byte) {
 		d = s.defFuerThema(topic) // gemeinsamer Zugang: Sensor über sein Thema finden
 	}
 	if d == nil {
-		if z.Alle { // angemeldet, aber das Thema gehört zu keinem Sensor in KAI — sonst verschwänden die Werte spurlos
+		// angemeldet, aber das Thema gehört zu keinem Sensor in KAI — sonst verschwänden die Werte spurlos.
+		// esphome/discover/… ist die Selbstanzeige von ESPHome für sein Dashboard, kein Messwert.
+		if z.Alle && !strings.HasPrefix(topic, "esphome/discover/") {
 			kopf := strings.SplitN(topic, "/", 2)[0]
 			gedrosseltMelden("ohne|"+kopf, 6*time.Hour, "warn", "Nachricht ohne passenden Sensor in KAI: Thema "+topic+" (Präfix „"+kopf+"“ ist bei keinem Sensor eingetragen)")
 		}
@@ -569,7 +592,16 @@ func (s *Sensorik) senden(k *KaiClient) {
 	if len(stueck) == 0 && len(status) == 0 && len(logs) == 0 {
 		return
 	}
-	if err := k.PostSensorWerte(stueck, status, logs); err != nil {
+	// Zweite Sicherung: nie einen nicht endlichen Wert schicken — einer allein ließ die ganze Sendung scheitern,
+	// und weil er vorne im Puffer blieb, jede weitere auch. Er fällt mit den gesendeten aus dem Puffer.
+	sauber := make([]sensorMessung, 0, len(stueck))
+	for _, m := range stueck {
+		if f, ok := m.Wert.(float64); ok && (math.IsNaN(f) || math.IsInf(f, 0)) {
+			continue
+		}
+		sauber = append(sauber, m)
+	}
+	if err := k.PostSensorWerte(sauber, status, logs); err != nil {
 		log.Printf("sensoren: senden: %v", err)
 		s.pufferSichern()
 		return

@@ -90,7 +90,12 @@ func newKaiClient(base, token string) *KaiClient {
 func (k *KaiClient) do(method, path string, body any) ([]byte, int, error) {
 	var r io.Reader
 	if body != nil {
-		b, _ := json.Marshal(body)
+		// Ein Fehler beim Verpacken (z. B. NaN) darf nicht als LEERE Anfrage rausgehen — KAI antwortet dann nur 400
+		// und der Grund bleibt unsichtbar (Büro FN, 19.11.2026).
+		b, err := json.Marshal(body)
+		if err != nil {
+			return nil, 0, fmt.Errorf("json: %w", err)
+		}
 		r = bytes.NewReader(b)
 	}
 	req, err := http.NewRequest(method, k.base+path, r)
