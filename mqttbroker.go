@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -246,6 +247,15 @@ func (b *MQTTBroker) bedienen(conn net.Conn) {
 	sauber := false
 	angemeldet := false
 	keepalive := 60 * time.Second
+	// Verbindungen, die nie angemeldet wurden, hinterlassen eine Spur (Peter 2026-11-19: ein ESP war im WLAN und erreichte
+	// Port 1883, im Protokoll stand trotzdem nichts — vorher wurde nur ein falsches Kennwort gemeldet).
+	grund, stufe := "", "warn"
+	defer func() {
+		if !angemeldet && grund != "" {
+			ip := hostVon(conn)
+			gedrosseltMelden("ab|"+ip+"|"+grund, 30*time.Minute, stufe, "Sensor-Verbindung ohne Anmeldung beendet: "+grund+" ("+ip+")")
+		}
+	}()
 	defer func() {
 		if angemeldet {
 			b.mu.Lock()
@@ -265,18 +275,22 @@ func (b *MQTTBroker) bedienen(conn net.Conn) {
 		_ = conn.SetReadDeadline(time.Now().Add(frist))
 		kopf, err := r.ReadByte()
 		if err != nil {
+			grund, stufe = leseFehler(err, false)
 			return
 		}
 		n, err := leseLaenge(r)
 		if err != nil || n > 256*1024 {
+			grund = "ungültige Paketlänge"
 			return
 		}
 		p := make([]byte, n)
 		if _, err := io.ReadFull(r, p); err != nil {
+			grund, stufe = leseFehler(err, true)
 			return
 		}
 		typ := kopf >> 4
 		if !angemeldet && typ != 1 {
+			grund = "erstes Paket ist keine Anmeldung (Typ " + strconv.Itoa(int(typ)) + ")"
 			return
 		}
 		switch typ {
@@ -284,8 +298,9 @@ func (b *MQTTBroker) bedienen(conn net.Conn) {
 			if angemeldet {
 				return
 			}
-			ok, ka := c.connect(p)
+			ok, ka, g := c.connect(p)
 			if !ok {
+				grund = g // leer = schon gemeldet (falsches Kennwort)
 				return
 			}
 			if ka > 0 {
@@ -411,59 +426,109 @@ func (b *MQTTBroker) eingangMelden(c *mqttClient, topic string, payload []byte) 
 	}
 }
 
-// connect wertet CONNECT aus und antwortet mit CONNACK. Rückgabe: angenommen?, Keepalive in Sekunden.
-func (c *mqttClient) connect(p []byte) (bool, int) {
+// connect wertet CONNECT aus und antwortet mit CONNACK. Rückgabe: angenommen?, Keepalive in Sekunden, Grund der
+// Ablehnung (leer, wenn schon gemeldet oder angenommen).
+func (c *mqttClient) connect(p []byte) (bool, int, string) {
 	name, rest, err := leseString(p)
 	if err != nil || len(rest) < 4 {
-		return false, 0
+		return false, 0, "Anmeldung unvollständig"
 	}
 	stufe, flags := rest[0], rest[1]
 	ka := int(rest[2])<<8 | int(rest[3])
 	rest = rest[4:]
 	if (name != "MQTT" && name != "MQIsdp") || (stufe != 4 && stufe != 3) {
 		_ = c.senden(0x20, []byte{0, 1}) // falsche Protokollversion
-		return false, 0
+		return false, 0, "Protokoll „" + name + "“ Stufe " + strconv.Itoa(int(stufe)) + " wird nicht unterstützt (nur MQTT 3.1/3.1.1)"
 	}
 	if c.id, rest, err = leseString(rest); err != nil {
-		return false, 0
+		return false, 0, "Anmeldung unvollständig (Client-Kennung)"
 	}
 	if flags&0x04 != 0 { // Last Will
 		var t string
 		var m string
 		if t, rest, err = leseString(rest); err != nil {
-			return false, 0
+			return false, 0, "Anmeldung unvollständig (Last Will)"
 		}
 		if m, rest, err = leseString(rest); err != nil {
-			return false, 0
+			return false, 0, "Anmeldung unvollständig (Last Will)"
 		}
 		c.will = &mqttNachricht{topic: t, payload: []byte(m), retain: flags&0x20 != 0}
 	}
 	user, pass := "", ""
 	if flags&0x80 != 0 {
 		if user, rest, err = leseString(rest); err != nil {
-			return false, 0
+			return false, 0, "Anmeldung unvollständig (Benutzer)"
 		}
 	}
 	if flags&0x40 != 0 {
 		if pass, _, err = leseString(rest); err != nil {
-			return false, 0
+			return false, 0, "Anmeldung unvollständig (Kennwort)"
 		}
 	}
 	z, ok := c.b.auth(user, pass)
 	if !ok {
 		_ = c.senden(0x20, []byte{0, 4}) // Benutzer/Kennwort falsch
 		// Client-ID (ESPHome = Node-Name) und IP mitloggen, damit ein fremdes Gerät im Bordnetz auffindbar ist.
-		addr := c.conn.RemoteAddr().String()
-		if host, _, e := net.SplitHostPort(addr); e == nil {
-			addr = host
-		}
-		logEvent("warn", "Sensor-Anmeldung abgelehnt: "+user+" (Client "+c.id+", "+addr+")")
-		return false, 0
+		logEvent("warn", "Sensor-Anmeldung abgelehnt: "+user+" (Client "+c.id+", "+hostVon(c.conn)+")")
+		return false, 0, ""
 	}
 	c.zugang = z
 	if c.will != nil && !zugangDarf(z, c.will.topic) {
 		c.will = nil
 	}
 	_ = c.senden(0x20, []byte{0, 0})
-	return true, ka
+	// Angenommene Anmeldung kurz vermerken — je Gerät höchstens alle 6 Stunden (Akku-Sensoren wachen alle paar Minuten auf).
+	ip := hostVon(c.conn)
+	gedrosseltMelden("an|"+c.id+"|"+ip, 6*time.Hour, "info", "Sensor angemeldet: "+user+" (Client "+c.id+", "+ip+")")
+	return true, ka, ""
+}
+
+// hostVon: IP der Gegenstelle ohne Port.
+func hostVon(conn net.Conn) string {
+	addr := conn.RemoteAddr().String()
+	if host, _, e := net.SplitHostPort(addr); e == nil {
+		return host
+	}
+	return addr
+}
+
+// leseFehler: Grund + Stufe, wenn eine Verbindung vor der Anmeldung abreißt. Ohne ein einziges Byte ist es meist eine
+// Port-Prüfung (nc, Netz-Scan) → nur Info.
+func leseFehler(err error, gelesen bool) (string, string) {
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		if gelesen {
+			return "Anmeldung nicht binnen 10 s vollständig", "warn"
+		}
+		return "binnen 10 s keine Daten", "info"
+	}
+	if !gelesen {
+		return "ohne Daten wieder geschlossen (z. B. Port-Prüfung)", "info"
+	}
+	return "Verbindung während der Anmeldung abgebrochen", "warn"
+}
+
+// gedrosseltMelden: Meldung ins Geräteprotokoll, je Schlüssel höchstens einmal im Abstand.
+var (
+	meldungMu      sync.Mutex
+	meldungZuletzt = map[string]time.Time{}
+)
+
+func gedrosseltMelden(schluessel string, abstand time.Duration, level, text string) {
+	jetzt := time.Now()
+	meldungMu.Lock()
+	if t, ok := meldungZuletzt[schluessel]; ok && jetzt.Sub(t) < abstand {
+		meldungMu.Unlock()
+		return
+	}
+	meldungZuletzt[schluessel] = jetzt
+	if len(meldungZuletzt) > 2000 {
+		for k, t := range meldungZuletzt {
+			if jetzt.Sub(t) > 24*time.Hour {
+				delete(meldungZuletzt, k)
+			}
+		}
+	}
+	meldungMu.Unlock()
+	logEvent(level, text)
 }

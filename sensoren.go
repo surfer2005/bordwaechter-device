@@ -305,6 +305,10 @@ func (s *Sensorik) eingang(z mqttZugang, topic string, payload []byte) {
 		d = s.defFuerThema(topic) // gemeinsamer Zugang: Sensor über sein Thema finden
 	}
 	if d == nil {
+		if z.Alle { // angemeldet, aber das Thema gehört zu keinem Sensor in KAI — sonst verschwänden die Werte spurlos
+			kopf := strings.SplitN(topic, "/", 2)[0]
+			gedrosseltMelden("ohne|"+kopf, 6*time.Hour, "warn", "Nachricht ohne passenden Sensor in KAI: Thema "+topic+" (Präfix „"+kopf+"“ ist bei keinem Sensor eingetragen)")
+		}
 		return
 	}
 	// ESPHome-Log über MQTT (<praefix>/debug) sammeln — für die Live-Anzeige in KAI, kein Messwert.
