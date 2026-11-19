@@ -21,7 +21,8 @@ import (
 type mqttZugang struct {
 	SensorID int
 	Praefix  string
-	Alle     bool // MQTT-B (HA-Modell): geteilter Broker-Zugang darf jedes Sensor-Thema
+	Alle     bool   // MQTT-B (HA-Modell): geteilter Broker-Zugang darf jedes Sensor-Thema
+	IP       string // Adresse der Gegenstelle (gesetzt beim Anmelden) — ESPHome meldet seine eigene nicht verlässlich
 }
 
 // zugangDarf: Pro-Sensor-Zugang nur unter seinem Thema; der geteilte Zugang (Alle) überall.
@@ -472,6 +473,7 @@ func (c *mqttClient) connect(p []byte) (bool, int, string) {
 		logEvent("warn", "Sensor-Anmeldung abgelehnt: "+user+" (Client "+c.id+", "+hostVon(c.conn)+")")
 		return false, 0, ""
 	}
+	z.IP = hostVon(c.conn)
 	c.zugang = z
 	if c.will != nil && !zugangDarf(z, c.will.topic) {
 		c.will = nil

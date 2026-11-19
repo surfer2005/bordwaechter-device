@@ -353,6 +353,11 @@ func (s *Sensorik) eingang(z mqttZugang, topic string, payload []byte) {
 		s.status[d.ID] = st
 	}
 	jetzt := time.Now().UTC()
+	// ESPHome: die Adresse aus der Verbindung — der Textwert „ip“ (wifi_info) kam bei Büro00001 nie an (19.11.2026);
+	// KAI braucht sie für den Ein-Klick-Link zur Geräteseite. Shelly meldet sie selbst (wifi.sta_ip).
+	if d.Art == "esphome" && z.IP != "" {
+		st.IP = z.IP
+	}
 	werte := werteAusNachricht(d.Art, d.Praefix, topic, payload, st)
 	if len(werte) > 0 {
 		st.Online = true
@@ -635,6 +640,14 @@ func (s *Sensorik) firmwareHolen(k *KaiClient) {
 		if d.Firmware == nil || d.Firmware.Version == "" {
 			continue
 		}
+		if _, bekannt := s.fwForce[d.ID]; !bekannt {
+			// nach einem Neustart: zuletzt ausgeführten Anstoß aus der Datei — sonst drückte das Gerät denselben erneut (19.11.2026)
+			v := ""
+			if b, err := os.ReadFile(filepath.Join(sensorOrdner(), "fw", d.User, "force")); err == nil {
+				v = strings.TrimSpace(string(b))
+			}
+			s.fwForce[d.ID] = v
+		}
 		erzwingen := d.Firmware.Force != "" && s.fwForce[d.ID] != d.Firmware.Force
 		if s.fwStand[d.ID] != d.Firmware.Version || erzwingen {
 			ziele = append(ziele, d)
@@ -649,7 +662,6 @@ func (s *Sensorik) firmwareHolen(k *KaiClient) {
 			if b, err := os.ReadFile(filepath.Join(ordner, "version")); err == nil && strings.TrimSpace(string(b)) == d.Firmware.Version {
 				s.mu.Lock()
 				s.fwStand[d.ID] = d.Firmware.Version
-				s.fwForce[d.ID] = d.Firmware.Force
 				s.mu.Unlock()
 				continue
 			}
@@ -669,6 +681,7 @@ func (s *Sensorik) firmwareHolen(k *KaiClient) {
 		})
 		_ = os.WriteFile(filepath.Join(ordner, "manifest.json"), manifest, 0o644)
 		_ = os.WriteFile(filepath.Join(ordner, "version"), []byte(d.Firmware.Version), 0o644)
+		_ = os.WriteFile(filepath.Join(ordner, "force"), []byte(d.Firmware.Force), 0o644)
 		s.mu.Lock()
 		s.fwStand[d.ID] = d.Firmware.Version
 		s.fwForce[d.ID] = d.Firmware.Force
