@@ -56,6 +56,11 @@ func runNetScan(k *KaiClient) error {
 	//    an anderen Standorten/Schiffen → on/off (nicht nur gefundene, auch nicht erreichbare = rot).
 	entries := discoverLocalHosts()
 	entries = append(entries, targetedPings(k)...)
+	return meldeKonnektivitaet(k, entries)
+}
+
+// meldeKonnektivitaet schickt Ping-Ergebnisse an die Ping-Senke von KAI (auch der Anzeigerwächter, anzeiger.go).
+func meldeKonnektivitaet(k *KaiClient, entries []connEntry) error {
 	if len(entries) == 0 {
 		return nil
 	}

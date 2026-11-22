@@ -48,6 +48,13 @@ func selfUpdate() error {
 	if imAddon {
 		return fmt.Errorf("im Home-Assistant-Add-on wird über Home Assistant aktualisiert (Add-on → Aktualisieren)")
 	}
+	// Anzeigerwächter auf einer Vorabversion (z. B. v0.1.147-test): „Aktualisieren“ lädt releases/latest — ist die älter,
+	// kennt sie die Rolle noch nicht. Dann nicht zurückfallen, sondern warten, bis eine neuere Version freigegeben ist.
+	if istAnzeigerRolle(startRolle) {
+		if neu := latestReleaseTag(); neu == "" || !verNewer(neu, version) {
+			return fmt.Errorf("keine neuere freigegebene Version als %s (neueste: %s) — der Anzeigerwächter bleibt auf seinem Stand", version, neu)
+		}
+	}
 	arch := runtime.GOARCH
 	if arch == "arm" {
 		arch = "armv7"
@@ -538,12 +545,17 @@ func (a *App) routes() *http.ServeMux {
 				ant.Device = ant.Medien.Name
 			}
 		}
+		if istAnzeigerRolle(ant.Rolle) {
+			n.Rolle = rolleAnzeiger // Anzeigerwächter: Dienst startet gleich in der neuen Rolle neu (kein Geräte-Neustart nötig)
+		}
 		if err := a.applyConfig(n); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
 		logEvent("info", "Mit KAI gekoppelt als "+ant.Device)
-		if !istMedienRolle(n.Rolle) {
+		if istAnzeigerRolle(n.Rolle) {
+			reexecSoon() // Rolle wechselt → Dienst neu starten (systemd startet ihn wieder)
+		} else if !istMedienRolle(n.Rolle) {
 			go a.kaiSync(0, true) // sofort alle Einstellungen aus KAI holen
 		}
 		writeJSON(w, map[string]any{"ok": true, "device": ant.Device, "ship_id": ant.ShipID, "rolle": rolleFuerKai(n.Rolle), "neustart": istMedienRolle(n.Rolle)})

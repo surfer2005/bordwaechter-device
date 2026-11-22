@@ -462,6 +462,12 @@ async function koppeln(){
     try{ await fetch('/api/reboot',{method:'POST'}) }catch(e){}
     return
   }
+  if(j.rolle==='anzeigerwaechter'){
+    // Anzeigerwächter: der Dienst startet in der neuen Rolle neu (kein Geräte-Neustart)
+    m.textContent='Gekoppelt als Anzeigerwächter „'+j.device+'“ – der Dienst startet neu …'
+    setTimeout(loadCfg,8000)
+    return
+  }
   m.textContent='Gekoppelt als '+j.device+' – Einstellungen werden aus KAI geholt …'
   setTimeout(loadCfg,4000)
 }
@@ -479,13 +485,13 @@ async function loadCfg(){
   const c=await rc.json()
   const gek=!!c.edge_token
   g('kop_ok').style.display=gek?'block':'none'
-  const rolle=c.rolle==='audio'?'Bordmusik':c.rolle==='bildschirm'?'Bildschirm':''
-  g('kop_text').textContent=gek&&rolle?('Gekoppelt als '+rolle+' mit '+(c.kai_base_url||'KAI')+(c.bordwaechter?' · Position vom Bordwächter '+c.bordwaechter:' · noch kein Bordwächter bekannt')):gek?('Gekoppelt mit '+(c.kai_base_url||'KAI')+' · Schiff-ID '+(c.ship_id||0)+(c.kai_config_rev?(' · Einstellungen aus KAI, Stand '+c.kai_config_rev):' · Einstellungen aus KAI noch nicht übernommen')):''
+  const rolle=c.rolle==='audio'?'Bordmusik':c.rolle==='bildschirm'?'Bildschirm':c.rolle==='anzeigerwaechter'?'Anzeigerwächter':''
+  g('kop_text').textContent=gek&&c.rolle==='anzeigerwaechter'?('Gekoppelt als Anzeigerwächter mit '+(c.kai_base_url||'KAI')+' · prüft die Zielanzeiger und Sprachboxen und schickt ihnen die Telegramme aus KAI'):gek&&rolle?('Gekoppelt als '+rolle+' mit '+(c.kai_base_url||'KAI')+(c.bordwaechter?' · Position vom Bordwächter '+c.bordwaechter:' · noch kein Bordwächter bekannt')):gek?('Gekoppelt mit '+(c.kai_base_url||'KAI')+' · Schiff-ID '+(c.ship_id||0)+(c.kai_config_rev?(' · Einstellungen aus KAI, Stand '+c.kai_config_rev):' · Einstellungen aus KAI noch nicht übernommen')):''
   g('kop_form').style.display=gek?'none':'block'
   if(!g('kop_base').value) g('kop_base').value=c.kai_base_url||''
   document.body.classList.toggle('medienrolle',!!rolle); window.__rolle=rolle||'Bordwächter'
   // Mit KAI gekoppelt: alles aus KAI ist hier gesperrt (nur Anzeige); frei bleiben KAI-Adresse, Netzwerk, Anzeige-Schlüssel
-  const ausKai=gek&&(c.kai_config_rev||0)>0, LOKAL=['c_base','c_host','n_mode','n_if','n_addr','n_gw','n_dns','kop_base','kop_code','m_lat','m_lng','m_sp']
+  const ausKai=gek&&((c.kai_config_rev||0)>0||c.rolle==='anzeigerwaechter'), LOKAL=['c_base','c_host','n_mode','n_if','n_addr','n_gw','n_dns','kop_base','kop_code','m_lat','m_lng','m_sp']
   g('ausKaiHinweis').style.display=ausKai?'block':'none'; document.body.classList.toggle('auskai',ausKai)
   document.querySelectorAll('.card input, .card select, .card textarea').forEach(function(e){ if(!LOKAL.includes(e.id)) e.disabled=ausKai })
   g('saveBtn').textContent=ausKai?'KAI-Adresse speichern':'Speichern'

@@ -9,11 +9,14 @@ import (
 	"time"
 )
 
-const version = "0.1.146"
+const version = "0.1.147"
 
 // imAddon: läuft als Home-Assistant-Add-on (Übergang, z. B. MS-KONSTANZ 2026-11) — der Rechner gehört Home Assistant:
 // kein Hostname/SSH/VNC/Netzwerk/Kiosk setzen, keine Selbstaktualisierung (die macht Home Assistant).
 var imAddon = os.Getenv("KAI_ADDON") == "1"
+
+// startRolle: Rolle, mit der der Dienst gestartet ist (für die Selbstaktualisierung, s. selfUpdate)
+var startRolle string
 
 type App struct {
 	mu     sync.Mutex
@@ -272,7 +275,7 @@ func (a *App) auftragLoop() {
 		cfg := a.getCfg()
 		a.airplayPruefen() // gewählte AirPlay-Dauer abgelaufen? (auch ohne Verbindung zu KAI)
 		if k := a.getKai(); k != nil && cfg.EdgeToken != "" {
-			if !istMedienRolle(cfg.Rolle) {
+			if !istKaiRolle(cfg.Rolle) {
 				_ = k.SendSifa(a.sifaBlock()) // SIFA-Restzeit für KAI aktuell halten (ältere KAI antworten 404, harmlos)
 			}
 			if au, err := k.GetAuftrag(); err == nil {
@@ -283,8 +286,8 @@ func (a *App) auftragLoop() {
 				if au.Update {
 					go updateAusKai(k)
 				}
-				if au.ConfigRev > cfg.KaiConfigRev {
-					go a.kaiSync(au.ConfigRev, false) // neuer Stand der Einstellungen in KAI
+				if au.ConfigRev > cfg.KaiConfigRev && !istAnzeigerRolle(cfg.Rolle) {
+					go a.kaiSync(au.ConfigRev, false) // neuer Stand der Einstellungen in KAI (der Anzeigerwächter hat keine)
 				}
 				if au.Befehl != nil {
 					go a.kaiBefehl(au.Befehl) // Testschalter aus KAI
@@ -303,12 +306,16 @@ func (a *App) heartbeatLoop() {
 		if k := a.getKai(); k != nil && cfg.EdgeToken != "" {
 			gh, gp := a.gpsHostForHello()
 			var sifa map[string]any
-			if istMedienRolle(cfg.Rolle) {
-				gh, gp = "", 0 // Bildschirm/Bordmusik: kein GPS, keine SIFA
+			if istKaiRolle(cfg.Rolle) {
+				gh, gp = "", 0 // Bildschirm/Bordmusik/Anzeigerwächter: kein GPS, keine SIFA
 			} else {
 				sifa = a.sifaBlock()
 			}
-			if hr, err := k.Hello(version, rolleFuerKai(cfg.Rolle), a.getSys(), gh, gp, sifa, anzeigeZustand(cfg)); err != nil {
+			var anzeige map[string]any
+			if !istAnzeigerRolle(cfg.Rolle) {
+				anzeige = anzeigeZustand(cfg) // der Anzeigerwächter hat keine Anzeige
+			}
+			if hr, err := k.Hello(version, rolleFuerKai(cfg.Rolle), a.getSys(), gh, gp, sifa, anzeige); err != nil {
 				kaiReachable = false
 				log.Printf("heartbeat: %v", err)
 			} else if hr != nil {
@@ -325,12 +332,13 @@ func (a *App) heartbeatLoop() {
 				if hr.LatestVersion != "" {
 					setLatestTag(hr.LatestVersion) // „Neue Version verfügbar“ binnen einer Minute statt stündlich
 				}
-				if hr.ConfigRev > cfg.KaiConfigRev {
+				if hr.ConfigRev > cfg.KaiConfigRev && !istAnzeigerRolle(cfg.Rolle) {
 					go a.kaiSync(hr.ConfigRev, false)
 				}
 				setBordToken(hr.BordToken)  // Position fürs Bord-Netz (Bildschirme/Bordmusik)
 				a.sshAusKai(hr.SSHPassword) // SSH-Passwort aus KAI (alle Rollen)
-				a.medienAusHerzschlag(hr)   // Bildschirm/Bordmusik: Abspielseite + Bordwächter-Adresse
+				a.anzeigerRolleAusHerzschlag(hr) // Rolle Anzeigerwächter aus KAI (vor den Medien: startet ggf. neu)
+				a.medienAusHerzschlag(hr)        // Bildschirm/Bordmusik: Abspielseite + Bordwächter-Adresse
 				a.airplaySollSetzen(hr.AirplaySoll, hr.AirplayBis, hr.AirplayRef)
 			}
 		}
@@ -393,6 +401,18 @@ func main() {
 	gpio := buildGPIO(cfg)
 	eng := NewEngine(cfg, kai, gpio)
 	app := &App{cfg: cfg, kai: kai, gpio: gpio, manual: manual, src: buildGPS(cfg, manual), eng: eng}
+	startRolle = cfg.Rolle
+
+	if istAnzeigerRolle(cfg.Rolle) {
+		// Anzeigerwächter (anzeiger.go): nur Herzschlag, Protokoll, Gerätezustand, Aufträge aus KAI, Anpingen der Zielgeräte
+		// und Telegramme — kein GPS, keine SIFA/Hupe, kein Smartmeter, keine Sensoren, keine Anzeige.
+		app.anzeigerStart()
+		log.Printf("KAI-Bordgerät %s in der Rolle Anzeigerwächter — lokale Oberfläche auf %s", version, cfg.Listen)
+		if err := http.ListenAndServe(cfg.Listen, app.routes()); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	if istMedienRolle(cfg.Rolle) {
 		// Bildschirm/Bordmusik: nur Herzschlag, Protokoll, Aktualisierung und Gerätezustand — kein GPS,

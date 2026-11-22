@@ -29,13 +29,15 @@ func rolleName(r string) string {
 		return "Bildschirm"
 	case "audio":
 		return "Bordmusik"
+	case rolleAnzeiger:
+		return "Anzeigerwächter"
 	}
 	return "Bordwächter"
 }
 
 // rolleFuerKai: Art, die das Gerät im Herzschlag meldet.
 func rolleFuerKai(r string) string {
-	if istMedienRolle(r) {
+	if istKaiRolle(r) {
 		return r
 	}
 	return "bordwaechter"

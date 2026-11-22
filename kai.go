@@ -88,6 +88,11 @@ func newKaiClient(base, token string) *KaiClient {
 }
 
 func (k *KaiClient) do(method, path string, body any) ([]byte, int, error) {
+	return k.doMit(k.hc, method, path, body)
+}
+
+// doMit: wie do, aber mit eigenem Client (z. B. längeres Zeitlimit für den Telegramm-Abruf des Anzeigerwächters).
+func (k *KaiClient) doMit(hc *http.Client, method, path string, body any) ([]byte, int, error) {
 	var r io.Reader
 	if body != nil {
 		// Ein Fehler beim Verpacken (z. B. NaN) darf nicht als LEERE Anfrage rausgehen — KAI antwortet dann nur 400
@@ -106,7 +111,7 @@ func (k *KaiClient) do(method, path string, body any) ([]byte, int, error) {
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := k.hc.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -217,7 +222,7 @@ type HelloResp struct {
 	ConfigRev          int    `json:"config_rev"`          // Stand der Einstellungen in KAI
 	BordToken          string `json:"bord_token"`          // Lese-Schlüssel für die Position im Bord-Netz
 	SSHPassword        string `json:"ssh_password"`        // ein SSH-Passwort für alle Bordgeräte, zentral aus KAI
-	Rolle              string `json:"rolle"`               // Rolle aus KAI (bordwaechter | bildschirm | audio)
+	Rolle              string `json:"rolle"`               // Rolle aus KAI (bordwaechter | bildschirm | audio | anzeigerwaechter)
 	Medien             *MedienInfo `json:"medien"` // Bildschirm/Bordmusik: Abspielseite
 	AirplaySoll        *bool       `json:"airplay_soll"` // AirPlay als Quelle gewählt (nil = ältere KAI)
 	AirplayBis         string      `json:"airplay_bis"`  // Ende der gewählten Dauer, leer = bis beendet

@@ -139,7 +139,8 @@ type Config struct {
 	// Stand der zuletzt aus KAI übernommenen Einstellungen (0 = noch nie). Siehe kaiconfig.go.
 	KaiConfigRev int `json:"kai_config_rev"`
 
-	// Rolle (2026-10-24): leer = Bordwächter; "bildschirm"/"audio" = Bildschirm bzw. Bordmusik. Kommt beim
+	// Rolle (2026-10-24): leer = Bordwächter; "bildschirm"/"audio" = Bildschirm bzw. Bordmusik; "anzeigerwaechter" =
+	// Anzeigerwächter (2026-11-22, anzeiger.go). Kommt beim
 	// Koppeln aus KAI, ebenso Abspielseite und Adresse/Lese-Schlüssel des Bordwächters desselben Schiffs.
 	Rolle             string `json:"rolle"`
 	MedienPfad        string `json:"medien_pfad"`

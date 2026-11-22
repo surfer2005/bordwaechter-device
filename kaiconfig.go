@@ -330,8 +330,9 @@ func (a *App) kaiStartSync() {
 // Bildschirm/Bordmusik gelten ab der Kopplung als aus KAI gesteuert (sie haben keine KAI-Einstellungen, also nie
 // KaiConfigRev > 0) — sonst verwarf ein Speichern der Konfig-Seite ihre Rolle, und das Gerät lief als Bordwächter
 // weiter (MS-Lindau 2026-10-26).
+// Ebenso der Anzeigerwächter (2026-11-22): er hat keine KAI-Einstellungen, seine Rolle darf ein Speichern nicht verwerfen.
 func ausKaiGesteuert(c *Config) bool {
-	return c != nil && c.EdgeToken != "" && (c.KaiConfigRev > 0 || istMedienRolle(c.Rolle))
+	return c != nil && c.EdgeToken != "" && (c.KaiConfigRev > 0 || istKaiRolle(c.Rolle))
 }
 
 // sperreAusKai: was von einer Speicherung der Konfig-Seite übernommen wird. Ist das Gerät aus KAI gesteuert,
