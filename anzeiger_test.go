@@ -115,8 +115,16 @@ func TestAnzeigerHTTP(t *testing.T) {
 	defer srv.Close()
 	h, p := hostPort(t, srv.Listener.Addr().String())
 	r := telegrammSenden(anzTelegramm{ID: 5, Inhalt: "<zielanzeiger test=\"ja\"/>", Ziel: anzZiel{IP: h, Weg: "http", Port: p, Pfad: "xml"}})
-	if r.Status != "gesendet" || pfad != "/xml" || !strings.HasPrefix(art, "application/xml") || inhalt != "<zielanzeiger test=\"ja\"/>" {
+	if r.Status != "gesendet" || pfad != "/xml" || art != "application/xml; charset=utf-8" || inhalt != "<zielanzeiger test=\"ja\"/>" {
 		t.Fatalf("HTTP: %+v pfad=%q art=%q inhalt=%q", r, pfad, art, inhalt)
+	}
+	// Content-Type aus KAI (ab 0.1.148); Inhalt eines eigenen Telegramms geht unverändert raus (CR LF, Steuerzeichen)
+	roh := "<T>\r\nZeile 1\r\n\x03"
+	if r := telegrammSenden(anzTelegramm{ID: 51, Inhalt: roh, Ziel: anzZiel{IP: h, Weg: "http", Port: p, ContentType: "text/xml"}}); r.Status != "gesendet" || art != "text/xml" || inhalt != roh {
+		t.Fatalf("Content-Type/roher Inhalt: %+v art=%q inhalt=%q", r, art, inhalt)
+	}
+	if anzContentType("text/xml\r\nX-Fremd: 1") != anzContentTypeVorgabe || anzContentType("") != anzContentTypeVorgabe || anzContentType("kaputt") != anzContentTypeVorgabe {
+		t.Fatal("ungültiger Content-Type muss auf die Vorgabe fallen")
 	}
 	if r.Antwort != "HTTP 200 · <quittung ok=\"ja\"/>" {
 		t.Fatalf("Antwort: %q", r.Antwort)

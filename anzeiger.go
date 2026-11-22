@@ -115,6 +115,24 @@ type anzZiel struct {
 	Weg     string `json:"weg"` // aus | http | tcp (aus KAI, je Zielgerät)
 	Port    int    `json:"port"`
 	Pfad    string `json:"pfad"`
+	// Content-Type der HTTP-Anfrage aus KAI (ab 0.1.148), leer = application/xml; charset=utf-8
+	ContentType string `json:"content_type"`
+}
+
+const anzContentTypeVorgabe = "application/xml; charset=utf-8"
+
+// anzContentType: eingestellter Content-Type, nur druckbare Zeichen (nie ein Zeilenumbruch in der Kopfzeile), sonst Vorgabe.
+func anzContentType(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" || len(s) > 120 || !strings.Contains(s, "/") {
+		return anzContentTypeVorgabe
+	}
+	for _, r := range s {
+		if r < 0x20 || r > 0x7e {
+			return anzContentTypeVorgabe
+		}
+	}
+	return s
 }
 
 type anzTelegramm struct {
@@ -275,7 +293,7 @@ func telegrammSenden(t anzTelegramm) anzErgebnis {
 		if err != nil {
 			return fertig("fehler", "", err.Error())
 		}
-		req.Header.Set("Content-Type", "application/xml; charset=utf-8")
+		req.Header.Set("Content-Type", anzContentType(z.ContentType))
 		cl := &http.Client{
 			Timeout:       anzGesamtZeit,
 			Transport:     &http.Transport{Proxy: nil, DialContext: (&net.Dialer{Timeout: anzVerbindenZeit}).DialContext},
