@@ -421,7 +421,9 @@ function recenterMap(initZoom){ if(!kmap)return; recentering=true
   var z = (initZoom||!frisch) ? INITZOOM : kmap.getZoom()
   if(!frisch) userZoom=false
   if(shipLL){ kmap.setView(shipLL, z, {animate:false}) }
-  else if(mapPts.length){ kmap.fitBounds(L.latLngBounds(mapPts).pad(0.25),{animate:false}) }
+  // Ohne Position nur beim ersten Mal bzw. mit ◎ auf die Route einpassen — sonst bleibt der Ausschnitt stehen. Vorher passte jede
+  // Lücke in der Position (GPS ohne Fix, seit 0.1.142 verworfen) die Karte auf die ganze Route ein: der Maßstab sprang (2026-11-23).
+  else if(mapPts.length&&(initZoom||!mapFitted)){ kmap.fitBounds(L.latLngBounds(mapPts).pad(0.25),{animate:false}) }
   recentering=false; userMoved=false } // synchron geklammert — kein setTimeout (sonst userMoved-Hänger)
 function drawMap(s){
   if(typeof L==='undefined'){ $('mapcard').style.display='none'; return }
@@ -472,7 +474,7 @@ function drawMap(s){
   } else { shipLL=null }
   mapPts=pts
   // Große Seekarte: IMMER folgen (zentriert, course-up); Nutzer-Zoom 30 s behalten, dann zurück auf die gewählte Stufe (◎ = sofort INITZOOM).
-  if(!mapFitted&&(shipLL||pts.length)){ recenterMap(true); mapFitted=true }
+  if(!mapFitted&&(shipLL||pts.length)){ recenterMap(true); mapFitted=!!shipLL } // erst mit Schiffsort gilt der Maßstab als gesetzt
   else if(shipLL||pts.length){ recenterMap(false) }
   lastDrawData=s; drawCourseOverlay()
 }
