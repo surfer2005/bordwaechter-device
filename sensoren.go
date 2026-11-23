@@ -699,9 +699,13 @@ func (s *Sensorik) firmwareHolen(k *KaiClient) {
 	}
 }
 
+// chipFamilie: Chip-Familie im Manifest. ESPHome vergleicht sie beim Update mit seiner eigenen (ESPHOME_VARIANT) —
+// ein ESP32-C3 sucht „ESP32-C3“; mit „ESP32“ fände er kein passendes Abbild und spielte nichts auf. Bekannte Familien
+// gehen deshalb unverändert durch, alles andere bleibt wie bisher „ESP32“.
 func chipFamilie(c string) string {
-	if c == "ESP8266" {
-		return "ESP8266"
+	switch c {
+	case "ESP8266", "ESP32", "ESP32-C3", "ESP32-C6", "ESP32-S2", "ESP32-S3":
+		return c
 	}
 	return "ESP32"
 }

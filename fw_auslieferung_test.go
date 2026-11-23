@@ -60,3 +60,12 @@ func TestFirmwareMitGroessenangabe(t *testing.T) {
 		t.Fatalf("OTA-Fortschritt fehlt: %+v", st)
 	}
 }
+
+// ESP32-C3 SuperMini (Peter 2026-11-23): das Manifest muss „ESP32-C3“ tragen, sonst findet das ESPHome-Update kein Abbild.
+func TestChipFamilieImManifest(t *testing.T) {
+	for ein, soll := range map[string]string{"ESP8266": "ESP8266", "ESP32": "ESP32", "ESP32-C3": "ESP32-C3", "": "ESP32", "unbekannt": "ESP32"} {
+		if ist := chipFamilie(ein); ist != soll {
+			t.Fatalf("chipFamilie(%q) = %q, soll %q", ein, ist, soll)
+		}
+	}
+}
