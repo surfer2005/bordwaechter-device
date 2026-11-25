@@ -1,0 +1,1570 @@
+{
+ "hinweis": "Gemeinsame Fälle für die Übersetzung der Sensor-Meldungen: werteAusNachricht in sensoren.go (Bordgerät) und in server/src/bordsensorik-roh.js (KAI) müssen für jede Eingabe dasselbe liefern. Die Erwartung erzeugt der Go-Test aus der bisherigen Übersetzung am Gerät: FIXTURE_SCHREIBEN=1 go test -run TestUebersetzungGemeinsameFaelle",
+ "faelle": [
+  {
+   "name": "Shelly H\u0026T Gen3 NotifyFullStatus (bordsensorik_test.go)",
+   "art": "shelly",
+   "praefix": "kn1178-bar",
+   "thema": "kn1178-bar/events/rpc",
+   "inhalt": "{\"src\":\"shellyhtg3\",\"method\":\"NotifyFullStatus\",\"params\":{\"ts\":1.7e9,\"temperature:0\":{\"id\":0,\"tC\":4.9},\"humidity:0\":{\"id\":0,\"rh\":61},\"devicepower:0\":{\"battery\":{\"V\":5.9,\"percent\":84}},\"wifi\":{\"sta_ip\":\"192.168.75.52\"}}}",
+   "erwartet": {
+    "batterie": 84,
+    "ip": "192.168.75.52",
+    "werte": [
+     {
+      "schluessel": "batterie",
+      "wert": 84
+     },
+     {
+      "schluessel": "feuchte",
+      "wert": 61
+     },
+     {
+      "schluessel": "temperatur",
+      "wert": 4.9
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly gemeinsamer Zugang (bordsensorik_test.go)",
+   "art": "shelly",
+   "praefix": "bw-temperatur",
+   "thema": "bw-temperatur/events/rpc",
+   "inhalt": "{\"method\":\"NotifyFullStatus\",\"params\":{\"temperature:0\":{\"id\":0,\"tC\":7.5},\"humidity:0\":{\"id\":0,\"rh\":55}}}",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "feuchte",
+      "wert": 55
+     },
+     {
+      "schluessel": "temperatur",
+      "wert": 7.5
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly status/temperature:0",
+   "art": "shelly",
+   "praefix": "fn-ht",
+   "thema": "fn-ht/status/temperature:0",
+   "inhalt": "{\"id\":0,\"tC\":21.4,\"tF\":70.5}",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "temperatur",
+      "wert": 21.4
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly status/temperature:100 (Add-on)",
+   "art": "shelly",
+   "praefix": "fn-uni",
+   "thema": "fn-uni/status/temperature:100",
+   "inhalt": "{\"id\":100,\"tC\":4.25,\"tF\":39.6}",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "temperatur_100",
+      "wert": 4.25
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly status/humidity:0",
+   "art": "shelly",
+   "praefix": "fn-ht",
+   "thema": "fn-ht/status/humidity:0",
+   "inhalt": "{\"id\":0,\"rh\":48.6}",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "feuchte",
+      "wert": 48.6
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly status/devicepower:0",
+   "art": "shelly",
+   "praefix": "fn-ht",
+   "thema": "fn-ht/status/devicepower:0",
+   "inhalt": "{\"id\":0,\"battery\":{\"V\":5.48,\"percent\":72},\"external\":{\"present\":false}}",
+   "erwartet": {
+    "batterie": 72,
+    "werte": [
+     {
+      "schluessel": "batterie",
+      "wert": 72
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly devicepower ohne battery",
+   "art": "shelly",
+   "praefix": "fn-ht",
+   "thema": "fn-ht/status/devicepower:0",
+   "inhalt": "{\"id\":0,\"battery\":null}",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly Power Strip status/switch:0",
+   "art": "shelly",
+   "praefix": "kn1178-leiste",
+   "thema": "kn1178-leiste/status/switch:0",
+   "inhalt": "{\"id\":0,\"source\":\"init\",\"output\":true,\"apower\":12.3,\"voltage\":229.8,\"current\":0.071,\"aenergy\":{\"total\":1234.567,\"by_minute\":[0,0,0],\"minute_ts\":1731700000},\"temperature\":{\"tC\":30.1,\"tF\":86.2}}",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "energie",
+      "wert": 1234.567
+     },
+     {
+      "schluessel": "leistung",
+      "wert": 12.3
+     },
+     {
+      "schluessel": "relais",
+      "wert": true
+     },
+     {
+      "schluessel": "spannung",
+      "wert": 229.8
+     },
+     {
+      "schluessel": "strom",
+      "wert": 0.071
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly Power Strip status/switch:3 aus",
+   "art": "shelly",
+   "praefix": "kn1178-leiste",
+   "thema": "kn1178-leiste/status/switch:3",
+   "inhalt": "{\"id\":3,\"output\":false,\"apower\":0,\"voltage\":230.1,\"current\":0,\"aenergy\":{\"total\":0}}",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "energie_3",
+      "wert": 0
+     },
+     {
+      "schluessel": "leistung_3",
+      "wert": 0
+     },
+     {
+      "schluessel": "relais_3",
+      "wert": false
+     },
+     {
+      "schluessel": "spannung_3",
+      "wert": 230.1
+     },
+     {
+      "schluessel": "strom_3",
+      "wert": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly NotifyStatus nur geänderte Felder",
+   "art": "shelly",
+   "praefix": "kn1178-leiste",
+   "thema": "kn1178-leiste/events/rpc",
+   "inhalt": "{\"src\":\"shellypstripg4\",\"dst\":\"kn1178-leiste/events\",\"method\":\"NotifyStatus\",\"params\":{\"ts\":1731700000.12,\"switch:1\":{\"id\":1,\"apower\":0.0,\"current\":0.0}}}",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "leistung_1",
+      "wert": 0
+     },
+     {
+      "schluessel": "strom_1",
+      "wert": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly NotifyStatus Relais 2 ein",
+   "art": "shelly",
+   "praefix": "kn1178-leiste",
+   "thema": "kn1178-leiste/events/rpc",
+   "inhalt": "{\"method\":\"NotifyStatus\",\"params\":{\"ts\":1731700001,\"switch:2\":{\"id\":2,\"output\":true,\"source\":\"MQTT\"}}}",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "relais_2",
+      "wert": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly NotifyEvent (kein Status)",
+   "art": "shelly",
+   "praefix": "kn1178-leiste",
+   "thema": "kn1178-leiste/events/rpc",
+   "inhalt": "{\"method\":\"NotifyEvent\",\"params\":{\"ts\":1731700002,\"events\":[{\"component\":\"input:0\",\"event\":\"single_push\"}]}}",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly events/rpc mit Method groß",
+   "art": "shelly",
+   "praefix": "kn",
+   "thema": "kn/events/rpc",
+   "inhalt": "{\"Method\":\"NotifyStatus\",\"Params\":{\"temperature:0\":{\"tC\":5}}}",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "temperatur",
+      "wert": 5
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly events/rpc method falscher Typ",
+   "art": "shelly",
+   "praefix": "kn",
+   "thema": "kn/events/rpc",
+   "inhalt": "{\"method\":5,\"params\":{\"temperature:0\":{\"tC\":5}}}",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly events/rpc params null",
+   "art": "shelly",
+   "praefix": "kn",
+   "thema": "kn/events/rpc",
+   "inhalt": "{\"method\":\"NotifyStatus\",\"params\":null}",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly events/rpc params Liste",
+   "art": "shelly",
+   "praefix": "kn",
+   "thema": "kn/events/rpc",
+   "inhalt": "{\"method\":\"NotifyStatus\",\"params\":[1]}",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly events/rpc Komponente null",
+   "art": "shelly",
+   "praefix": "kn",
+   "thema": "kn/events/rpc",
+   "inhalt": "{\"method\":\"NotifyStatus\",\"params\":{\"temperature:0\":null,\"humidity:0\":{\"rh\":40}}}",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "feuchte",
+      "wert": 40
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly events/rpc kein JSON",
+   "art": "shelly",
+   "praefix": "kn",
+   "thema": "kn/events/rpc",
+   "inhalt": "kaputt",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly events/rpc null",
+   "art": "shelly",
+   "praefix": "kn",
+   "thema": "kn/events/rpc",
+   "inhalt": "null",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly status/input:0",
+   "art": "shelly",
+   "praefix": "kn-tuer",
+   "thema": "kn-tuer/status/input:0",
+   "inhalt": "{\"id\":0,\"state\":true}",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "eingang",
+      "wert": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly status/input:1",
+   "art": "shelly",
+   "praefix": "kn-tuer",
+   "thema": "kn-tuer/status/input:1",
+   "inhalt": "{\"id\":1,\"state\":false}",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "eingang_1",
+      "wert": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly status/illuminance:0",
+   "art": "shelly",
+   "praefix": "kn-licht",
+   "thema": "kn-licht/status/illuminance:0",
+   "inhalt": "{\"id\":0,\"lux\":120,\"illumination\":\"bright\"}",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "helligkeit",
+      "wert": 120
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly status/voltmeter:100",
+   "art": "shelly",
+   "praefix": "kn-uni",
+   "thema": "kn-uni/status/voltmeter:100",
+   "inhalt": "{\"id\":100,\"voltage\":12.1}",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "spannung_100",
+      "wert": 12.1
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly status/wifi",
+   "art": "shelly",
+   "praefix": "fn-ht",
+   "thema": "fn-ht/status/wifi",
+   "inhalt": "{\"sta_ip\":\"192.168.62.156\",\"status\":\"got ip\",\"ssid\":\"BSB-Bord\",\"rssi\":-61}",
+   "erwartet": {
+    "ip": "192.168.62.156",
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly status/wifi ohne Adresse",
+   "art": "shelly",
+   "praefix": "fn-ht",
+   "thema": "fn-ht/status/wifi",
+   "inhalt": "{\"sta_ip\":null,\"status\":\"disconnected\"}",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly status/sys (unbekannt)",
+   "art": "shelly",
+   "praefix": "fn-ht",
+   "thema": "fn-ht/status/sys",
+   "inhalt": "{\"mac\":\"AABBCCDDEEFF\",\"restart_required\":false,\"uptime\":1234}",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly status Zahl statt Objekt",
+   "art": "shelly",
+   "praefix": "fn-ht",
+   "thema": "fn-ht/status/temperature:0",
+   "inhalt": "5",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly status Liste",
+   "art": "shelly",
+   "praefix": "fn-ht",
+   "thema": "fn-ht/status/temperature:0",
+   "inhalt": "[1,2]",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly status null",
+   "art": "shelly",
+   "praefix": "fn-ht",
+   "thema": "fn-ht/status/temperature:0",
+   "inhalt": "null",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly status kein JSON",
+   "art": "shelly",
+   "praefix": "fn-ht",
+   "thema": "fn-ht/status/switch:0",
+   "inhalt": "kaputt",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly status Temperatur als Text",
+   "art": "shelly",
+   "praefix": "fn-ht",
+   "thema": "fn-ht/status/temperature:0",
+   "inhalt": "{\"tC\":\"21.4\"}",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly online true",
+   "art": "shelly",
+   "praefix": "fn-ht",
+   "thema": "fn-ht/online",
+   "inhalt": "true",
+   "erwartet": {
+    "online": true,
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly online false",
+   "art": "shelly",
+   "praefix": "fn-ht",
+   "thema": "fn-ht/online",
+   "inhalt": "false",
+   "erwartet": {
+    "online": false,
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly online True (Groß)",
+   "art": "shelly",
+   "praefix": "fn-ht",
+   "thema": "fn-ht/online",
+   "inhalt": "True",
+   "erwartet": {
+    "online": false,
+    "werte": []
+   }
+  },
+  {
+   "name": "Shelly anderes Thema fällt durch auf allgemein",
+   "art": "shelly",
+   "praefix": "kn",
+   "thema": "kn/events/other",
+   "inhalt": "5",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "events_other",
+      "wert": 5
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly command (ohne Schrägstrich davor)",
+   "art": "shelly",
+   "praefix": "kn",
+   "thema": "kn/command",
+   "inhalt": "status_update",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "command",
+      "wert": "status_update"
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly rpc-Nachricht an das eigene Thema",
+   "art": "shelly",
+   "praefix": "kn",
+   "thema": "kn/rpc",
+   "inhalt": "{\"id\":7,\"src\":\"kai-bordwaechter\",\"method\":\"Switch.Set\",\"params\":{\"id\":2,\"on\":true}}",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "rpc",
+      "wert": "{\"id\":7,\"src\":\"kai-bordwaechter\",\"method\":\"Switch.Set\",\"params\":{\"id\":2,\"on\":true}}"
+     }
+    ]
+   }
+  },
+  {
+   "name": "Shelly Thema nur Präfix",
+   "art": "shelly",
+   "praefix": "kn",
+   "thema": "kn",
+   "inhalt": "1",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "ESPHome sensor Temperatur",
+   "art": "esphome",
+   "praefix": "kn1178-kuehl",
+   "thema": "kn1178-kuehl/sensor/temperatur/state",
+   "inhalt": "8.6",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "temperatur",
+      "wert": 8.6
+     }
+    ]
+   }
+  },
+  {
+   "name": "ESPHome sensor mit Leerraum",
+   "art": "esphome",
+   "praefix": "kn1178-kuehl",
+   "thema": "kn1178-kuehl/sensor/temperatur/state",
+   "inhalt": " 21.50 \n",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "temperatur",
+      "wert": 21.5
+     }
+    ]
+   }
+  },
+  {
+   "name": "ESPHome sensor nan (DHT11, Büro FN)",
+   "art": "esphome",
+   "praefix": "bw-buero",
+   "thema": "bw-buero/sensor/temperatur/state",
+   "inhalt": "nan",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "ESPHome sensor NaN",
+   "art": "esphome",
+   "praefix": "bw-buero",
+   "thema": "bw-buero/sensor/temperatur/state",
+   "inhalt": "NaN",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "ESPHome sensor inf",
+   "art": "esphome",
+   "praefix": "bw-buero",
+   "thema": "bw-buero/sensor/temperatur/state",
+   "inhalt": "inf",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "ESPHome sensor -inf",
+   "art": "esphome",
+   "praefix": "bw-buero",
+   "thema": "bw-buero/sensor/temperatur/state",
+   "inhalt": "-inf",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "ESPHome sensor kein Wert",
+   "art": "esphome",
+   "praefix": "bw-buero",
+   "thema": "bw-buero/sensor/temperatur/state",
+   "inhalt": "unknown",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "ESPHome sensor Überlauf",
+   "art": "esphome",
+   "praefix": "bw-buero",
+   "thema": "bw-buero/sensor/temperatur/state",
+   "inhalt": "1e400",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "ESPHome sensor WLAN-Signal (Thema aus dem Namen)",
+   "art": "esphome",
+   "praefix": "bw-buero00001",
+   "thema": "bw-buero00001/sensor/wlan-signal/state",
+   "inhalt": "-71",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "wlan-signal",
+      "wert": -71
+     }
+    ]
+   }
+  },
+  {
+   "name": "ESPHome sensor Laufzeit",
+   "art": "esphome",
+   "praefix": "bw-buero00001",
+   "thema": "bw-buero00001/sensor/laufzeit/state",
+   "inhalt": "3600",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "laufzeit",
+      "wert": 3600
+     }
+    ]
+   }
+  },
+  {
+   "name": "ESPHome sensor Wachzeit",
+   "art": "esphome",
+   "praefix": "bw-akku",
+   "thema": "bw-akku/sensor/wachzeit/state",
+   "inhalt": "4.3",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "wachzeit",
+      "wert": 4.3
+     }
+    ]
+   }
+  },
+  {
+   "name": "ESPHome sensor altes Thema aus Namen (Büro00001)",
+   "art": "esphome",
+   "praefix": "bw-buero00001",
+   "thema": "bw-buero00001/sensor/b__ro00001/state",
+   "inhalt": "23.4",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "b__ro00001",
+      "wert": 23.4
+     }
+    ]
+   }
+  },
+  {
+   "name": "ESPHome binary_sensor Tür ON (bordsensorik_test.go)",
+   "art": "esphome",
+   "praefix": "kn1178-kuehl",
+   "thema": "kn1178-kuehl/binary_sensor/tuer/state",
+   "inhalt": "ON",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "tuer",
+      "wert": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "ESPHome binary_sensor OFF",
+   "art": "esphome",
+   "praefix": "kn1178-kuehl",
+   "thema": "kn1178-kuehl/binary_sensor/tuer/state",
+   "inhalt": "OFF",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "tuer",
+      "wert": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "ESPHome binary_sensor on klein",
+   "art": "esphome",
+   "praefix": "kn1178-kuehl",
+   "thema": "kn1178-kuehl/binary_sensor/wasser/state",
+   "inhalt": "on",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "wasser",
+      "wert": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "ESPHome binary_sensor Verbindung",
+   "art": "esphome",
+   "praefix": "bw-buero00001",
+   "thema": "bw-buero00001/binary_sensor/verbindung/state",
+   "inhalt": "ON",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "verbindung",
+      "wert": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "ESPHome switch Relais",
+   "art": "esphome",
+   "praefix": "kn-relais",
+   "thema": "kn-relais/switch/relais/state",
+   "inhalt": "OFF",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "relais",
+      "wert": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "ESPHome text_sensor IP",
+   "art": "esphome",
+   "praefix": "bw-buero00001",
+   "thema": "bw-buero00001/text_sensor/ip/state",
+   "inhalt": "192.168.62.117",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "ip",
+      "wert": "192.168.62.117"
+     }
+    ]
+   }
+  },
+  {
+   "name": "ESPHome text_sensor Firmware-Stand",
+   "art": "esphome",
+   "praefix": "bw-buero00001",
+   "thema": "bw-buero00001/text_sensor/firmware_stand/state",
+   "inhalt": "2026.11.19.1540",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "firmware_stand",
+      "wert": "2026.11.19.1540"
+     }
+    ]
+   }
+  },
+  {
+   "name": "ESPHome text_sensor Zahl als Text",
+   "art": "esphome",
+   "praefix": "bw-buero00001",
+   "thema": "bw-buero00001/text_sensor/stand/state",
+   "inhalt": " 21 ",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "stand",
+      "wert": "21"
+     }
+    ]
+   }
+  },
+  {
+   "name": "ESPHome status online",
+   "art": "esphome",
+   "praefix": "bw-buero00001",
+   "thema": "bw-buero00001/status",
+   "inhalt": "online",
+   "erwartet": {
+    "online": true,
+    "werte": []
+   }
+  },
+  {
+   "name": "ESPHome status offline",
+   "art": "esphome",
+   "praefix": "bw-buero00001",
+   "thema": "bw-buero00001/status",
+   "inhalt": "offline",
+   "erwartet": {
+    "online": false,
+    "werte": []
+   }
+  },
+  {
+   "name": "ESPHome debug (Log, kein Wert)",
+   "art": "esphome",
+   "praefix": "bw-buero00001",
+   "thema": "bw-buero00001/debug",
+   "inhalt": "[D][dht:048]: Got Temperature=23.0°C",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "ESPHome Thema zu tief",
+   "art": "esphome",
+   "praefix": "kn",
+   "thema": "kn/sensor/a/b/state",
+   "inhalt": "1",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "ESPHome Knopf-Befehl",
+   "art": "esphome",
+   "praefix": "kn",
+   "thema": "kn/button/firmware_aktualisieren/command",
+   "inhalt": "PRESS",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "Web-IO input/1 ON (MS-KONSTANZ)",
+   "art": "webio",
+   "praefix": "BSBWEBIO000001",
+   "thema": "BSBWEBIO000001/get/input/1",
+   "inhalt": "ON",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "input_1",
+      "wert": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "Web-IO input/0 OFF",
+   "art": "webio",
+   "praefix": "BSBWEBIO000001",
+   "thema": "BSBWEBIO000001/get/input/0",
+   "inhalt": "OFF",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "input_0",
+      "wert": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "Web-IO output/1 OFF",
+   "art": "webio",
+   "praefix": "BSBWEBIO000001",
+   "thema": "BSBWEBIO000001/get/output/1",
+   "inhalt": "OFF",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "output_1",
+      "wert": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "Web-IO counter/1 859",
+   "art": "webio",
+   "praefix": "BSBWEBIO000001",
+   "thema": "BSBWEBIO000001/get/counter/1",
+   "inhalt": "859",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "counter_1",
+      "wert": 859
+     }
+    ]
+   }
+  },
+  {
+   "name": "Web-IO online",
+   "art": "webio",
+   "praefix": "BSBWEBIO000001",
+   "thema": "BSBWEBIO000001",
+   "inhalt": "online",
+   "erwartet": {
+    "online": true,
+    "werte": []
+   }
+  },
+  {
+   "name": "Web-IO Online groß",
+   "art": "webio",
+   "praefix": "BSBWEBIO000001",
+   "thema": "BSBWEBIO000001",
+   "inhalt": "Online",
+   "erwartet": {
+    "online": true,
+    "werte": []
+   }
+  },
+  {
+   "name": "Web-IO offline",
+   "art": "webio",
+   "praefix": "BSBWEBIO000001",
+   "thema": "BSBWEBIO000001",
+   "inhalt": "offline",
+   "erwartet": {
+    "online": false,
+    "werte": []
+   }
+  },
+  {
+   "name": "Web-IO nan",
+   "art": "webio",
+   "praefix": "BSBWEBIO000001",
+   "thema": "BSBWEBIO000001/get/input/1",
+   "inhalt": "nan",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "Web-IO Dezimalkomma bleibt Text",
+   "art": "webio",
+   "praefix": "BSBWEBIO000001",
+   "thema": "BSBWEBIO000001/get/analog/1",
+   "inhalt": "12,5",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "analog_1",
+      "wert": "12,5"
+     }
+    ]
+   }
+  },
+  {
+   "name": "Web-IO set-Thema",
+   "art": "webio",
+   "praefix": "BSBWEBIO000001",
+   "thema": "BSBWEBIO000001/set/output/1",
+   "inhalt": "ON",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "allgemein Zahl",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/temp",
+   "inhalt": "21.5",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "temp",
+      "wert": 21.5
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Thema mit Ebenen",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/a/b",
+   "inhalt": "ON",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "a_b",
+      "wert": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein nur Präfix",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet",
+   "inhalt": "x",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "allgemein set",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/x/set",
+   "inhalt": "1",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "allgemein command",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/x/command/y",
+   "inhalt": "1",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "allgemein nan",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/temp",
+   "inhalt": "nan",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "allgemein Infinity",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/temp",
+   "inhalt": "Infinity",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "allgemein +Inf",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/temp",
+   "inhalt": "+Inf",
+   "erwartet": {
+    "werte": []
+   }
+  },
+  {
+   "name": "allgemein +nan",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/temp",
+   "inhalt": "+nan",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "temp",
+      "wert": "+nan"
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Text",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/text",
+   "inhalt": "hallo",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "text",
+      "wert": "hallo"
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Zahl mit Leerraum",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": " 7 ",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": 7
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Exponent",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "1e3",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": 1000
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Hex-Gleitkomma",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "0x1p4",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": 16
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Hex mit Bruch",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "0x1.8p1",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Hex ohne Exponent",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "0x10",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": "0x10"
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein .5",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": ".5",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": 0.5
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein 5.",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "5.",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": 5
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein +5",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "+5",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": 5
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Unterstrich",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "1_000",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": 1000
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Unterstrich mit 0",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "0_1",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein doppelter Unterstrich",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "1__0",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": "1__0"
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Unterstrich vorn",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "_1",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": "_1"
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Unterstrich hinten",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "1_",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": "1_"
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Unterstrich vor Punkt",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "1_.5",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": "1_.5"
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Unterstrich im Exponent",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "1e1_0",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": 10000000000
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Hex mit Unterstrich",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "0x_1p0",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Binärpräfix",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "0b1",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": "0b1"
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Komma",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "12,5",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": "12,5"
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Tabulator und Zeilenende",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "\t42\r\n",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": 42
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein geschütztes Leerzeichen",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": " 42 ",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": 42
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Exponent ohne Ziffer",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "1e",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": "1e"
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Punkt",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": ".",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": "."
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Unterlauf",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "1e-400",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Überlauf",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/zahl",
+   "inhalt": "-1e400",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "zahl",
+      "wert": "-1e400"
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein true",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/z",
+   "inhalt": "true",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "z",
+      "wert": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein CLOSED",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/z",
+   "inhalt": "CLOSED",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "z",
+      "wert": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein open klein",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/z",
+   "inhalt": "open",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "z",
+      "wert": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein leer",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/leer",
+   "inhalt": "",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "leer",
+      "wert": ""
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein Umlaut bleibt Text",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/z",
+   "inhalt": "größer",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "z",
+      "wert": "größer"
+     }
+    ]
+   }
+  },
+  {
+   "name": "allgemein JSON bleibt Text",
+   "art": "mqtt",
+   "praefix": "geraet",
+   "thema": "geraet/json",
+   "inhalt": "{\"a\":1}",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "json",
+      "wert": "{\"a\":1}"
+     }
+    ]
+   }
+  },
+  {
+   "name": "unbekannte Art wie allgemein",
+   "art": "neu",
+   "praefix": "g",
+   "thema": "g/x",
+   "inhalt": "3",
+   "erwartet": {
+    "werte": [
+     {
+      "schluessel": "x",
+      "wert": 3
+     }
+    ]
+   }
+  }
+ ]
+}

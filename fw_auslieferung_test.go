@@ -62,8 +62,10 @@ func TestFirmwareMitGroessenangabe(t *testing.T) {
 }
 
 // ESP32-C3 SuperMini (Peter 2026-11-23): das Manifest muss „ESP32-C3“ tragen, sonst findet das ESPHome-Update kein Abbild.
+// Seit 2026-11-25 reicht der Bordwächter die Familie aus KAI ungeprüft durch — eine neue Platine (z. B. ESP32-H2) braucht
+// kein neues Bordgerät; nur leer (ältere KAI) bleibt „ESP32“.
 func TestChipFamilieImManifest(t *testing.T) {
-	for ein, soll := range map[string]string{"ESP8266": "ESP8266", "ESP32": "ESP32", "ESP32-C3": "ESP32-C3", "": "ESP32", "unbekannt": "ESP32"} {
+	for ein, soll := range map[string]string{"ESP8266": "ESP8266", "ESP32": "ESP32", "ESP32-C3": "ESP32-C3", "ESP32-H2": "ESP32-H2", "": "ESP32", "  ": "ESP32"} {
 		if ist := chipFamilie(ein); ist != soll {
 			t.Fatalf("chipFamilie(%q) = %q, soll %q", ein, ist, soll)
 		}

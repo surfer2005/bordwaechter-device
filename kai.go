@@ -22,6 +22,8 @@ type Leg struct {
 	GeometryReverse [][2]float64 `json:"geometry_reverse"` // Gegenrichtung (blasse Linie)
 	LengthKm        *float64     `json:"length_km"`
 	SpreadM  *float64    `json:"spread_m"` // gelernte Korridor-Breite (für adaptive Kurs-Grenze)
+	// Fahrprofil (Hafenausfahrt · freie Strecke · Hafeneinfahrt, KAI ab 2026-11-25) — nil bei älterem KAI → bisherige Rechnung
+	Profil *LegProfil `json:"profil"`
 }
 
 type Bundle struct {
@@ -47,6 +49,7 @@ type Bundle struct {
 		MaxKmh          float64 `json:"maxKmh"`
 		ArrivalRadiusM  float64 `json:"arrivalRadiusM"`
 		NextLogbookHintMin float64 `json:"nextLogbookHintMin"`
+		ProfilRampeM       float64 `json:"profilRampeM"` // Fahrprofil: Meter, über die das Reisetempo nach der Ausfahrt aufs aktuelle gleitet
 		Unit            string  `json:"unit"`
 	} `json:"thresholds"`
 	HatBordbuch bool   `json:"hatBordbuch"`

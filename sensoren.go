@@ -2,15 +2,24 @@ package main
 
 // Sensoren am Bordwächter (Peter 2026-11-07): Shelly, ESPHome und Web-IO melden per MQTT an den eingebauten
 // Empfänger (mqttbroker.go, Port 1883). Die Zugänge kommen aus KAI (GET /api/edge/sensoren-config, nur Hash),
-// die Werte gehen gesammelt an KAI (POST /api/edge/sensoren-werte) und werden ohne Netz gepuffert.
+// die Meldungen gehen gesammelt an KAI (POST /api/edge/sensoren-werte) und werden ohne Netz gepuffert.
 // Grenzwerte mit „Lampe/Hupe an Bord“ prüft der Bordwächter selbst — die Lampe geht auch ohne Netz an.
 // ESPHome-Firmware: der Bordwächter lädt sie von KAI und bietet sie im Bord-Netz an (/fw/<sensor>/…);
 // der Sensor holt sie sich über seine Update-Funktion.
+//
+// Durchreichen statt übersetzen (Peter 2026-11-25: „Reicht es nicht aus, dass der Bordwächter sozusagen nur als
+// Mittelsmann auftritt?“): kündigt KAI es in sensoren-config an („durchreichen“), schickt der Bordwächter jede Nachricht
+// eines Sensors UNVERÄNDERT (Thema + Inhalt + Zeit) an KAI — welche Geräteart welchen Wert meint, weiß nur noch KAI
+// (server/src/bordsensorik-roh.js). Für Lampe/Hupe ohne Netz und den Schlüsselschalter des Lichts schickt KAI je Wert
+// fertige Quellen (Thema + Pfad im Inhalt) mit; der Bordwächter liest den Wert daraus, ohne die Geräteart zu kennen.
+// Eine neue Sensorart braucht so nur ein neues KAI, kein neues Bordgerät. Sagt KAI nichts (ältere KAI, z. B. die
+// Produktion vor dem Einspielen), übersetzt der Bordwächter wie bisher selbst (werteAusNachricht) — das bleibt Rückfall.
 
 import (
 	"crypto/md5"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -24,6 +33,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 type sensorWertDef struct {
@@ -33,6 +43,15 @@ type sensorWertDef struct {
 	AlarmBei   *string  `json:"alarm_bei"`
 	DauerMin   int      `json:"dauer_min"`
 	Lampe      bool     `json:"lampe"`
+	// Woher der Wert beim Durchreichen kommt (aus KAI): Thema (MQTT-Filter) und Pfad im JSON-Inhalt, leer = ganzer Inhalt.
+	Quellen []wertQuelle `json:"quellen,omitempty"`
+}
+
+// wertQuelle: eine Stelle, an der ein Wert in einer Sensor-Nachricht steht — von KAI je Geräteart gebildet, z. B.
+// {thema: "kn-bar/status/temperature:0", pfad: ["tC"]} oder {thema: "kn-kuehl/sensor/temperatur/state"}.
+type wertQuelle struct {
+	Thema string   `json:"thema"`
+	Pfad  []string `json:"pfad,omitempty"`
 }
 type sensorFirmware struct {
 	Version string `json:"version"`
@@ -69,7 +88,32 @@ type sensorStatus struct {
 	// OTA-Fortschritt: wie viel der Sensor von der angebotenen Firmware schon geladen hat (0.1.145, Peter 2026-11-19)
 	OtaProzent *int   `json:"ota_prozent,omitempty"`
 	OtaAt      string `json:"ota_at,omitempty"`
+	// Adresse, von der der Sensor beim Bordwächter angemeldet ist (aus der MQTT-Verbindung, für jede Geräteart) —
+	// KAI entscheidet, wofür sie taugt (ESPHome: Link zur Geräteseite).
+	VerbindungIP string `json:"verbindung_ip,omitempty"`
 }
+
+// sensorRoh: eine Sensor-Nachricht, wie sie am MQTT-Empfänger ankam — geht unverändert an KAI („durchreichen“).
+// SensorID nur bei einem eigenen Zugang des Sensors; beim gemeinsamen Zugang ordnet KAI über das Thema zu.
+type sensorRoh struct {
+	SensorID  int    `json:"sensor_id,omitempty"`
+	Thema     string `json:"thema"`
+	Inhalt    string `json:"inhalt"`
+	InhaltB64 string `json:"inhalt_b64,omitempty"` // nur, wenn der Inhalt kein gültiges UTF-8 ist
+	At        string `json:"at"`
+}
+
+func (r sensorRoh) groesse() int { return len(r.Thema) + len(r.Inhalt) + len(r.InhaltB64) + 64 }
+
+// Obergrenzen des Puffers für durchgereichte Nachrichten (ohne Netz). Eine Shelly-Meldung ist ein paar hundert Byte,
+// eine vollständige (NotifyFullStatus) ein paar KB; der alte Puffer hielt 50.000 übersetzte Werte ≈ 10.000 Meldungen.
+const (
+	rohMaxAnzahl    = 20000
+	rohMaxBytes     = 16 << 20
+	rohMaxNachricht = 64 << 10
+	rohJeSendung    = 1000
+	rohBytesJeSend  = 2 << 20
+)
 
 type Sensorik struct {
 	mu        sync.Mutex
@@ -83,9 +127,13 @@ type Sensorik struct {
 	logs      map[int][]string // ESPHome-Log je Sensor (über MQTT <praefix>/debug), Ringpuffer → an KAI
 	broker    *MQTTBroker
 	gemeinsam *brokerZugang // MQTT-B: EIN geteilter Broker-Zugang je Bordwächter (HA-Modell), zusätzlich zu den Pro-Sensor-Zugängen
-	lampeAn   bool
-	gesendet  time.Time
-	geladenAm time.Time
+	// Durchreichen (KAI übersetzt): angekündigt von KAI in sensoren-config, gemerkt in meldeweg.json für den Start ohne Netz
+	durchreichen bool
+	roh          []sensorRoh
+	rohBytes     int
+	lampeAn      bool
+	gesendet     time.Time
+	geladenAm    time.Time
 }
 
 // brokerZugang: der geteilte MQTT-Zugang (HA-Modell). Das Gerät bekommt nur Benutzer + Salt + Hash.
@@ -353,6 +401,14 @@ func (s *Sensorik) eingang(z mqttZugang, topic string, payload []byte) {
 		s.status[d.ID] = st
 	}
 	jetzt := time.Now().UTC()
+	if z.IP != "" {
+		st.VerbindungIP = z.IP
+	}
+	st.ZuletztAt = jetzt.Format(time.RFC3339)
+	if s.durchreichen {
+		s.rohMerken(z, d, topic, payload, jetzt)
+		return
+	}
 	// ESPHome: die Adresse aus der Verbindung — der Textwert „ip“ (wifi_info) kam bei Büro00001 nie an (19.11.2026);
 	// KAI braucht sie für den Ein-Klick-Link zur Geräteseite. Shelly meldet sie selbst (wifi.sta_ip).
 	if d.Art == "esphome" && z.IP != "" {
@@ -362,7 +418,6 @@ func (s *Sensorik) eingang(z mqttZugang, topic string, payload []byte) {
 	if len(werte) > 0 {
 		st.Online = true
 	}
-	st.ZuletztAt = jetzt.Format(time.RFC3339)
 	for _, w := range werte {
 		s.aktuell[fmt.Sprintf("%d|%s", d.ID, w.Schluessel)] = w.Wert
 		s.puffer = append(s.puffer, sensorMessung{SensorID: d.ID, Schluessel: w.Schluessel, Wert: w.Wert, At: jetzt.Format(time.RFC3339Nano)})
@@ -382,6 +437,110 @@ func (s *Sensorik) defFuerThema(topic string) *sensorDef {
 		}
 	}
 	return best
+}
+
+// rohMerken: Nachricht unverändert für KAI puffern und die Werte, für die KAI Quellen geschickt hat, für Lampe/Hupe und den
+// Schlüsselschalter lesen — ohne die Geräteart zu kennen. Aufrufer hält s.mu.
+func (s *Sensorik) rohMerken(z mqttZugang, d *sensorDef, topic string, payload []byte, jetzt time.Time) {
+	for _, w := range d.Werte {
+		for _, q := range w.Quellen {
+			if v, ok := wertAusQuelle(q, topic, payload); ok {
+				s.aktuell[fmt.Sprintf("%d|%s", d.ID, w.Schluessel)] = v
+				break
+			}
+		}
+	}
+	if len(payload) > rohMaxNachricht {
+		gedrosseltMelden("gross|"+d.Praefix, 6*time.Hour, "warn", fmt.Sprintf("Sensor-Nachricht zu groß (%d Byte), nicht an KAI weitergegeben: Thema %s", len(payload), topic))
+		return
+	}
+	r := sensorRoh{SensorID: z.SensorID, Thema: topic, At: jetzt.Format(time.RFC3339Nano)}
+	if utf8.Valid(payload) {
+		r.Inhalt = string(payload)
+	} else {
+		r.InhaltB64 = base64.StdEncoding.EncodeToString(payload)
+	}
+	s.roh = append(s.roh, r)
+	s.rohBytes += r.groesse()
+	s.rohKuerzen()
+}
+
+// rohKuerzen: ältestes zuerst verwerfen, wenn der Puffer zu groß wird (lange ohne Netz). Aufrufer hält s.mu.
+func (s *Sensorik) rohKuerzen() {
+	weg := 0
+	for len(s.roh)-weg > rohMaxAnzahl || (s.rohBytes > rohMaxBytes && weg < len(s.roh)) {
+		s.rohBytes -= s.roh[weg].groesse()
+		weg++
+	}
+	if weg > 0 {
+		s.roh = append([]sensorRoh(nil), s.roh[weg:]...)
+	}
+}
+
+// wertAusQuelle: den Wert an der Stelle lesen, die KAI genannt hat. Ohne Pfad ist der ganze Inhalt der Wert (Zahl,
+// ein/aus oder Text wie zahlOderZustand), mit Pfad ein Feld im JSON. Kein Wert (Thema passt nicht, Feld fehlt, „nan“) → false.
+func wertAusQuelle(q wertQuelle, topic string, payload []byte) (any, bool) {
+	if q.Thema == "" || !passt(q.Thema, topic) {
+		return nil, false
+	}
+	if len(q.Pfad) == 0 {
+		v := zahlOderZustand(string(payload))
+		return v, v != nil
+	}
+	var x any
+	if json.Unmarshal(payload, &x) != nil {
+		return nil, false
+	}
+	for _, k := range q.Pfad {
+		m, ok := x.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		if x, ok = m[k]; !ok {
+			return nil, false
+		}
+	}
+	switch v := x.(type) {
+	case float64, bool:
+		return v, true
+	case string:
+		z := zahlOderZustand(v)
+		return z, z != nil
+	}
+	return nil, false
+}
+
+// rohUebersetzen: schaltet KAI das Durchreichen ab (z. B. Rückfall in KAI, ältere KAI), werden noch gepufferte
+// Nachrichten hier übersetzt wie früher — es geht nichts verloren. Aufrufer hält s.mu.
+func (s *Sensorik) rohUebersetzen() {
+	for _, r := range s.roh {
+		d := s.defs[r.SensorID]
+		if d == nil {
+			d = s.defFuerThema(r.Thema)
+		}
+		if d == nil {
+			continue
+		}
+		payload := []byte(r.Inhalt)
+		if r.InhaltB64 != "" {
+			if b, err := base64.StdEncoding.DecodeString(r.InhaltB64); err == nil {
+				payload = b
+			}
+		}
+		st := s.status[d.ID]
+		if st == nil {
+			st = &sensorStatus{SensorID: d.ID}
+			s.status[d.ID] = st
+		}
+		for _, w := range werteAusNachricht(d.Art, d.Praefix, r.Thema, payload, st) {
+			s.aktuell[fmt.Sprintf("%d|%s", d.ID, w.Schluessel)] = w.Wert
+			s.puffer = append(s.puffer, sensorMessung{SensorID: d.ID, Schluessel: w.Schluessel, Wert: w.Wert, At: r.At})
+		}
+	}
+	if len(s.puffer) > 50000 {
+		s.puffer = s.puffer[len(s.puffer)-50000:]
+	}
+	s.roh, s.rohBytes = nil, 0
 }
 
 // WertVon: letzter Wert eines Sensors anhand seines Themas (für das Licht: Schlüsselschalter).
@@ -447,22 +606,70 @@ func (s *Sensorik) lampeBerechnen(jetzt time.Time) bool {
 
 // ── Puffer auf Platte (ohne Netz, über einen Neustart hinweg) ───────────────────────────────────────
 
+// Zwei Puffer-Dateien: puffer.json (übersetzte Werte — auch die von vor dem Update, sie gehen über den alten Weg an KAI)
+// und puffer-roh.json (durchgereichte Nachrichten). Eine leere Liste löscht ihre Datei.
 func (s *Sensorik) pufferSichern() {
 	s.mu.Lock()
-	daten, _ := json.Marshal(s.puffer)
+	var werte, roh []byte
+	if len(s.puffer) > 0 {
+		werte, _ = json.Marshal(s.puffer)
+	}
+	if len(s.roh) > 0 {
+		roh, _ = json.Marshal(s.roh)
+	}
 	s.mu.Unlock()
 	_ = os.MkdirAll(sensorOrdner(), 0o700)
-	_ = os.WriteFile(filepath.Join(sensorOrdner(), "puffer.json"), daten, 0o600)
+	for name, daten := range map[string][]byte{"puffer.json": werte, "puffer-roh.json": roh} {
+		if daten == nil {
+			_ = os.Remove(filepath.Join(sensorOrdner(), name))
+		} else {
+			_ = os.WriteFile(filepath.Join(sensorOrdner(), name), daten, 0o600)
+		}
+	}
 }
 func (s *Sensorik) pufferLaden() {
-	b, err := os.ReadFile(filepath.Join(sensorOrdner(), "puffer.json"))
+	if b, err := os.ReadFile(filepath.Join(sensorOrdner(), "puffer.json")); err == nil {
+		var p []sensorMessung
+		if json.Unmarshal(b, &p) == nil {
+			s.mu.Lock()
+			s.puffer = append(p, s.puffer...)
+			s.mu.Unlock()
+		}
+	}
+	if b, err := os.ReadFile(filepath.Join(sensorOrdner(), "puffer-roh.json")); err == nil {
+		var p []sensorRoh
+		if json.Unmarshal(b, &p) == nil {
+			s.mu.Lock()
+			s.roh = append(p, s.roh...)
+			s.rohBytes = 0
+			for _, r := range s.roh {
+				s.rohBytes += r.groesse()
+			}
+			s.rohKuerzen()
+			s.mu.Unlock()
+		}
+	}
+}
+
+// Meldeweg merken: ein Bordwächter, der ohne Netz neu startet, soll weiter so melden, wie KAI es zuletzt wollte.
+func (s *Sensorik) meldewegSichern() {
+	s.mu.Lock()
+	daten, _ := json.Marshal(map[string]bool{"durchreichen": s.durchreichen})
+	s.mu.Unlock()
+	_ = os.MkdirAll(sensorOrdner(), 0o700)
+	_ = os.WriteFile(filepath.Join(sensorOrdner(), "meldeweg.json"), daten, 0o600)
+}
+func (s *Sensorik) meldewegLaden() {
+	b, err := os.ReadFile(filepath.Join(sensorOrdner(), "meldeweg.json"))
 	if err != nil {
 		return
 	}
-	var p []sensorMessung
-	if json.Unmarshal(b, &p) == nil {
+	var m struct {
+		Durchreichen bool `json:"durchreichen"`
+	}
+	if json.Unmarshal(b, &m) == nil {
 		s.mu.Lock()
-		s.puffer = append(p, s.puffer...)
+		s.durchreichen = m.Durchreichen
 		s.mu.Unlock()
 	}
 }
@@ -494,22 +701,26 @@ func (s *Sensorik) defsLaden() {
 
 // ── KAI ─────────────────────────────────────────────────────────────────────────────────────────────
 
-func (k *KaiClient) GetSensorenConfig() ([]*sensorDef, *brokerZugang, error) {
+// sensorenConfig: Antwort von GET /api/edge/sensoren-config. Durchreichen fehlt bei älterem KAI → false → wie bisher übersetzen.
+type sensorenConfig struct {
+	Sensoren     []*sensorDef  `json:"sensoren"`
+	Broker       *brokerZugang `json:"broker"`
+	Durchreichen bool          `json:"durchreichen"`
+}
+
+func (k *KaiClient) GetSensorenConfig() (*sensorenConfig, error) {
 	data, code, err := k.do("GET", "/api/edge/sensoren-config", nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if code != 200 {
-		return nil, nil, fmt.Errorf("sensoren-config http %d", code)
+		return nil, fmt.Errorf("sensoren-config http %d", code)
 	}
-	var r struct {
-		Sensoren []*sensorDef  `json:"sensoren"`
-		Broker   *brokerZugang `json:"broker"`
-	}
+	var r sensorenConfig
 	if err := json.Unmarshal(data, &r); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return r.Sensoren, r.Broker, nil
+	return &r, nil
 }
 
 // MQTT-B: geteilten Zugang übernehmen + für den Offline-Betrieb auf die Platte sichern.
@@ -539,8 +750,13 @@ type sensorLog struct {
 	Zeilen   []string `json:"zeilen"`
 }
 
-func (k *KaiClient) PostSensorWerte(werte []sensorMessung, status []sensorStatus, logs []sensorLog) error {
-	_, code, err := k.do("POST", "/api/edge/sensoren-werte", map[string]any{"werte": werte, "status": status, "logs": logs})
+// PostSensorWerte: roh == nil → Feld fehlt (übersetzt, wie bisher); sonst geht es mit, auch leer — daran sieht KAI den Meldeweg.
+func (k *KaiClient) PostSensorWerte(werte []sensorMessung, roh []sensorRoh, status []sensorStatus, logs []sensorLog) error {
+	body := map[string]any{"werte": werte, "status": status, "logs": logs}
+	if roh != nil {
+		body["roh"] = roh
+	}
+	_, code, err := k.do("POST", "/api/edge/sensoren-werte", body)
 	if err != nil {
 		return err
 	}
@@ -550,7 +766,7 @@ func (k *KaiClient) PostSensorWerte(werte []sensorMessung, status []sensorStatus
 	return nil
 }
 
-func (s *Sensorik) configUebernehmen(liste []*sensorDef) {
+func (s *Sensorik) configUebernehmen(liste []*sensorDef, durchreichen bool) {
 	s.mu.Lock()
 	neu := map[int]*sensorDef{}
 	for _, d := range liste {
@@ -558,8 +774,21 @@ func (s *Sensorik) configUebernehmen(liste []*sensorDef) {
 	}
 	s.defs = neu
 	s.geladenAm = time.Now()
+	wechsel := s.durchreichen != durchreichen
+	if wechsel {
+		if durchreichen {
+			logEvent("info", "Sensoren: KAI übersetzt die Meldungen, der Bordwächter reicht sie unverändert durch")
+		} else {
+			logEvent("info", "Sensoren: der Bordwächter übersetzt die Meldungen wieder selbst")
+			s.rohUebersetzen() // noch gepufferte Nachrichten nicht verlieren
+		}
+	}
+	s.durchreichen = durchreichen
 	s.mu.Unlock()
 	s.defsSichern()
+	if wechsel {
+		s.meldewegSichern()
+	}
 }
 
 // sendenMu: senden läuft aus dem 10-s-Takt UND sofort nach einem Schaltbefehl — nie gleichzeitig,
@@ -575,6 +804,19 @@ func (s *Sensorik) senden(k *KaiClient) {
 		n = 2000
 	}
 	stueck := append([]sensorMessung(nil), s.puffer[:n]...)
+	// Durchgereichte Nachrichten: höchstens 1.000 bzw. ~2 MB je Sendung. Beim Durchreichen geht das Feld immer mit (auch leer).
+	var rohStueck []sensorRoh
+	if s.durchreichen {
+		rohStueck = []sensorRoh{}
+		groesse := 0
+		for _, r := range s.roh {
+			if len(rohStueck) >= rohJeSendung || (len(rohStueck) > 0 && groesse+r.groesse() > rohBytesJeSend) {
+				break
+			}
+			rohStueck = append(rohStueck, r)
+			groesse += r.groesse()
+		}
+	}
 	verbunden := map[int]bool{}
 	if s.broker != nil {
 		s.mu.Unlock()
@@ -596,7 +838,7 @@ func (s *Sensorik) senden(k *KaiClient) {
 		}
 	}
 	s.mu.Unlock()
-	if len(stueck) == 0 && len(status) == 0 && len(logs) == 0 {
+	if len(stueck) == 0 && len(rohStueck) == 0 && len(status) == 0 && len(logs) == 0 {
 		return
 	}
 	// Zweite Sicherung: nie einen nicht endlichen Wert schicken — einer allein ließ die ganze Sendung scheitern,
@@ -608,7 +850,7 @@ func (s *Sensorik) senden(k *KaiClient) {
 		}
 		sauber = append(sauber, m)
 	}
-	if err := k.PostSensorWerte(sauber, status, logs); err != nil {
+	if err := k.PostSensorWerte(sauber, rohStueck, status, logs); err != nil {
 		log.Printf("sensoren: senden: %v", err)
 		s.pufferSichern()
 		return
@@ -622,11 +864,29 @@ func (s *Sensorik) senden(k *KaiClient) {
 		}
 	}
 	s.puffer = s.puffer[len(stueck):]
+	// Durchgereichte: nur die gesendeten vorne entfernen — bis zur zuletzt gesendeten Nachricht. Vorne können während der
+	// Sendung schon welche weggefallen sein (Obergrenze); hat rohUebersetzen den Puffer geleert, findet sich nichts.
+	if n := len(rohStueck); n > 0 {
+		bis := -1
+		for i := 0; i < n && i < len(s.roh); i++ {
+			if s.roh[i] == rohStueck[n-1] {
+				bis = i
+			}
+		}
+		for _, r := range s.roh[:bis+1] {
+			s.rohBytes -= r.groesse()
+		}
+		s.roh = s.roh[bis+1:]
+	}
 	s.gesendet = time.Now()
 	leer := len(s.puffer) == 0
+	rohLeer := len(s.roh) == 0
 	s.mu.Unlock()
 	if leer {
 		_ = os.Remove(filepath.Join(sensorOrdner(), "puffer.json"))
+	}
+	if rohLeer {
+		_ = os.Remove(filepath.Join(sensorOrdner(), "puffer-roh.json"))
 	}
 }
 
@@ -700,11 +960,11 @@ func (s *Sensorik) firmwareHolen(k *KaiClient) {
 }
 
 // chipFamilie: Chip-Familie im Manifest. ESPHome vergleicht sie beim Update mit seiner eigenen (ESPHOME_VARIANT) —
-// ein ESP32-C3 sucht „ESP32-C3“; mit „ESP32“ fände er kein passendes Abbild und spielte nichts auf. Bekannte Familien
-// gehen deshalb unverändert durch, alles andere bleibt wie bisher „ESP32“.
+// ein ESP32-C3 sucht „ESP32-C3“; mit „ESP32“ fände er kein passendes Abbild und spielte nichts auf. Welche Familie eine
+// Platine hat, weiß KAI (ESPHOME_BOARDS[].chip) — der Bordwächter reicht sie ungeprüft durch, damit eine neue Platine
+// kein neues Bordgerät braucht (Peter 2026-11-25). Leer (ältere KAI) bleibt wie bisher „ESP32“.
 func chipFamilie(c string) string {
-	switch c {
-	case "ESP8266", "ESP32", "ESP32-C3", "ESP32-C6", "ESP32-S2", "ESP32-S3":
+	if c = strings.TrimSpace(c); c != "" {
 		return c
 	}
 	return "ESP32"
@@ -812,7 +1072,13 @@ func (a *App) sensorLoop() {
 	s := sensorik
 	s.defsLaden()
 	s.gemeinsamLaden()
+	s.meldewegLaden()
 	s.pufferLaden()
+	s.mu.Lock()
+	if !s.durchreichen && len(s.roh) > 0 {
+		s.rohUebersetzen() // durchgereichte Nachrichten aus der Zeit vor einem Rückfall
+	}
+	s.mu.Unlock()
 	s.broker = neuerMQTTBroker(s.pruefeZugang, s.eingang)
 	s.broker.zuordnen = func(topic string) int {
 		s.mu.Lock()
@@ -837,9 +1103,9 @@ func (a *App) sensorLoop() {
 		cfg := a.getCfg()
 		if k != nil && cfg.EdgeToken != "" {
 			if time.Since(letzteConfig) > 60*time.Second {
-				if liste, broker, err := k.GetSensorenConfig(); err == nil {
-					s.configUebernehmen(liste)
-					s.gemeinsamUebernehmen(broker)
+				if c, err := k.GetSensorenConfig(); err == nil {
+					s.configUebernehmen(c.Sensoren, c.Durchreichen)
+					s.gemeinsamUebernehmen(c.Broker)
 					letzteConfig = time.Now()
 					go s.firmwareHolen(k)
 				}
@@ -861,16 +1127,27 @@ func (a *App) sensorLoop() {
 }
 
 // ── Steckdosen schalten (wie beim DALI-Licht) ──────────────────────────────────────────────────────
+//
+// Fertige Nachricht aus KAI (Peter 2026-11-25, gleiche Fassung wie das Durchreichen): beim Abholen kündigt der Bordwächter
+// „nachricht“ an; KAI schickt Schaltbefehle dann als Thema + Inhalt (Shelly: Switch.Set an <präfix>/rpc, ESPHome-Relais:
+// <präfix>/switch/<id>/command ON/OFF), der Bordwächter veröffentlicht sie nur — eine neue schaltbare Geräteart braucht so
+// nur KAI. Ein älteres KAI überhört die Ankündigung und schickt wie bisher Präfix + Kanal (Switch.Set baut dann das Gerät).
+
+// befehlFaehigkeiten: was der Bordwächter beim Abholen der Sensor-Befehle ankündigt.
+var befehlFaehigkeiten = []string{"nachricht"}
 
 type sensorBefehl struct {
 	ID       int    `json:"id"`
 	SensorID int    `json:"sensor_id"`
-	Art      string `json:"art"` // "" / schalten = Switch.Set über MQTT · mqtt_steuerung = am Shelly per HTTP einschalten (0.1.138)
+	Art      string `json:"art"` // "" / schalten = Switch.Set über MQTT · mqtt_steuerung = am Shelly per HTTP einschalten (0.1.138) · nachricht = fertige MQTT-Nachricht aus KAI
 	Praefix  string `json:"praefix"`
 	Kanal    int    `json:"kanal"`
 	An       bool   `json:"an"`
 	IP       string `json:"ip"`
 	Neustart bool   `json:"neustart"`
+	Thema    string `json:"thema"`  // nachricht: Thema, an das veröffentlicht wird
+	Inhalt   string `json:"inhalt"` // nachricht: Inhalt, unverändert
+	Text     string `json:"text"`   // nachricht: Klartext fürs Geräte-Log (z. B. „Steckdose 3 aus“)
 }
 type sensorQuittung struct {
 	ID      int    `json:"id"`
@@ -913,7 +1190,7 @@ func shellySchaltNachricht(id, kanal int, an bool) []byte {
 
 // schaltBefehle: einmal Befehle abholen (mit Quittungen) und ausführen. Rückgabe: ob geschaltet wurde.
 func (s *Sensorik) schaltBefehle(k *KaiClient, quittung *[]sensorQuittung) bool {
-	data, code, err := k.do("POST", "/api/edge/sensor-befehle", map[string]any{"erledigt": *quittung})
+	data, code, err := k.do("POST", "/api/edge/sensor-befehle", map[string]any{"erledigt": *quittung, "kann": befehlFaehigkeiten})
 	if err != nil || code != 200 {
 		return false
 	}
@@ -931,6 +1208,10 @@ func (s *Sensorik) schaltBefehle(k *KaiClient, quittung *[]sensorQuittung) bool 
 	for _, b := range r.Befehle {
 		if b.Art == "mqtt_steuerung" {
 			*quittung = append(*quittung, mqttSteuerungBefehl(b))
+			continue
+		}
+		if b.Art == "nachricht" {
+			*quittung = append(*quittung, s.nachrichtSenden(b, verbunden))
 			continue
 		}
 		if b.Art != "" && b.Art != "schalten" {
@@ -954,6 +1235,31 @@ func (s *Sensorik) schaltBefehle(k *KaiClient, quittung *[]sensorQuittung) bool 
 		*quittung = append(*quittung, q)
 	}
 	return true
+}
+
+// nachrichtSenden: fertige Nachricht aus KAI veröffentlichen — ohne zu wissen, was für ein Gerät es ist. Sicherung: nur unter
+// dem Thema des Sensors, für den der Befehl gilt, und nur, wenn er gerade verbunden ist (sonst ginge der Befehl ins Leere).
+func (s *Sensorik) nachrichtSenden(b sensorBefehl, verbunden map[int]bool) sensorQuittung {
+	q := sensorQuittung{ID: b.ID, OK: true}
+	s.mu.Lock()
+	d := s.defs[b.SensorID]
+	s.mu.Unlock()
+	switch {
+	case s.broker == nil:
+		q.OK, q.Fehler = false, "MQTT-Empfänger nicht bereit"
+	case b.Thema == "" || d == nil || !darfThema(d.Praefix, b.Thema):
+		q.OK, q.Fehler = false, "Thema gehört nicht zu diesem Sensor"
+	case !verbunden[b.SensorID]:
+		q.OK, q.Fehler = false, "Gerät ist nicht mit dem Bordwächter verbunden"
+	default:
+		s.broker.Senden(b.Thema, []byte(b.Inhalt), false)
+		text := b.Text
+		if text == "" {
+			text = b.Inhalt
+		}
+		logEvent("info", fmt.Sprintf("Befehl an %s: %s (%s)", d.Name, text, b.Thema))
+	}
+	return q
 }
 
 // sensorBefehlLoop: fragt KAI im Halbsekundentakt nach Schaltbefehlen — nur, wenn es schaltbare Sensoren

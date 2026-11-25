@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"sync"
 	"time"
 )
@@ -24,7 +25,13 @@ type Status struct {
 	IstKmh           float64      `json:"ist_kmh"`
 	TodayKm          float64      `json:"today_km"` // heute gefahrene Strecke (aus GPS-Bewegung, Reset um Mitternacht)
 	SollKmh          float64      `json:"soll_kmh"`
-	Verdict          string       `json:"verdict"` // ok | faster | slower | ankunft | late | none
+	Verdict          string       `json:"verdict"`          // ok | faster | slower | ankunft | angekommen | late | ausfahrt | einfahrt | none
+	Zone             string       `json:"zone"`             // ausfahrt | frei | einfahrt (nur mit Fahrprofil aus KAI)
+	ProfilQuelle     string       `json:"profil_quelle"`    // schiff | alle | "" (ohne Fahrprofil: bisherige Rechnung)
+	PrognoseText     string       `json:"prognose_text"`    // Kachel „Prognose“ — Wortlaut wie KAI, die Seiten zeigen nur an
+	PrognoseTon      string       `json:"prognose_ton"`     // ok | early | late | dim
+	BufferMin        *int         `json:"buffer_min"`       // Puffer zur Soll-Ankunft (+ früh / − spät), nil = keine Hochrechnung
+	UeberfaelligMin  int          `json:"ueberfaellig_min"` // Soll-Abfahrt vorbei, Schiff wartet am Steg: seit N min (−1 = nein)
 	DiffKmh          float64      `json:"diff_kmh"`
 	DelayMin         int          `json:"delay_min"`
 	OffCourseM       float64      `json:"off_course_m"`
@@ -75,9 +82,10 @@ type Engine struct {
 	bundleAt    time.Time
 	pos         Position
 	lastPos     Position
-	lastHeading float64 // zuletzt abgeleiteter Kurs (wird bei Stillstand gehalten)
-	todayKm     float64 // heute aufsummierte Fahrstrecke
-	todayDate   string  // Ortstag (YYYY-MM-DD), zu dem todayKm zählt
+	lastHeading float64      // zuletzt abgeleiteter Kurs (wird bei Stillstand gehalten)
+	tempi       []tempoProbe // Geschwindigkeiten der letzten Minute (Ø für das Fahrprofil)
+	todayKm     float64      // heute aufsummierte Fahrstrecke
+	todayDate   string       // Ortstag (YYYY-MM-DD), zu dem todayKm zählt
 
 	// Ereignis-SIFA
 	alarmState string // normal | alarm | acked
@@ -207,8 +215,35 @@ func (e *Engine) SetPosition(p Position) {
 	}
 	if p.Valid {
 		e.lastPos = p
+		// Ø der letzten Minute (Fahrprofil: gleitendes Reisetempo auf der freien Strecke)
+		e.tempi = append(e.tempi, tempoProbe{ts: p.TS, kmh: p.SpeedKmh})
+		i := 0
+		for i < len(e.tempi) && p.TS.Sub(e.tempi[i].ts) > 60*time.Second {
+			i++
+		}
+		e.tempi = e.tempi[i:]
 	}
 	e.pos = p
+}
+
+type tempoProbe struct {
+	ts  time.Time
+	kmh float64
+}
+
+// mittelLocked: Ø-Geschwindigkeit der Proben aus der letzten Minute vor now (ok=false ohne Probe).
+func (e *Engine) mittelLocked(now time.Time) (float64, bool) {
+	s, n := 0.0, 0
+	for _, t := range e.tempi {
+		if d := now.Sub(t.ts); d <= 60*time.Second && d >= -5*time.Second {
+			s += t.kmh
+			n++
+		}
+	}
+	if n == 0 {
+		return 0, false
+	}
+	return s / float64(n), true
 }
 
 // CurrentPos: die zuletzt gesetzte, mit abgeleiteter Geschwindigkeit ANGEREICHERTE Position.
@@ -315,6 +350,8 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	st.Verdict = "none"
 	st.Phase = "none"
 	st.WartenMin, st.RestMin = -1, -1
+	st.UeberfaelligMin = -1
+	st.PrognoseText, st.PrognoseTon = "—", "dim"
 	if b == nil {
 		st.Hint = "kein Bundle"
 		return st
@@ -519,14 +556,18 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	if posLive {
 		st.IstKmh = round1(pos.SpeedKmh)
 	}
-	// Überfällige Abfahrt: steht das Schiff noch am Abfahrtssteg (Ist ~0, nah an leg.from) und die
-	// Soll-Abfahrt ist vorbei → keine Aufhol-Geschwindigkeit, sondern "wartet am Steg".
+	// Überfällige Abfahrt: steht das Schiff noch am Abfahrtssteg (langsamer als Manövertempo, nah am Anfang der
+	// Fahrrinne) und die Soll-Abfahrt ist vorbei → keine Aufhol-Geschwindigkeit und KEINE Hochrechnung aus dem
+	// Stillstand (bis 0.1.150 stieg die Kachel „Prognose“ dort auf „7419 min zu spät“, gemeldet von der MS-LINDAU),
+	// sondern „Abfahrt überfällig seit N min“ — wie KAI.
 	wartetAbfahrt := false
 	if posLive && len(leg.Geometry) >= 2 && best.dep >= 0 && float64(best.dep) <= nowMin && pos.SpeedKmh < maneuverKmh {
 		a := leg.Geometry[0]
 		if haversineKm(pos.Lat, pos.Lng, a[1], a[0]) <= portZoneKm {
 			wartetAbfahrt = true
-			st.Hint = "Abfahrt überfällig — Schiff wartet am Steg"
+			ueber := nowMin - float64(best.dep)
+			st.UeberfaelligMin = int(math.Floor(ueber))
+			st.Hint = ueberfaelligText(ueber) + " (Soll " + leg.Dep + ") — Schiff wartet am Steg"
 		}
 	}
 	maxKmh := b.Thresholds.MaxKmh
@@ -534,39 +575,50 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 		maxKmh = 40
 	}
 	st.MaxKmh = maxKmh
-	// Zwei Sicherungen gegen unsinnige Tempo-Werte am Rand (siehe Server kiosk-gps.js):
-	//  - praktisch am Ziel → "ankunft", keine Empfehlung
-	//  - auch bei Vollgas nicht pünktlich → "late" + Verspätung statt absurder km/h
-	if wartetAbfahrt {
-		// keine Tempo-Empfehlung, solange überfällig am Steg
-	} else if remainKnown && st.RemainKm <= arrivalRadiusKm {
-		// „Am Ziel" (steht am Steg) vs. „Gleich am Ziel" (fährt noch an) — wie der Server
-		// über das Tempo, nicht über den Restweg (die Linie endet nicht zwingend am Anleger).
-		if posLive && pos.SpeedKmh <= 2 {
-			st.Verdict = "angekommen"
-		} else {
-			st.Verdict = "ankunft"
+	// EIN Rechenweg wie KAI (fahrprofil.go): ohne Fahrprofil im Bundle die bisherige Rechnung (volle Fahrt bis zum
+	// Steg), mit Profil die Hafenzonen mit ihrem gelernten Tempo. Sicherungen: praktisch am Ziel → „Am Ziel“/„Gleich
+	// am Ziel“; auch mit dem Höchsttempo nicht pünktlich → „Zu spät“ + Verspätung statt absurder km/h.
+	if remainKnown {
+		lengthKm := 0.0
+		if leg.LengthKm != nil {
+			lengthKm = *leg.LengthKm
 		}
-		st.SollKmh = 0
-	} else if remainKnown && st.RemainKm > 0 && st.RestMin > 0 {
-		soll := requiredSpeedKmh(st.RemainKm, float64(st.RestMin))
-		if soll > maxKmh {
-			st.Verdict = "late"
-			st.SollKmh = 0
-			tFull := (st.RemainKm / maxKmh) * 60
-			dm := int(tFull - float64(st.RestMin) + 0.5)
-			if dm < 0 {
-				dm = 0
-			}
-			st.DelayMin = dm
-		} else {
-			st.SollKmh = round1(soll)
-			if posLive {
-				v, diff := speedVerdict(pos.SpeedKmh, soll, tol)
-				st.Verdict = v
-				st.DiffKmh = round1(diff)
-			}
+		rest := 0.0
+		restRoh, restRohOK := 0.0, false
+		if arr >= 0 {
+			restRoh, restRohOK = float64(arr)-nowMin, true
+			rest = math.Max(0.5, restRoh)
 		}
+		bew := tempoBewertung(tempoEingabe{
+			RemainKm: st.RemainKm, RestMin: rest, RestMinRoh: restRoh, RestMinRohOK: restRohOK,
+			IstKmh: pos.SpeedKmh, IstOK: posLive, MittelKmh: pos.MittelKmh, MittelOK: posLive && pos.MittelOK,
+			Wartet: wartetAbfahrt, Profil: leg.Profil, LengthKm: lengthKm, Tol: tol, MaxKmh: maxKmh,
+			RampeM: b.Thresholds.ProfilRampeM, AnkunftRadiusKm: arrivalRadiusKm,
+		})
+		st.Verdict = bew.Verdict
+		st.Zone = bew.Zone
+		if bew.Profil {
+			st.ProfilQuelle = leg.Profil.Quelle
+			if st.ProfilQuelle == "" {
+				st.ProfilQuelle = "schiff"
+			}
+			st.MaxKmh = bew.VMax
+		}
+		if bew.SollOK {
+			st.SollKmh = round1(bew.SollKmh)
+		}
+		if bew.DiffOK {
+			st.DiffKmh = round1(-bew.Diff) // Gerät zeigt Ist − Soll (+ = zu schnell), wie bisher
+		}
+		if bew.DelayOK {
+			st.DelayMin = bew.DelayMin
+		}
+		if bew.BufferOK {
+			v := int(jsRound(bew.BufferMin))
+			st.BufferMin = &v
+		}
+		ueberOK := st.UeberfaelligMin >= 0
+		st.PrognoseText, st.PrognoseTon = prognoseAnzeige(bew.Verdict, bew.BufferMin, bew.BufferOK, nowMin-float64(best.dep), ueberOK)
 	}
 	// Nach Ankunft am LETZTEN Halt (kein weiteres Leg) nach hintMin Minuten: Bordbuch für nächste Fahrt.
 	hintMin := b.Thresholds.NextLogbookHintMin
@@ -587,6 +639,7 @@ func (e *Engine) Tick(now time.Time) {
 	pos := e.pos
 	kai := e.kai
 
+	pos.MittelKmh, pos.MittelOK = e.mittelLocked(now)
 	st := computeAdvisory(b, pos, now, 1.5)
 	if pos.Valid {
 		st.PosValid = true

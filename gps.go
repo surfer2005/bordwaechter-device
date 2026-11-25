@@ -15,6 +15,9 @@ type Position struct {
 	Heading  float64
 	Valid    bool
 	TS       time.Time
+	// Ø-Geschwindigkeit der letzten Minute (setzt die Engine vor der Rechnung; für das Fahrprofil, ab 0.1.151)
+	MittelKmh float64
+	MittelOK  bool
 }
 
 type GPSSource interface {
