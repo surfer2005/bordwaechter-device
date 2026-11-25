@@ -16,6 +16,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"time"
 )
 
 // LegProfil: Fahrprofil eines Abschnitts aus dem Bundle (server/src/kiosk-gps.js edgeBundle()).
@@ -90,6 +91,15 @@ type tempoErgebnis struct {
 // halben Minuten voneinander ab.
 func jsRound(x float64) float64 { return math.Floor(x + 0.5) }
 
+// restBezug: Bezug für die Verspätung „Zu spät +N min“ — die ungeklammerte Restzeit, sobald sie unter der geklammerten
+// liegt (kurz vor bzw. nach der Soll-Ankunft); sonst die geklammerte (≥ 0,5 min). Wie KAI (fahrprofil.js restBezug).
+func restBezug(e tempoEingabe) float64 {
+	if e.RestMinRohOK && e.RestMinRoh < e.RestMin {
+		return e.RestMinRoh
+	}
+	return e.RestMin
+}
+
 // tempoBewertung: EIN Rechenweg wie in KAI. Ohne Profil die bisherige Rechnung (volle Fahrt bis zum Steg), mit Profil
 // die Hafenzonen mit ihrem gelernten Tempo. Am Steg wartend: keine Empfehlung und keine Hochrechnung.
 func tempoBewertung(e tempoEingabe) tempoErgebnis {
@@ -124,9 +134,12 @@ func tempoBewertung(e tempoEingabe) tempoErgebnis {
 	// bisherige Rechnung
 	if e.RestMin > 0 {
 		tgt := e.RemainKm / (e.RestMin / 60)
-		if tgt > maxKmh {
+		// Soll-Ankunft vorbei (Ankunft abwarten, ab 0.1.152): kein Soll-Tempo mehr — aus der geklammerten Restzeit
+		// (0,5 min) käme kurz vor dem Ziel sonst „Schneller, 36 km/h“. Wie KAI.
+		vorbei := e.RestMinRohOK && e.RestMinRoh <= 0
+		if tgt > maxKmh || vorbei {
 			out.Verdict = "late"
-			d := jsRound(e.RemainKm/maxKmh*60 - e.RestMin)
+			d := jsRound(e.RemainKm/maxKmh*60 - restBezug(e))
 			if d < 0 {
 				d = 0
 			}
@@ -200,9 +213,12 @@ func profilRechnung(e tempoEingabe, remExit, remEntry, tol, maxKmh float64) temp
 		out.RestzeitMin, out.RestzeitOK = tHafen+freiTeil/vFrei*60, true
 	}
 	tMin := tHafen + freiTeil/vMax*60
-	if tMin > e.RestMin {
+	// In der Hafeneinfahrt gibt es nichts mehr aufzuholen — dort bleibt es „Hafeneinfahrt“, auch wenn das Schiff zu spät
+	// ist; die Verspätung steht in der Prognose (ab 0.1.152, wie KAI). Die Verspätung bei Höchsttempo zählt ab der
+	// Soll-Ankunft (ungeklammert).
+	if tMin > e.RestMin && out.Zone != "einfahrt" {
 		out.Verdict = "late"
-		d := jsRound(tMin - e.RestMin)
+		d := jsRound(tMin - restBezug(e))
 		if d < 0 {
 			d = 0
 		}
@@ -275,4 +291,117 @@ func prognoseAnzeige(verdict string, buf float64, bufOK bool, ueberMin float64, 
 	default:
 		return fmt.Sprintf("%d min zu spät", -b), "late"
 	}
+}
+
+// ---- Ankunft abwarten (ab 0.1.152, Peter 2026-11-25) --------------------------------------------------------------------
+// Echte Fahrt der MS-LINDAU am 24.11. (11:20 Friedrichshafen → Romanshorn, Soll-Ankunft 12:06, angelegt 12:10): bisher
+// entschied allein die Uhr, welche Fahrt gilt — ab der Soll-Ankunft zeigte der Pilot schon die nächste Abfahrt, obwohl
+// das Schiff noch einfuhr. Jetzt bleibt eine Fahrt nach ihrer Soll-Ankunft die laufende, solange das Schiff laut frischer
+// Position nicht angekommen ist (Reststrecke ≤ Ankunftsradius und ≤ 2 km/h, wie „Am Ziel“). Einmal angekommen bleibt
+// angekommen — dafür die Spur im Speicher (Engine.spur). Ohne frische Position nach der Uhr; höchstens NachlaufMaxMin
+// Minuten (KAI-Einstellung, Vorgabe 30, 0 = aus); fährt das Schiff erkennbar vom Ziel weg, gilt die Uhr.
+// Dieselbe Regel wie KAI (server/src/fahrprofil.js ankunftAbwarten) — Fälle in testdata/fahrprofil-faelle.json.
+const (
+	nachlaufStandKmh      = 2.0   // „steht“ — wie das Urteil „Am Ziel“
+	nachlaufWegKmh        = 3.0   // ab diesem Tempo zählt der Kurs
+	nachlaufGegenGrad     = 110.0 // Kurs so weit gegen die Fahrrinne = fährt vom Ziel weg
+	nachlaufMaxMinVorgabe = 30.0
+)
+
+func winkelAbstand(a, b float64) float64 {
+	d := math.Mod(math.Abs(a-b), 360)
+	if d > 180 {
+		return 360 - d
+	}
+	return d
+}
+
+type nachlaufEingabe struct {
+	UeberSollMin  float64 // jetzt − Soll-Ankunft
+	MaxMin        float64 // < 0 = Vorgabe
+	Frisch        bool
+	RemainKm      float64
+	RemainOK      bool
+	IstKmh        float64
+	IstOK         bool
+	RadiusKm      float64
+	WarAmZiel     bool
+	Heading       float64
+	HeadingOK     bool
+	LinienKurs    float64
+	LinienKursOK  bool
+	ZielAbstandKm float64
+	ZielAbstandOK bool
+	HafenKm       float64
+}
+
+// ankunftAbwarten: bleibt der Abschnitt nach seiner Soll-Ankunft der laufende? Grund wie in KAI:
+// soll_offen | hoechstdauer | ohne_gps | rest_unbekannt | angekommen | war_am_ziel | faehrt_weg | unterwegs (= halten)
+func ankunftAbwarten(e nachlaufEingabe) (bool, string) {
+	maxMin := e.MaxMin
+	if maxMin < 0 {
+		maxMin = nachlaufMaxMinVorgabe
+	}
+	if !(e.UeberSollMin > 0) {
+		return false, "soll_offen"
+	}
+	if e.UeberSollMin > maxMin {
+		return false, "hoechstdauer"
+	}
+	if !e.Frisch {
+		return false, "ohne_gps"
+	}
+	if !e.RemainOK {
+		return false, "rest_unbekannt"
+	}
+	r := e.RadiusKm
+	if !(r > 0) {
+		r = 0.15
+	}
+	if e.RemainKm <= r && e.IstOK && e.IstKmh <= nachlaufStandKmh {
+		return false, "angekommen"
+	}
+	if e.WarAmZiel {
+		return false, "war_am_ziel"
+	}
+	hafenKm := e.HafenKm
+	if !(hafenKm > 0) {
+		hafenKm = 0.5
+	}
+	if e.IstOK && e.IstKmh > nachlaufWegKmh && e.HeadingOK && e.LinienKursOK && e.ZielAbstandOK &&
+		e.ZielAbstandKm > hafenKm && winkelAbstand(e.Heading, e.LinienKurs) > nachlaufGegenGrad {
+		return false, "faehrt_weg"
+	}
+	return true, "unterwegs"
+}
+
+// spurPunkt: eine Position der Spur im Speicher (Engine.spur) — für „hat seit der Soll-Abfahrt am Ziel gestanden“.
+type spurPunkt struct {
+	TS       time.Time
+	Lat, Lng float64
+	Kmh      float64
+}
+
+// amZielGewesen: hat das Schiff seit ab am Ziel der Fahrrinne gestanden (Reststrecke ≤ Radius, ≤ 2 km/h)?
+func amZielGewesen(spur []spurPunkt, linie [][2]float64, ab time.Time, radiusKm float64) bool {
+	if len(linie) < 2 {
+		return false
+	}
+	r := radiusKm
+	if !(r > 0) {
+		r = 0.15
+	}
+	for i := len(spur) - 1; i >= 0; i-- {
+		p := spur[i]
+		if p.TS.Before(ab) {
+			break // Spur ist zeitlich sortiert
+		}
+		if p.Kmh > nachlaufStandKmh {
+			continue
+		}
+		if pr := projectOntoPolyline(linie, p.Lat, p.Lng); pr.OK && pr.RemainKm <= r {
+			return true
+		}
+	}
+	return false
 }

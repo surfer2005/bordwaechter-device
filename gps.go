@@ -18,6 +18,8 @@ type Position struct {
 	// Ø-Geschwindigkeit der letzten Minute (setzt die Engine vor der Rechnung; für das Fahrprofil, ab 0.1.151)
 	MittelKmh float64
 	MittelOK  bool
+	// Spur der letzten Stunden (setzt die Engine vor der Rechnung; „Ankunft abwarten“, ab 0.1.152) — nur lesen
+	Spur []spurPunkt
 }
 
 type GPSSource interface {

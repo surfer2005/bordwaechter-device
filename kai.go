@@ -50,6 +50,9 @@ type Bundle struct {
 		ArrivalRadiusM  float64 `json:"arrivalRadiusM"`
 		NextLogbookHintMin float64 `json:"nextLogbookHintMin"`
 		ProfilRampeM       float64 `json:"profilRampeM"` // Fahrprofil: Meter, über die das Reisetempo nach der Ausfahrt aufs aktuelle gleitet
+		// Ankunft abwarten (ab 0.1.152): so viele Minuten nach der Soll-Ankunft bleibt eine Fahrt, bis das Schiff angekommen
+		// ist; 0 = aus. nil = älterer KAI ohne das Feld → Vorgabe 30.
+		NachlaufMaxMin *float64 `json:"nachlaufMaxMin"`
 		Unit            string  `json:"unit"`
 	} `json:"thresholds"`
 	HatBordbuch bool   `json:"hatBordbuch"`

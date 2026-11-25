@@ -66,6 +66,7 @@ type Status struct {
 	BundleAgeSec     int          `json:"bundle_age_sec"`
 	Hint             string       `json:"hint"`
 	NextLogbookHint  bool         `json:"next_logbook_hint"` // am Ziel + kein weiteres Leg → Bordbuch für nächste Fahrt
+	Nachlauf         bool         `json:"nachlauf"`          // Soll-Ankunft vorbei, Schiff noch nicht angekommen → diese Fahrt bleibt (ab 0.1.152)
 	Horn             bool         `json:"horn"`
 	Lamp             bool         `json:"lamp"`
 	Version          string       `json:"version"`
@@ -84,6 +85,7 @@ type Engine struct {
 	lastPos     Position
 	lastHeading float64      // zuletzt abgeleiteter Kurs (wird bei Stillstand gehalten)
 	tempi       []tempoProbe // Geschwindigkeiten der letzten Minute (Ø für das Fahrprofil)
+	spur        []spurPunkt  // Positionen der letzten Stunden („Ankunft abwarten“: hat seit der Soll-Abfahrt am Ziel gestanden)
 	todayKm     float64      // heute aufsummierte Fahrstrecke
 	todayDate   string       // Ortstag (YYYY-MM-DD), zu dem todayKm zählt
 
@@ -222,8 +224,37 @@ func (e *Engine) SetPosition(p Position) {
 			i++
 		}
 		e.tempi = e.tempi[i:]
+		e.spurMerkenLocked(p)
 	}
 	e.pos = p
+}
+
+// Spur für „Ankunft abwarten“ (ab 0.1.152): höchstens alle spurTakt eine Position — sofort, wenn das Schiff vom Fahren
+// ins Stehen wechselt (oder umgekehrt), damit ein kurzes Anlegen nicht zwischen zwei Proben fällt. spurDauer reicht für
+// die längste Fahrt plus die Höchstdauer nach der Soll-Ankunft; ältere Punkte fallen heraus. Nur im Speicher: nach einem
+// Neustart beginnt sie leer (dann entscheidet die aktuelle Position und der Kurs).
+const (
+	spurTakt  = 5 * time.Second
+	spurDauer = 4 * time.Hour
+)
+
+func (e *Engine) spurMerkenLocked(p Position) {
+	steht := p.SpeedKmh <= nachlaufStandKmh
+	if n := len(e.spur); n > 0 {
+		last := e.spur[n-1]
+		if !p.TS.After(last.TS) {
+			return // gleiche oder ältere Zeit (Quelle wiederholt sich) — nichts Neues
+		}
+		if p.TS.Sub(last.TS) < spurTakt && steht == (last.Kmh <= nachlaufStandKmh) {
+			return
+		}
+	}
+	e.spur = append(e.spur, spurPunkt{TS: p.TS, Lat: p.Lat, Lng: p.Lng, Kmh: p.SpeedKmh})
+	i := 0
+	for i < len(e.spur) && p.TS.Sub(e.spur[i].TS) > spurDauer {
+		i++
+	}
+	e.spur = e.spur[i:] // wie tempi: append legt bei vollem Speicher neu an und nimmt nur den Rest mit
 }
 
 type tempoProbe struct {
@@ -343,6 +374,41 @@ func hhmmToMin(s string) int {
 	return h*60 + m
 }
 
+// nachlaufHalten: Eingaben für ankunftAbwarten (fahrprofil.go) aus Abschnitt + Position + Spur zusammenstellen — wie
+// KAI (kiosk-gps.js nachlaufPruefen): Reststrecke und Richtung der Fahrrinne an der Projektion, Abstand zum Ende der
+// Linie, „seit der Soll-Abfahrt am Ziel gestanden“ aus der Spur im Speicher.
+func nachlaufHalten(b *Bundle, l Leg, pos Position, now time.Time, nowMin, dep, ueber, maxMin float64) bool {
+	pr := projectOntoPolyline(l.Geometry, pos.Lat, pos.Lng)
+	if !pr.OK {
+		return false
+	}
+	radiusKm := b.Thresholds.ArrivalRadiusM / 1000
+	if radiusKm <= 0 {
+		radiusKm = 0.15
+	}
+	hafenKm := b.Thresholds.OffCoursePortM / 1000
+	if hafenKm <= 0 {
+		hafenKm = 0.5
+	}
+	a, z := l.Geometry[pr.Segment], l.Geometry[pr.Segment+1]
+	ende := l.Geometry[len(l.Geometry)-1]
+	e := nachlaufEingabe{
+		UeberSollMin: ueber, MaxMin: maxMin, Frisch: true,
+		RemainKm: pr.RemainKm, RemainOK: true, IstKmh: pos.SpeedKmh, IstOK: true, RadiusKm: radiusKm,
+		// Kurs am Gerät: aus der Bewegung (Teltonika ohne Kurs-Register) — erst ab nachlaufWegKmh zählt er ohnehin
+		Heading: pos.Heading, HeadingOK: pos.SpeedKmh > nachlaufWegKmh,
+		LinienKurs: bearingDeg(a[1], a[0], z[1], z[0]), LinienKursOK: true,
+		ZielAbstandKm: haversineKm(pos.Lat, pos.Lng, ende[1], ende[0]), ZielAbstandOK: true, HafenKm: hafenKm,
+	}
+	if ok, _ := ankunftAbwarten(e); !ok {
+		return false
+	}
+	ab := now.Add(-time.Duration((nowMin - dep) * float64(time.Minute))) // Soll-Abfahrt dieses Abschnitts
+	e.WarAmZiel = amZielGewesen(pos.Spur, l.Geometry, ab, radiusKm)
+	ok, _ := ankunftAbwarten(e)
+	return ok
+}
+
 // computeAdvisory: Phase/nächster Halt/Kursabweichung/Empfehlung aus Bundle + Position (reine Rechnung).
 func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64) Status {
 	var st Status
@@ -402,7 +468,36 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 			upcoming = append(upcoming, c)
 		}
 	}
-	if len(offen) == 0 {
+	// Ankunft abwarten (ab 0.1.152, wie KAI kiosk-gps.js): ist die Soll-Ankunft eines Abschnitts vorbei, das Schiff laut
+	// frischer Position aber noch nicht angekommen, bleibt dieser Abschnitt der laufende — vor allen anderen. Bis 0.1.151
+	// sprang die Anzeige zur Soll-Ankunft auf die nächste Abfahrt, auch wenn das Schiff noch einfuhr. Mehrere: die
+	// früheste Soll-Ankunft. Ohne frische Position: nach der Uhr.
+	nachlaufMax := nachlaufMaxMinVorgabe
+	if b.Thresholds.NachlaufMaxMin != nil && *b.Thresholds.NachlaufMaxMin >= 0 {
+		nachlaufMax = *b.Thresholds.NachlaufMaxMin
+	}
+	posLiveVorab := pos.Valid && now.Sub(pos.TS).Seconds() <= posStaleSec(b)
+	var nachlauf *cand
+	if posLiveVorab && nachlaufMax > 0 {
+		for _, l := range b.Legs {
+			dep, arr := hhmmToMin(l.Dep), hhmmToMin(l.Arr)
+			if dep < 0 || arr < 0 || float64(dep) > nowMin || len(l.Geometry) < 2 {
+				continue
+			}
+			arrAbs := arr
+			if arr < dep {
+				arrAbs += 1440
+			}
+			ueber := nowMin - float64(arrAbs)
+			if !(ueber > 0 && ueber <= nachlaufMax) {
+				continue
+			}
+			if nachlaufHalten(b, l, pos, now, nowMin, float64(dep), ueber, nachlaufMax) && (nachlauf == nil || arrAbs < nachlauf.arr) {
+				nachlauf = &cand{leg: l, dep: dep, arr: arrAbs}
+			}
+		}
+	}
+	if len(offen) == 0 && nachlauf == nil {
 		st.Phase = "beendet"
 		st.Hint = "Dienst beendet — alle Halte erreicht"
 		return st
@@ -413,10 +508,17 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	} else if len(upcoming) > 0 {
 		pool = upcoming
 	}
-	best := pool[0]
-	for _, c := range pool {
-		if c.rang < best.rang {
-			best = c
+	var best cand
+	if nachlauf != nil {
+		best = *nachlauf
+		best.arr = hhmmToMin(best.leg.Arr) // Rechnung unten wie bisher (Mitternacht dort)
+		st.Nachlauf = true
+	} else {
+		best = pool[0]
+		for _, c := range pool {
+			if c.rang < best.rang {
+				best = c
+			}
 		}
 	}
 	leg := best.leg
@@ -466,10 +568,14 @@ func computeAdvisory(b *Bundle, pos Position, now time.Time, tolDefault float64)
 	}
 	if arr >= 0 {
 		rm := float64(arr) - nowMin
-		if rm < 0.5 {
-			rm = 0.5
+		if rm <= 0 {
+			st.RestMin = 0 // Soll-Ankunft vorbei (Ankunft abwarten, ab 0.1.152): 0 statt „1 min“ — die Verspätung zeigt die Prognose
+		} else {
+			if rm < 0.5 {
+				rm = 0.5
+			}
+			st.RestMin = int(rm + 0.5)
 		}
-		st.RestMin = int(rm + 0.5)
 	}
 	portZoneKm := b.Thresholds.OffCoursePortM / 1000
 	if portZoneKm <= 0 {
@@ -640,7 +746,9 @@ func (e *Engine) Tick(now time.Time) {
 	kai := e.kai
 
 	pos.MittelKmh, pos.MittelOK = e.mittelLocked(now)
-	st := computeAdvisory(b, pos, now, 1.5)
+	pa := pos
+	pa.Spur = e.spur // nur für die Rechnung unter der Sperre (die Ereignis-Goroutinen unten bekommen sie nicht mit)
+	st := computeAdvisory(b, pa, now, 1.5)
 	if pos.Valid {
 		st.PosValid = true
 		st.Lat, st.Lng = pos.Lat, pos.Lng

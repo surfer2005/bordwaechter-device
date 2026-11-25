@@ -27,6 +27,7 @@ func bearingDeg(aLat, aLng, bLat, bLng float64) float64 {
 type projResult struct {
 	RemainKm     float64
 	DistToLineKm float64
+	Segment      int // Abschnitt der Linie mit der Projektion (Richtung der Fahrrinne dort, wie segment in KAI)
 	OK           bool
 }
 
@@ -70,7 +71,7 @@ func projectOntoPolyline(pts [][2]float64, lat, lng float64) projResult {
 	for i := bestSeg + 1; i < len(pts)-1; i++ {
 		remain += haversineKm(pts[i][1], pts[i][0], pts[i+1][1], pts[i+1][0])
 	}
-	return projResult{RemainKm: remain, DistToLineKm: bestD / 1000.0, OK: true}
+	return projResult{RemainKm: remain, DistToLineKm: bestD / 1000.0, Segment: bestSeg, OK: true}
 }
 
 func requiredSpeedKmh(remainKm, restMin float64) float64 {
