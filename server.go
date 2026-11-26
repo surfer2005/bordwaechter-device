@@ -214,6 +214,11 @@ func (a *App) statusWithInfo() map[string]any {
 	if sys := a.getSys(); sys != nil {
 		m["system"] = sys
 	}
+	// Größe der Seekarte im Hochformat (Einstellung aus KAI, Vorgabe kompakt)
+	m["groesse"] = "kompakt"
+	if c := a.getCfg(); c != nil && c.DisplaySize == "gross" {
+		m["groesse"] = "gross"
+	}
 	if lt := cachedLatestTag(); lt != "" {
 		m["latest_version"] = lt
 		m["update_available"] = verNewer(lt, version)

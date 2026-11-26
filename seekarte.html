@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-groesse="kompakt">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -130,16 +130,16 @@
  /* Hochformat kompakt (Peter 2026-11-26, Monitor 1280×1024 hochkant auf der MS-KARLSRUHE: „der obere Teil wird recht groß
     dargestellt“): Kopfzeile, Wetter/Pegel, Tacho, Hinweise und Fakten kleiner — die Seekarte bekommt den Rest. Tacho und
     Abfahrtszeit richten sich zusätzlich nach der Höhe (vh), damit es auch bei 125–150 % Systemskalierung passt.
-    Auswahl „Kompakt / Groß“ in der Kopfzeile (je Monitor gemerkt, Vorgabe Kompakt): „Groß“ = die bisherige Darstellung,
-    z. B. für einen größeren Monitor. Im Querformat ohne Wirkung (dort ausgeblendet). */
- html[data-orient="landscape"] #groessesel{display:none}
+    Kompakt / Groß kommt aus den Geräte-Einstellungen in KAI (display_size → /api/display „groesse“, Vorgabe kompakt; Peter
+    2026-11-26: „in die Einstellungen … keiner kann es verändern“). „Groß“ = die bisherige Darstellung. Im Querformat ohne Wirkung. */
  html[data-groesse="kompakt"]:not([data-orient="landscape"]) .wrap{gap:6px;padding:6px}
  html[data-groesse="kompakt"]:not([data-orient="landscape"]) header{gap:8px}
  html[data-groesse="kompakt"]:not([data-orient="landscape"]) .shipname{font-size:1rem}
  html[data-groesse="kompakt"]:not([data-orient="landscape"]) .reg{font-size:.78rem}
  /* Uhr direkt hinter den Schiffsnamen (sonst rutscht sie als Letztes in eine zweite Zeile, Peter 2026-11-26), Knöpfe schmaler,
     damit die Kopfzeile in eine Zeile passt */
- html[data-groesse="kompakt"]:not([data-orient="landscape"]) header .brand{display:none}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) header .brand{order:-3}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .brand .d{width:26px;height:26px}
  html[data-groesse="kompakt"]:not([data-orient="landscape"]) header .schiffkopf{order:-2}
  html[data-groesse="kompakt"]:not([data-orient="landscape"]) .clock{order:-1;font-size:1.15rem}
  html[data-groesse="kompakt"]:not([data-orient="landscape"]) header{gap:6px}
@@ -201,10 +201,6 @@
       <option value="hell">Karte hell</option>
       <option value="mittel">Karte mittel</option>
       <option value="dunkel">Karte dunkel</option>
-    </select>
-    <select class="themebtn" id="groessesel" title="Größe der Anzeige oben im Hochformat (je Monitor gemerkt)">
-      <option value="kompakt">Kompakt</option>
-      <option value="gross">Groß</option>
     </select>
     <select class="themebtn" id="zielsel" title="Ziel wählen (ohne KAI, aus dem gespeicherten Streckennetz)" style="display:none">
       <option value="">Kein Ziel</option>
@@ -319,16 +315,6 @@ function streamUrl(){ return '/api/stream?token='+encodeURIComponent(token) }
 // unabhängig vom UI-Theme. Startwert nach Theme (Dunkelmodus → dunkel, sonst hell).
 // Führendes Semikolon: der Theme-Block endet mit })() ohne ; — ohne das Semikolon verkettet
 // der Parser beide IIFEs (ASI-Falle, "… is not a function"), und das ganze Skript bricht ab.
-// Größe oben im Hochformat (Kompakt/Groß) — je Monitor gemerkt, Vorgabe Kompakt (Peter 2026-11-26).
-;(function(){
-  var GKEY='bw_seekarte_groesse';
-  var g='kompakt';try{var v=localStorage.getItem(GKEY);if(v==='kompakt'||v==='gross')g=v}catch(e){}
-  function applyG(v){document.documentElement.setAttribute('data-groesse',v);var s=document.getElementById('groessesel');if(s)s.value=v;
-    setTimeout(function(){try{if(window.kmap)kmap.invalidateSize()}catch(e){}},50)}
-  applyG(g);
-  var sel=document.getElementById('groessesel');
-  if(sel)sel.onchange=function(){applyG(sel.value);try{localStorage.setItem(GKEY,sel.value)}catch(e){}};
-})()
 ;(function(){
   var HKEY='bw_seekarte_helligkeit';
   function initVal(){
@@ -376,9 +362,10 @@ function render(s){
   $('shipname').textContent=s.ship||'—'
   $('reg').textContent=s.registration_number||''
   $('verfoot').innerHTML=(s.version?('v'+s.version):'')+(s.update_available?(' · <span style="color:#F0A93C;font-weight:700">neue Version '+s.latest_version+' verfügbar</span>'):'')
-  // Im Kompakt-Hochformat ohne das Wort „Kurs“ (Platz in der Kopfzeile, Peter 2026-11-26)
-  var kompaktKopf=document.documentElement.getAttribute('data-groesse')==='kompakt'&&document.documentElement.getAttribute('data-orient')!=='landscape'
-  $('kurs').textContent=s.pos_valid?((kompaktKopf?'':'Kurs ')+Math.round(s.heading||0)+'° · '+cardinal(s.heading||0)):''
+  // Größe im Hochformat aus der Einstellung in KAI (Kompakt/Groß)
+  var gr=(s.groesse==='gross')?'gross':'kompakt'
+  if(document.documentElement.getAttribute('data-groesse')!==gr){document.documentElement.setAttribute('data-groesse',gr);setTimeout(function(){try{if(kmap)kmap.invalidateSize()}catch(e){}},50)}
+  $('kurs').textContent=s.pos_valid?('Kurs '+Math.round(s.heading||0)+'° · '+cardinal(s.heading||0)):''
   setInfo(s.info)
 
   // Fußzeile: Live · Quelle + Position

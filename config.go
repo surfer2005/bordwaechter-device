@@ -24,6 +24,9 @@ type Config struct {
 	DisplayToken string `json:"display_token"`  // Token für die Kiosk-Anzeige (/anzeige?token=…), leer = Anzeige aus
 	DisplayView  string `json:"display_view"`   // Startansicht des Geräte-Kiosks: "pilot" | "seekarte"
 	DisplayRotate string `json:"display_rotate"` // Bildschirmdrehung des Monitors: "normal"|"left"|"right"|"inverted"
+	// Seekarte im Hochformat: "kompakt" (oben kleiner, mehr Karte) | "gross" (bisherige Darstellung). Gepflegt in KAI
+	// (Anzeige am Monitor), nicht am Monitor selbst (Peter 2026-11-26: „Voreinstellung … und keiner kann es verändern“).
+	DisplaySize string `json:"display_size"`
 	// Standalone-/Offline-Navigation OHNE KAI: Ziel aus dem gespeicherten Streckennetz wählen.
 	// Nur dann zeigt die Seekarte das Ziel-Auswahlfeld. Wer KAI nutzt, bekommt die Route automatisch
 	// aus dem Bundle und braucht das nicht. Vorgabe: aus.
@@ -178,6 +181,7 @@ func defaultConfig() *Config {
 	c.Camera.HoldSec = 20
 	c.DisplayView = "pilot"
 	c.DisplayRotate = "normal"
+	c.DisplaySize = "kompakt"
 	c.Hostname = "bordwaechter"
 	c.Detect.FrigateURL = "http://127.0.0.1:5000"
 	c.Detect.Labels = "person,boat"
