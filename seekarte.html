@@ -135,11 +135,18 @@
  html[data-orient="landscape"] #groessesel{display:none}
  html[data-groesse="kompakt"]:not([data-orient="landscape"]) .wrap{gap:6px;padding:6px}
  html[data-groesse="kompakt"]:not([data-orient="landscape"]) header{gap:8px}
- html[data-groesse="kompakt"]:not([data-orient="landscape"]) .brand .d{width:26px;height:26px}
  html[data-groesse="kompakt"]:not([data-orient="landscape"]) .shipname{font-size:1rem}
  html[data-groesse="kompakt"]:not([data-orient="landscape"]) .reg{font-size:.78rem}
- html[data-groesse="kompakt"]:not([data-orient="landscape"]) .clock{font-size:1.2rem}
- html[data-groesse="kompakt"]:not([data-orient="landscape"]) .themebtn{min-height:32px;padding:4px 9px;font-size:.95rem}
+ /* Uhr direkt hinter den Schiffsnamen (sonst rutscht sie als Letztes in eine zweite Zeile, Peter 2026-11-26), Knöpfe schmaler,
+    damit die Kopfzeile in eine Zeile passt */
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) header .brand{display:none}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) header .schiffkopf{order:-2}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .clock{order:-1;font-size:1.15rem}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) header{gap:6px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .themebtn{min-height:30px;padding:3px 7px;font-size:.85rem;border-radius:8px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) select.themebtn{padding:3px 2px 3px 6px}
+ /* Kurs nimmt nur den Platz, der übrig bleibt (sonst schöbe „Kurs 300° · WNW“ einen Knopf in die zweite Zeile) */
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .kurs{font-size:.88rem;flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;text-align:right}
  html[data-groesse="kompakt"]:not([data-orient="landscape"]) .umwelt{padding:4px 12px;gap:14px;border-radius:10px}
  html[data-groesse="kompakt"]:not([data-orient="landscape"]) .useg b{font-size:1rem}
  html[data-groesse="kompakt"]:not([data-orient="landscape"]) .useg .uic{width:18px;height:18px}
@@ -179,7 +186,7 @@
 <div class="wrap">
   <header>
     <div class="brand"><span class="d"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18c2 1.4 4 1.4 6 0s4-1.4 6 0 4 1.4 6 0M5 18l1.2-8.4a1 1 0 0 1 1-.86H12V4l6 4-6 3.2"/></svg></span></div>
-    <div><div class="shipname" id="shipname">—</div><div class="reg" id="reg"></div></div>
+    <div class="schiffkopf"><div class="shipname" id="shipname">—</div><div class="reg" id="reg"></div></div>
     <span class="kurs" id="kurs"></span>
     <a class="themebtn switchbtn" id="switchview" title="Zur Pilot-Ansicht">Pilot</a>
     <button class="themebtn" id="orientBtn" title="Hoch-/Querformat umschalten" onclick="cycleOrient()">Hochformat</button>
@@ -369,7 +376,9 @@ function render(s){
   $('shipname').textContent=s.ship||'—'
   $('reg').textContent=s.registration_number||''
   $('verfoot').innerHTML=(s.version?('v'+s.version):'')+(s.update_available?(' · <span style="color:#F0A93C;font-weight:700">neue Version '+s.latest_version+' verfügbar</span>'):'')
-  $('kurs').textContent=s.pos_valid?('Kurs '+Math.round(s.heading||0)+'° · '+cardinal(s.heading||0)):''
+  // Im Kompakt-Hochformat ohne das Wort „Kurs“ (Platz in der Kopfzeile, Peter 2026-11-26)
+  var kompaktKopf=document.documentElement.getAttribute('data-groesse')==='kompakt'&&document.documentElement.getAttribute('data-orient')!=='landscape'
+  $('kurs').textContent=s.pos_valid?((kompaktKopf?'':'Kurs ')+Math.round(s.heading||0)+'° · '+cardinal(s.heading||0)):''
   setInfo(s.info)
 
   // Fußzeile: Live · Quelle + Position
