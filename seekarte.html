@@ -127,6 +127,52 @@
  .utrend.up{color:var(--green)}.utrend.down{color:var(--red)}
  .uspark{width:84px;height:24px}
  .usep{width:1px;align-self:stretch;min-height:22px;background:var(--line)}
+ /* Hochformat kompakt (Peter 2026-11-26, Monitor 1280×1024 hochkant auf der MS-KARLSRUHE: „der obere Teil wird recht groß
+    dargestellt“): Kopfzeile, Wetter/Pegel, Tacho, Hinweise und Fakten kleiner — die Seekarte bekommt den Rest. Tacho und
+    Abfahrtszeit richten sich zusätzlich nach der Höhe (vh), damit es auch bei 125–150 % Systemskalierung passt.
+    Auswahl „Kompakt / Groß“ in der Kopfzeile (je Monitor gemerkt, Vorgabe Kompakt): „Groß“ = die bisherige Darstellung,
+    z. B. für einen größeren Monitor. Im Querformat ohne Wirkung (dort ausgeblendet). */
+ html[data-orient="landscape"] #groessesel{display:none}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .wrap{gap:6px;padding:6px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) header{gap:8px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .brand .d{width:26px;height:26px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .shipname{font-size:1rem}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .reg{font-size:.78rem}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .clock{font-size:1.2rem}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .themebtn{min-height:32px;padding:4px 9px;font-size:.95rem}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .umwelt{padding:4px 12px;gap:14px;border-radius:10px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .useg b{font-size:1rem}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .useg .uic{width:18px;height:18px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .uspark{height:18px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .ampel{padding:6px 12px;font-size:1rem;border-radius:10px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .ampel .lamp{width:14px;height:14px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) main{gap:6px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .advice{padding:4px 10px 6px;gap:2px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .gauge{width:min(240px,22vh,60vw)}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .gauge .big .val{font-size:2.2rem}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .gauge .big .u{margin-top:3px;font-size:.62rem}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .todaykm{margin:0;font-size:.85rem}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .sifabox{margin:2px auto;padding:3px 10px;font-size:.85rem}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .verdict{margin-top:0;gap:8px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .verdict .ar{font-size:1.5rem}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .verdict .w{font-size:1.2rem}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .verdict .de{font-size:.95rem;padding:2px 8px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .tl{font-size:.85rem}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .hintbox{padding:10px;font-size:1.05rem}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .abfahrtblock{padding:6px 10px;gap:2px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .abfahrtblock .abz{font-size:min(2.8rem,5vh)}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .abfahrtblock .abi{font-size:1.1rem}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .abfahrtblock .abziel{font-size:.95rem;margin-top:0}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .facts{padding:6px;gap:5px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .fact{padding:4px 9px;border-radius:8px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .fact .k{font-size:.6rem}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .fact .v{font-size:1rem;margin-top:1px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) #nextStop{font-size:1.05rem!important}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .camwrap{max-width:min(560px,48vh)}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .map{padding:6px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .map h3{display:none}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) footer{font-size:.8rem;gap:10px}
+ html[data-groesse="kompakt"]:not([data-orient="landscape"]) .cfg{padding:3px 10px}
 </style>
 </head>
 <body>
@@ -148,6 +194,10 @@
       <option value="hell">Karte hell</option>
       <option value="mittel">Karte mittel</option>
       <option value="dunkel">Karte dunkel</option>
+    </select>
+    <select class="themebtn" id="groessesel" title="Größe der Anzeige oben im Hochformat (je Monitor gemerkt)">
+      <option value="kompakt">Kompakt</option>
+      <option value="gross">Groß</option>
     </select>
     <select class="themebtn" id="zielsel" title="Ziel wählen (ohne KAI, aus dem gespeicherten Streckennetz)" style="display:none">
       <option value="">Kein Ziel</option>
@@ -262,6 +312,16 @@ function streamUrl(){ return '/api/stream?token='+encodeURIComponent(token) }
 // unabhängig vom UI-Theme. Startwert nach Theme (Dunkelmodus → dunkel, sonst hell).
 // Führendes Semikolon: der Theme-Block endet mit })() ohne ; — ohne das Semikolon verkettet
 // der Parser beide IIFEs (ASI-Falle, "… is not a function"), und das ganze Skript bricht ab.
+// Größe oben im Hochformat (Kompakt/Groß) — je Monitor gemerkt, Vorgabe Kompakt (Peter 2026-11-26).
+;(function(){
+  var GKEY='bw_seekarte_groesse';
+  var g='kompakt';try{var v=localStorage.getItem(GKEY);if(v==='kompakt'||v==='gross')g=v}catch(e){}
+  function applyG(v){document.documentElement.setAttribute('data-groesse',v);var s=document.getElementById('groessesel');if(s)s.value=v;
+    setTimeout(function(){try{if(window.kmap)kmap.invalidateSize()}catch(e){}},50)}
+  applyG(g);
+  var sel=document.getElementById('groessesel');
+  if(sel)sel.onchange=function(){applyG(sel.value);try{localStorage.setItem(GKEY,sel.value)}catch(e){}};
+})()
 ;(function(){
   var HKEY='bw_seekarte_helligkeit';
   function initVal(){
