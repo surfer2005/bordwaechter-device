@@ -228,6 +228,7 @@ type HelloResp struct {
 	ConfigRev          int    `json:"config_rev"`          // Stand der Einstellungen in KAI
 	BordToken          string `json:"bord_token"`          // Lese-Schlüssel für die Position im Bord-Netz
 	SSHPassword        string `json:"ssh_password"`        // ein SSH-Passwort für alle Bordgeräte, zentral aus KAI
+	SeitenPasswort     string `json:"seiten_passwort"`     // Passwort der Geräteseite (alle Rollen, ab 0.1.156) — der Anzeigerwächter holt keine Einstellungen
 	Rolle              string `json:"rolle"`               // Rolle aus KAI (bordwaechter | bildschirm | audio | anzeigerwaechter)
 	Medien             *MedienInfo `json:"medien"` // Bildschirm/Bordmusik: Abspielseite
 	AirplaySoll        *bool       `json:"airplay_soll"` // AirPlay als Quelle gewählt (nil = ältere KAI)

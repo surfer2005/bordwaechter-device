@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const version = "0.1.155"
+const version = "0.1.156"
 
 // imAddon: läuft als Home-Assistant-Add-on (Übergang, z. B. MS-KONSTANZ 2026-11) — der Rechner gehört Home Assistant:
 // kein Hostname/SSH/VNC/Netzwerk/Kiosk setzen, keine Selbstaktualisierung (die macht Home Assistant).
@@ -97,6 +97,35 @@ func (a *App) sshAusKai(pw string) {
 	}
 	applySSHPassword(&n)
 	logEvent("info", "SSH-Passwort aus KAI übernommen")
+}
+
+// seitenPasswortNeu: ob das Passwort der Geräteseite aus KAI übernommen wird — nur ein gesetztes, das vom eigenen abweicht.
+// Leer (KAI ohne Passwort oder ältere KAI) lässt das Gerät wie es ist. Rein, testbar.
+func seitenPasswortNeu(ist, kai string) (string, bool) {
+	kai = strings.TrimSpace(kai)
+	if kai == "" || kai == ist {
+		return ist, false
+	}
+	return kai, true
+}
+
+// seitenPasswortAusKai: Passwort der Geräteseite aus dem Herzschlag (Peter 2026-11-27). Der Bordwächter bekommt es auch über die
+// Einstellungen, der Anzeigerwächter holt keine — seine Konfig-Seite blieb trotz Passwort in KAI offen.
+func (a *App) seitenPasswortAusKai(pw string) {
+	neu, aendern := seitenPasswortNeu(a.getCfg().UIPassword, pw)
+	if !aendern {
+		return
+	}
+	a.mu.Lock()
+	n := *a.cfg
+	n.UIPassword = neu
+	a.cfg = &n
+	a.mu.Unlock()
+	if err := saveConfig(&n); err != nil {
+		logEvent("warn", "Passwort der Geräteseite aus KAI nicht gespeichert: "+err.Error())
+		return
+	}
+	logEvent("info", "Passwort der Geräteseite aus KAI übernommen")
 }
 
 // gpsHostForHello: die Router-/Modbus-Adresse, wenn GPS per Teltonika läuft (für die Teltonika-Übersicht).
@@ -337,6 +366,7 @@ func (a *App) heartbeatLoop() {
 				}
 				setBordToken(hr.BordToken)  // Position fürs Bord-Netz (Bildschirme/Bordmusik)
 				a.sshAusKai(hr.SSHPassword) // SSH-Passwort aus KAI (alle Rollen)
+				a.seitenPasswortAusKai(hr.SeitenPasswort) // Passwort der Geräteseite aus KAI (alle Rollen, auch Anzeigerwächter)
 				a.anzeigerRolleAusHerzschlag(hr) // Rolle Anzeigerwächter aus KAI (vor den Medien: startet ggf. neu)
 				a.medienAusHerzschlag(hr)        // Bildschirm/Bordmusik: Abspielseite + Bordwächter-Adresse
 				a.airplaySollSetzen(hr.AirplaySoll, hr.AirplayBis, hr.AirplayRef)
